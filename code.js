@@ -27,11 +27,16 @@ function onOpen() {
     const guvMenu = ui.createMenu("📊 GUV");
     guvMenu.addItem("✅ GUV berechnen", "calculateGUV");
 
-    // Hauptmenü "Buchhaltung" mit den drei Submenüs
+    // Submenü für BWA
+    const bwaMenu = ui.createMenu("📈 BWA");
+    bwaMenu.addItem("📊 BWA berechnen", "calculateBWA");
+
+    // Hauptmenü "Buchhaltung" mit allen Submenüs
     ui.createMenu("📂 Buchhaltung")
         .addSubMenu(rechnungenMenu)
         .addSubMenu(einnahmenAusgabenMenu)
         .addSubMenu(guvMenu)
+        .addSubMenu(bwaMenu)  // Hier wird BWA hinzugefügt
         .addToUi();
 }
 
@@ -397,4 +402,133 @@ function calculateGUV() {
     }
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
+}
+
+function calculateBWA() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const einnahmenSheet = ss.getSheetByName("Einnahmen");
+    const ausgabenSheet = ss.getSheetByName("Ausgaben");
+
+    if (!einnahmenSheet || !ausgabenSheet) {
+        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
+        return;
+    }
+
+    const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
+    const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
+    let fehlendeDaten = [];
+
+    let bwaData = {};
+    for (let m = 1; m <= 12; m++) {
+        bwaData[m] = {
+            dienstleistungen: 0, produkte: 0, sonstigeEinnahmen: 0, gesamtEinnahmen: 0,
+            betriebskosten: 0, marketing: 0, reisen: 0, einkauf: 0, personal: 0, gesamtAusgaben: 0,
+            offeneForderungen: 0, offeneVerbindlichkeiten: 0,
+            rohertrag: 0, betriebsergebnis: 0, ergebnisVorSteuern: 0, ergebnisNachSteuern: 0,
+            liquiditaet: 0
+        };
+    }
+
+    function getCategoryMapping(category) {
+        const categoryMap = {
+            "Dienstleistungen": "dienstleistungen",
+            "Produkte & Waren": "produkte",
+            "Sonstige Einnahmen": "sonstigeEinnahmen",
+            "Betriebskosten": "betriebskosten",
+            "Marketing & Werbung": "marketing",
+            "Reisen & Mobilität": "reisen",
+            "Wareneinkauf & Dienstleistungen": "einkauf",
+            "Personal & Gehälter": "personal"
+        };
+        return categoryMap[category] || null;
+    }
+
+    einnahmenData.forEach((row, index) => {
+        let date = row[0];
+        let category = row[2];
+        let netto = parseFloat(row[4]) || 0;
+        let bezahlt = parseFloat(row[8]) || 0;
+        let monat = date instanceof Date ? date.getMonth() + 1 : null;
+
+        if (!monat) {
+            fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}`);
+            return;
+        }
+        if (!category) {
+            fehlendeDaten.push(`Einnahmen ohne Kategorie - Zeile ${index + 2}`);
+            return;
+        }
+
+        let mappedCategory = getCategoryMapping(category);
+        if (!mappedCategory) {
+            fehlendeDaten.push(`Ungültige Kategorie in Einnahmen - Zeile ${index + 2}`);
+            return;
+        }
+
+        bwaData[monat][mappedCategory] += bezahlt;
+        bwaData[monat].gesamtEinnahmen += bezahlt;
+        bwaData[monat].offeneForderungen += netto - bezahlt;
+    });
+
+    ausgabenData.forEach((row, index) => {
+        let date = row[0];
+        let category = row[2];
+        let netto = parseFloat(row[4]) || 0;
+        let bezahlt = parseFloat(row[8]) || 0;
+        let monat = date instanceof Date ? date.getMonth() + 1 : null;
+
+        if (!monat) {
+            fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}`);
+            return;
+        }
+        if (!category) {
+            fehlendeDaten.push(`Ausgaben ohne Kategorie - Zeile ${index + 2}`);
+            return;
+        }
+
+        let mappedCategory = getCategoryMapping(category);
+        if (!mappedCategory) {
+            fehlendeDaten.push(`Ungültige Kategorie in Ausgaben - Zeile ${index + 2}`);
+            return;
+        }
+
+        bwaData[monat][mappedCategory] += bezahlt;
+        bwaData[monat].gesamtAusgaben += bezahlt;
+        bwaData[monat].offeneVerbindlichkeiten += netto - bezahlt;
+    });
+
+    if (fehlendeDaten.length > 0) {
+        SpreadsheetApp.getUi().alert("Fehler: Fehlende oder ungültige Daten! Bitte überprüfen:\n" + fehlendeDaten.join("\n"));
+        return;
+    }
+
+    let bwaSheet = ss.getSheetByName("BWA");
+    if (!bwaSheet) {
+        bwaSheet = ss.insertSheet("BWA");
+    } else {
+        bwaSheet.clearContents();
+    }
+
+    bwaSheet.appendRow(["Zeitraum", "Dienstleistungen", "Produkte", "Sonstige Einnahmen", "Gesamt-Einnahmen",
+        "Betriebskosten", "Marketing", "Reisen", "Einkauf", "Personal", "Gesamt-Ausgaben",
+        "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
+        "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
+
+    for (let m = 1; m <= 12; m++) {
+        let data = bwaData[m];
+        data.rohertrag = data.gesamtEinnahmen - data.einkauf;
+        data.betriebsergebnis = data.rohertrag - data.betriebskosten;
+        data.ergebnisVorSteuern = data.betriebsergebnis - data.marketing - data.reisen;
+        data.ergebnisNachSteuern = data.ergebnisVorSteuern - data.personal;
+        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
+    }
+
+    bwaSheet.appendRow(["Gesamtjahr", ...Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0))]);
+
+    let lastRow = bwaSheet.getLastRow();
+    if (lastRow > 1) {
+        bwaSheet.getRange(`B2:R${lastRow}`).setNumberFormat("#,##0.00€");
+    }
+
+    SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
