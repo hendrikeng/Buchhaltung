@@ -345,7 +345,9 @@ function calculateGUV() {
     guvSheet.appendRow(["Zeitraum", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
         "Umsatzsteuer", "Vorsteuer", "USt-Zahlung", "Ergebnis"]);
 
+    let gesamtErgebnis = 0;
     let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
+
     for (let q = 1; q <= 4; q++) {
         quartalsDaten[q] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
             umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
@@ -373,26 +375,13 @@ function calculateGUV() {
             data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
     }
 
-    // Gesamtjahr berechnen
-    let gesamtjahr = [0,0,0,0,0,0,0,0];
-    for (let q = 1; q <= 4; q++) {
-        let data = quartalsDaten[q];
-        gesamtjahr[0] += data.einnahmen;
-        gesamtjahr[1] += data.einnahmenOffen;
-        gesamtjahr[2] += data.ausgaben;
-        gesamtjahr[3] += data.ausgabenOffen;
-        gesamtjahr[4] += data.umsatzsteuer;
-        gesamtjahr[5] += data.vorsteuer;
-        gesamtjahr[6] += data.umsatzsteuer - data.vorsteuer;
-        gesamtjahr[7] += data.ergebnis;
-    }
-    guvSheet.appendRow(["Gesamtjahr", "", "", "", "", "", "", "", gesamtjahr[7]]);
+    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0,0,0,0,0,0,0,0])]);
 
     let lastRow = guvSheet.getLastRow();
-    guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00 €");
-
-    // Automatisch Spaltenbreiten anpassen (Fit-to-Content)
-    guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
+    if (lastRow > 1) {
+        guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00€");
+    }
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
+
