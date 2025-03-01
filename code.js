@@ -99,7 +99,7 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
 
     // Vorhandene Dateinamen in Hauptblatt und Import-Sheet ermitteln:
     const existingMainData = mainSheet.getDataRange().getValues();
-    const existingMainFiles = new Set(existingMainData.slice(1).map(row => row[1])); // Spalte 2
+    const existingMainFiles = new Set(existingMainData.slice(1).map(row => row[1])); // Spalte 2: Dateiname
 
     const existingImportData = importSheet.getDataRange().getValues();
     const existingImportFiles = new Set(existingImportData.slice(1).map(row => row[0])); // Spalte 1
@@ -119,27 +119,28 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
         const timestamp = new Date();
         let wasImported = false;
 
-        // Eintrag im Hauptblatt hinzufügen, wenn noch nicht vorhanden:
-        if (!existingMainFiles.has(fileName)) {
-            const currentRow = mainStartRow + newMainRows.length;
-            newMainRows.push([
-                timestamp,      // Datum
-                fileName,       // Dateiname
-                "", "", "",     // Leere Felder
-                `=D${currentRow}*E${currentRow}`, // MwSt.-Betrag
-                `=D${currentRow}+F${currentRow}`, // Bruttobetrag
-                "",             // Leeres Feld
-                `=D${currentRow}-(H${currentRow}-F${currentRow})`, // Restbetrag Netto
-                `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Quartal
-                `=IF(H${currentRow}>=G${currentRow}; "Bezahlt"; "Offen")`, // Zahlungsstatus
-                "",             // Leeres Feld
-                fileName,       // Dateiname
-                fileUrl,        // Link zur Datei
-                timestamp       // Letzte Aktualisierung
-            ]);
-            existingMainFiles.add(fileName);
-            wasImported = true;
-        }
+        // Neues Array für Haupttabelle (16 Spalten) – jetzt mit eingefügter Spalte "Kategorie" (Spalte C)
+        const currentRow = mainStartRow + newMainRows.length;
+        newMainRows.push([
+            timestamp,               // Spalte A: Datum
+            fileName,                // Spalte B: Dateiname
+            "",                      // Spalte C: Kategorie (neu)
+            "",                      // Spalte D: Kunde (ursprünglich Spalte C)
+            "",                      // Spalte E: Nettobetrag (ursprünglich Spalte D)
+            "",                      // Spalte F: Prozentsatz oder sonstiger Wert (ursprünglich Spalte E, wird als Prozent formatiert)
+            `=E${currentRow}*F${currentRow}`, // Spalte G: MwSt.-Betrag (berechnet aus E und F)
+            `=E${currentRow}+G${currentRow}`, // Spalte H: Bruttobetrag (E plus MwSt)
+            "",                      // Spalte I: (leer, wie zuvor)
+            `=E${currentRow}-(I${currentRow}-G${currentRow})`, // Spalte J: Restbetrag Netto
+            `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Spalte K: Quartal
+            `=IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Offen")`, // Spalte L: Zahlungsstatus
+            "",                      // Spalte M: (leer)
+            fileName,                // Spalte N: Dateiname (wiederholt)
+            fileUrl,                 // Spalte O: Link zur Datei
+            timestamp                // Spalte P: Letzte Aktualisierung
+        ]);
+        existingMainFiles.add(fileName);
+        wasImported = true;
 
         // Eintrag im Import-Sheet hinzufügen, wenn noch nicht vorhanden:
         if (!existingImportFiles.has(fileName)) {
@@ -233,29 +234,35 @@ function updateFormulasOnSheet(sheet) {
     const formulas11 = [];
 
     for (let i = 2; i <= lastRow; i++) {
-        formulas6.push([`=D${i}*E${i}`]);
-        formulas7.push([`=D${i}+F${i}`]);
-        formulas9.push([`=D${i}-(H${i}-F${i})`]);
-        formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]);
-        formulas11.push([`=IF(H${i}>=G${i}; "Bezahlt"; "Offen")`]);
+        formulas6.push([`=E${i}*F${i}`]); // MwSt.-Betrag (Spalte G)
+        formulas7.push([`=E${i}+G${i}`]); // Bruttobetrag (Spalte H)
+        formulas9.push([`=E${i}-(I${i}-G${i})`]); // Restbetrag Netto (Spalte J)
+        formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Quartal (Spalte K)
+        formulas11.push([`=IF(I${i}>=H${i}; "Bezahlt"; "Offen")`]); // Zahlungsstatus (Spalte L)
     }
 
-    sheet.getRange(2, 6, numRows, 1).setFormulas(formulas6);
-    sheet.getRange(2, 7, numRows, 1).setFormulas(formulas7);
-    sheet.getRange(2, 9, numRows, 1).setFormulas(formulas9);
-    sheet.getRange(2, 10, numRows, 1).setFormulas(formulas10);
-    sheet.getRange(2, 11, numRows, 1).setFormulas(formulas11);
+    sheet.getRange(2, 7, numRows, 1).setFormulas(formulas6);
+    sheet.getRange(2, 8, numRows, 1).setFormulas(formulas7);
+    sheet.getRange(2, 10, numRows, 1).setFormulas(formulas9);
+    sheet.getRange(2, 11, numRows, 1).setFormulas(formulas10);
+    sheet.getRange(2, 12, numRows, 1).setFormulas(formulas11);
 }
 
 function applyFormatting(sheet) {
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
+        // Datum in Spalte A
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
-        sheet.getRange(`L2:L${lastRow}`).setNumberFormat("DD.MM.YYYY");
-        sheet.getRange(`O2:O${lastRow}`).setNumberFormat("DD.MM.YYYY");
-        sheet.getRange(`D2:D${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        sheet.getRange(`F2:I${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        sheet.getRange(`E2:E${lastRow}`).setNumberFormat("0.00%");
+        // Letzte Aktualisierung in Spalte P
+        sheet.getRange(`P2:P${lastRow}`).setNumberFormat("DD.MM.YYYY");
+        // Nettobetrag in Spalte E als Währung
+        sheet.getRange(`E2:E${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
+        // MwSt, Bruttobetrag und Restbetrag in den Spalten G, H und J als Währung
+        sheet.getRange(`G2:G${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
+        sheet.getRange(`H2:H${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
+        sheet.getRange(`J2:J${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
+        // Prozentsatz in Spalte F
+        sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
     }
 }
 
@@ -270,13 +277,17 @@ function calculateGUV() {
         return;
     }
 
-    // Daten (ohne Header) einlesen
+    // Daten (ohne Header) einlesen – Anpassung der Indizes:
+    // Datum: Spalte A (Index 0)
+    // Nettobetrag: früher Spalte D (Index 3) → jetzt Spalte E (Index 4)
+    // MwSt: früher Spalte F (Index 5) → jetzt Spalte G (Index 6)
+    // Bezahlter Betrag: früher Spalte H (Index 7) → jetzt Spalte I (Index 8)
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
 
     let fehlendeDaten = [];
 
-    // Monatsweise und Quartalsweise Berechnung
+    // Monatsweise Berechnung (Monate 1 bis 12)
     let guvData = {};
     for (let m = 1; m <= 12; m++) {
         guvData[m] = {
@@ -285,47 +296,46 @@ function calculateGUV() {
         };
     }
 
-    // Einnahmen durchgehen
+    // Einnahmen auswerten
     einnahmenData.forEach((row, index) => {
         let date = row[0]; // Datum in Spalte A
         if (!(date instanceof Date)) {
             fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}`);
             return;
         }
-        let netto = parseFloat(row[3]) || 0; // Netto (€) in Spalte D
-        let mwst = parseFloat(row[5]) || 0; // MwSt.-Betrag (€) in Spalte F
-        let bezahlt = parseFloat(row[7]) || 0; // Bezahlter Betrag (€) in Spalte H
+        let netto = parseFloat(row[4]) || 0;     // Nettobetrag in Spalte E
+        let mwst = parseFloat(row[6]) || 0;      // MwSt in Spalte G
+        let bezahlt = parseFloat(row[8]) || 0;   // Bezahlter Betrag in Spalte I
         let monat = date.getMonth() + 1;
 
-        guvData[monat].einnahmen += bezahlt; // Nur tatsächlich bezahlte Einnahmen
-        guvData[monat].umsatzsteuer += bezahlt > 0 ? mwst : 0; // MwSt. nur auf bezahlte Beträge
-        guvData[monat].einnahmenOffen += netto - bezahlt; // Offene Forderungen
+        guvData[monat].einnahmen += bezahlt;
+        guvData[monat].umsatzsteuer += bezahlt > 0 ? mwst : 0;
+        guvData[monat].einnahmenOffen += netto - bezahlt;
     });
 
-    // Ausgaben durchgehen
+    // Ausgaben auswerten
     ausgabenData.forEach((row, index) => {
         let date = row[0]; // Datum in Spalte A
         if (!(date instanceof Date)) {
             fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}`);
             return;
         }
-        let netto = parseFloat(row[3]) || 0; // Netto (€) in Spalte D
-        let mwst = parseFloat(row[5]) || 0; // MwSt.-Betrag (€) in Spalte F
-        let bezahlt = parseFloat(row[7]) || 0; // Bezahlter Betrag (€) in Spalte H
+        let netto = parseFloat(row[4]) || 0;    // Nettobetrag in Spalte E
+        let mwst = parseFloat(row[6]) || 0;     // MwSt in Spalte G
+        let bezahlt = parseFloat(row[8]) || 0;  // Bezahlter Betrag in Spalte I
         let monat = date.getMonth() + 1;
 
-        guvData[monat].ausgaben += bezahlt; // Nur tatsächlich bezahlte Ausgaben
-        guvData[monat].vorsteuer += bezahlt > 0 ? mwst : 0; // Vorsteuer nur auf bezahlte Beträge
-        guvData[monat].ausgabenOffen += netto - bezahlt; // Offene Verbindlichkeiten
+        guvData[monat].ausgaben += bezahlt;
+        guvData[monat].vorsteuer += bezahlt > 0 ? mwst : 0;
+        guvData[monat].ausgabenOffen += netto - bezahlt;
     });
 
-    // Falls fehlende Daten gefunden wurden, abbrechen und Benutzer informieren
     if (fehlendeDaten.length > 0) {
         SpreadsheetApp.getUi().alert("Fehler: Es gibt Einträge ohne Datum! Bitte überprüfe folgende Zeilen:\n" + fehlendeDaten.join("\n"));
         return;
     }
 
-    // GUV-Blatt erstellen oder bereinigen
+    // GUV-Blatt erstellen oder leeren
     let guvSheet = ss.getSheetByName("GUV");
     if (!guvSheet) {
         guvSheet = ss.insertSheet("GUV");
@@ -351,7 +361,6 @@ function calculateGUV() {
         let ergebnis = einnahmen - ausgaben;
 
         gesamtErgebnis += ergebnis;
-
         guvSheet.appendRow([`Monat ${m}`, einnahmen, einnahmenOffen, ausgaben, ausgabenOffen, umsatzsteuer, vorsteuer, ustZahlung, ergebnis]);
     }
 
@@ -359,7 +368,3 @@ function calculateGUV() {
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
-
-
-
-
