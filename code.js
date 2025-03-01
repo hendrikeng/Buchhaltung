@@ -422,13 +422,15 @@ function calculateBWA() {
     let fehlendeDaten = [];
 
     let bwaData = {};
+    let lastSaldo = 0; // Speichert den letzten bekannten Saldo
+
     for (let m = 1; m <= 12; m++) {
         bwaData[m] = {
             dienstleistungen: 0, produkte: 0, sonstigeEinnahmen: 0, gesamtEinnahmen: 0,
             betriebskosten: 0, marketing: 0, reisen: 0, einkauf: 0, personal: 0, gesamtAusgaben: 0,
             offeneForderungen: 0, offeneVerbindlichkeiten: 0,
             rohertrag: 0, betriebsergebnis: 0, ergebnisVorSteuern: 0, ergebnisNachSteuern: 0,
-            liquiditaet: 0
+            liquiditaet: lastSaldo
         };
     }
 
@@ -502,10 +504,11 @@ function calculateBWA() {
 
     bankData.forEach(row => {
         let date = row[0];
-        let saldo = parseFloat(row[1]) || 0;
+        let saldo = parseFloat(row[3]) || lastSaldo;
         let monat = date instanceof Date ? date.getMonth() + 1 : null;
         if (monat) {
-            bwaData[monat].liquiditaet += saldo;
+            bwaData[monat].liquiditaet = saldo;
+            lastSaldo = saldo;
         }
     });
 
@@ -526,11 +529,6 @@ function calculateBWA() {
         "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
         "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
 
-    for (let m = 1; m <= 12; m++) {
-        let data = bwaData[m];
-        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
-    }
-
     for (let q = 1; q <= 4; q++) {
         let quartalDaten = Array(17).fill(0);
         for (let m = (q - 1) * 3 + 1; m <= q * 3; m++) {
@@ -538,6 +536,11 @@ function calculateBWA() {
             quartalDaten = quartalDaten.map((val, i) => val + data[i]);
         }
         bwaSheet.appendRow([`Quartal ${q}`, ...quartalDaten]);
+    }
+
+    for (let m = 1; m <= 12; m++) {
+        let data = bwaData[m];
+        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
     }
 
     bwaSheet.appendRow(["Gesamtjahr", ...Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0))]);
@@ -550,5 +553,6 @@ function calculateBWA() {
 
     SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
+
 
 
