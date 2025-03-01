@@ -304,7 +304,6 @@ function calculateGUV() {
 
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
-
     let fehlendeDaten = [];
 
     let guvData = {};
@@ -362,9 +361,7 @@ function calculateGUV() {
     guvSheet.appendRow(["Zeitraum", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
         "Umsatzsteuer", "Vorsteuer", "USt-Zahlung", "Ergebnis"]);
 
-    let gesamtErgebnis = 0;
     let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
-
     for (let q = 1; q <= 4; q++) {
         quartalsDaten[q] = {
             einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
@@ -385,16 +382,17 @@ function calculateGUV() {
         quartalsDaten[q].ergebnis += data.einnahmen - data.ausgaben;
 
         guvSheet.appendRow([`Monat ${m}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
-            data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.einnahmen - data.ausgaben]);
-    }
-
-    for (let q = 1; q <= 4; q++) {
-        let data = quartalsDaten[q];
-        guvSheet.appendRow([`Quartal ${q}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
             data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
+
+        if (m % 3 === 0) {
+            let quartalData = quartalsDaten[q];
+            guvSheet.appendRow([`Quartal ${q}`, quartalData.einnahmen, quartalData.einnahmenOffen, quartalData.ausgaben, quartalData.ausgabenOffen,
+                quartalData.umsatzsteuer, quartalData.vorsteuer, quartalData.ustZahlung, quartalData.ergebnis]);
+        }
     }
 
-    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0, 0, 0, 0, 0, 0, 0, 0])]);
+    let jahreswerte = Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0, 0, 0, 0, 0, 0, 0, 0]);
+    guvSheet.appendRow(["Gesamtjahr", ...jahreswerte]);
 
     let lastRow = guvSheet.getLastRow();
     if (lastRow > 1) {
@@ -422,7 +420,7 @@ function calculateBWA() {
     let fehlendeDaten = [];
 
     let bwaData = {};
-    let lastSaldo = 0; // Speichert den letzten bekannten Saldo
+    let lastSaldo = 0;
 
     for (let m = 1; m <= 12; m++) {
         bwaData[m] = {
@@ -529,21 +527,17 @@ function calculateBWA() {
         "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
         "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
 
-    for (let q = 1; q <= 4; q++) {
-        let quartalDaten = Array(17).fill(0);
-        for (let m = (q - 1) * 3 + 1; m <= q * 3; m++) {
-            let data = Object.values(bwaData[m]);
-            quartalDaten = quartalDaten.map((val, i) => val + data[i]);
-        }
-        bwaSheet.appendRow([`Quartal ${q}`, ...quartalDaten]);
-    }
-
     for (let m = 1; m <= 12; m++) {
         let data = bwaData[m];
         bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
+        if (m % 3 === 0) {
+            let quartalDaten = Object.values(bwaData).slice(m - 2, m + 1).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0));
+            bwaSheet.appendRow([`Quartal ${Math.ceil(m / 3)}`, ...quartalDaten]);
+        }
     }
 
-    bwaSheet.appendRow(["Gesamtjahr", ...Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0))]);
+    let jahreswerte = Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0));
+    bwaSheet.appendRow(["Gesamtjahr", ...jahreswerte]);
 
     let lastRow = bwaSheet.getLastRow();
     if (lastRow > 1) {
@@ -553,6 +547,7 @@ function calculateBWA() {
 
     SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
+
 
 
 
