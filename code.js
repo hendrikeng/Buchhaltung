@@ -399,6 +399,7 @@ function calculateGUV() {
     let lastRow = guvSheet.getLastRow();
     if (lastRow > 1) {
         guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00€");
+        guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     }
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
@@ -408,14 +409,16 @@ function calculateBWA() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const einnahmenSheet = ss.getSheetByName("Einnahmen");
     const ausgabenSheet = ss.getSheetByName("Ausgaben");
+    const bankSheet = ss.getSheetByName("Bankbewegungen");
 
-    if (!einnahmenSheet || !ausgabenSheet) {
-        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
+    if (!einnahmenSheet || !ausgabenSheet || !bankSheet) {
+        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen', 'Ausgaben' oder 'Bankbewegungen' wurde nicht gefunden.");
         return;
     }
 
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
+    const bankData = bankSheet.getDataRange().getValues().slice(1);
     let fehlendeDaten = [];
 
     let bwaData = {};
@@ -497,6 +500,15 @@ function calculateBWA() {
         bwaData[monat].offeneVerbindlichkeiten += netto - bezahlt;
     });
 
+    bankData.forEach(row => {
+        let date = row[0];
+        let saldo = parseFloat(row[1]) || 0;
+        let monat = date instanceof Date ? date.getMonth() + 1 : null;
+        if (monat) {
+            bwaData[monat].liquiditaet += saldo;
+        }
+    });
+
     if (fehlendeDaten.length > 0) {
         SpreadsheetApp.getUi().alert("Fehler: Fehlende oder ungültige Daten! Bitte überprüfen:\n" + fehlendeDaten.join("\n"));
         return;
@@ -533,8 +545,10 @@ function calculateBWA() {
     let lastRow = bwaSheet.getLastRow();
     if (lastRow > 1) {
         bwaSheet.getRange(`B2:R${lastRow}`).setNumberFormat("#,##0.00€");
+        bwaSheet.autoResizeColumns(1, bwaSheet.getLastColumn());
     }
 
     SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
+
 
