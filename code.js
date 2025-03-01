@@ -514,12 +514,17 @@ function calculateBWA() {
         "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
         "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
 
+    for (let q = 1; q <= 4; q++) {
+        let quartalDaten = Array(17).fill(0);
+        for (let m = (q - 1) * 3 + 1; m <= q * 3; m++) {
+            let data = Object.values(bwaData[m]);
+            quartalDaten = quartalDaten.map((val, i) => val + data[i]);
+        }
+        bwaSheet.appendRow([`Quartal ${q}`, ...quartalDaten]);
+    }
+
     for (let m = 1; m <= 12; m++) {
         let data = bwaData[m];
-        data.rohertrag = data.gesamtEinnahmen - data.einkauf;
-        data.betriebsergebnis = data.rohertrag - data.betriebskosten;
-        data.ergebnisVorSteuern = data.betriebsergebnis - data.marketing - data.reisen;
-        data.ergebnisNachSteuern = data.ergebnisVorSteuern - data.personal;
         bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
     }
 
@@ -532,3 +537,4 @@ function calculateBWA() {
 
     SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
+
