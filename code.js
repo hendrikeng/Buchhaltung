@@ -248,9 +248,7 @@ function updateFormulasOnSheet(sheet) {
         formulas7.push([`=E${i}+G${i}`]); // Bruttobetrag (Spalte H)
         formulas9.push([`=E${i}-(I${i}-G${i})`]); // Restbetrag Netto (Spalte J)
         formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Quartal (Spalte K)
-        formulas11.push([
-            `=IF(OR(I${i}="", I${i}=0), "Offen", IF(I${i}>=H${i}, "Bezahlt", "Offen"))`
-        ]); // Zahlungsstatus (Spalte L)
+        formulas11.push([`=IF(OR(I${i}=""; I${i}=0); "Offen"; IF(I${i}>=H${i}; "Bezahlt"; "Offen"))`]); // Zahlungsstatus (Spalte L)
     }
 
     sheet.getRange(2, 7, numRows, 1).setFormulas(formulas6);
