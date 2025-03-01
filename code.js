@@ -248,7 +248,9 @@ function updateFormulasOnSheet(sheet) {
         formulas7.push([`=E${i}+G${i}`]); // Bruttobetrag (Spalte H)
         formulas9.push([`=E${i}-(I${i}-G${i})`]); // Restbetrag Netto (Spalte J)
         formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Quartal (Spalte K)
-        formulas11.push([`=IF(I${i}>=H${i}; "Bezahlt"; "Offen")`]); // Zahlungsstatus (Spalte L)
+        formulas11.push([
+            `=IF(OR(I${i}="", I${i}=0), "Offen", IF(I${i}>=H${i}, "Bezahlt", "Offen"))`
+        ]); // Zahlungsstatus (Spalte L)
     }
 
     sheet.getRange(2, 7, numRows, 1).setFormulas(formulas6);
@@ -304,8 +306,10 @@ function calculateGUV() {
 
     let guvData = {};
     for (let m = 1; m <= 12; m++) {
-        guvData[m] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
+        guvData[m] = {
+            einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0
+        };
     }
 
     einnahmenData.forEach((row, index) => {
@@ -359,8 +363,10 @@ function calculateGUV() {
     let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
 
     for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
+        quartalsDaten[q] = {
+            einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0
+        };
     }
 
     for (let m = 1; m <= 12; m++) {
@@ -385,7 +391,7 @@ function calculateGUV() {
             data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
     }
 
-    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0,0,0,0,0,0,0,0])]);
+    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0, 0, 0, 0, 0, 0, 0, 0])]);
 
     let lastRow = guvSheet.getLastRow();
     if (lastRow > 1) {
