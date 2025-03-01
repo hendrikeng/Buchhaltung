@@ -133,16 +133,16 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
                 timestamp,               // Spalte A: Datum
                 fileName,                // Spalte B: Dateiname
                 "",                      // Spalte C: Kategorie (neu)
-                "",                      // Spalte D: Kunde (ursprünglich Spalte C)
-                "",                      // Spalte E: Nettobetrag (ursprünglich Spalte D)
-                "",                      // Spalte F: Prozentsatz (ursprünglich Spalte E, als Prozent formatiert)
-                `=E${currentRow}*F${currentRow}`, // Spalte G: MwSt.-Betrag (berechnet aus E und F)
-                `=E${currentRow}+G${currentRow}`, // Spalte H: Bruttobetrag (E plus MwSt)
-                "",                      // Spalte I: (leer, wie zuvor)
+                "",                      // Spalte D: Kunde
+                "",                      // Spalte E: Nettobetrag
+                "",                      // Spalte F: Prozentsatz (als Prozent formatiert)
+                `=E${currentRow}*F${currentRow}`, // Spalte G: MwSt.-Betrag
+                `=E${currentRow}+G${currentRow}`, // Spalte H: Bruttobetrag
+                "",                      // Spalte I: (wird als Währung formatiert)
                 `=E${currentRow}-(I${currentRow}-G${currentRow})`, // Spalte J: Restbetrag Netto
                 `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Spalte K: Quartal
                 `=IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Offen")`, // Spalte L: Zahlungsstatus
-                "",                      // Spalte M: (leer)
+                "",                      // Spalte M: (wird als Datum formatiert)
                 fileName,                // Spalte N: Dateiname (wiederholt)
                 fileUrl,                 // Spalte O: Link zur Datei
                 timestamp                // Spalte P: Letzte Aktualisierung
@@ -261,17 +261,27 @@ function updateFormulasOnSheet(sheet) {
 function applyFormatting(sheet) {
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-        // Datum in Spalte A
+        // Spalte A (Datum)
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
-        // Letzte Aktualisierung in Spalte P
+
+        // Spalte M (z.B. weiterer Datumswert)
+        sheet.getRange(`M2:M${lastRow}`).setNumberFormat("DD.MM.YYYY");
+
+        // Spalte I als Währung (Accounting)
+        sheet.getRange(`I2:I${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
+
+        // Spalte P (Letzte Aktualisierung, Datum)
         sheet.getRange(`P2:P${lastRow}`).setNumberFormat("DD.MM.YYYY");
-        // Nettobetrag in Spalte E als Währung
+
+        // Spalte E (Nettobetrag) als Währung
         sheet.getRange(`E2:E${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        // MwSt, Bruttobetrag und Restbetrag in den Spalten G, H und J als Währung
+
+        // MwSt, Bruttobetrag und Restbetrag in G, H und J als Währung
         sheet.getRange(`G2:G${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
         sheet.getRange(`H2:H${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
         sheet.getRange(`J2:J${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        // Prozentsatz in Spalte F
+
+        // Spalte F (Prozentsatz)
         sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
     }
 }
@@ -384,4 +394,3 @@ function calculateGUV() {
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
-
