@@ -277,53 +277,43 @@ function calculateGUV() {
         return;
     }
 
-    // Daten (ohne Header) einlesen – Anpassung der Indizes:
-    // Datum: Spalte A (Index 0)
-    // Nettobetrag: früher Spalte D (Index 3) → jetzt Spalte E (Index 4)
-    // MwSt: früher Spalte F (Index 5) → jetzt Spalte G (Index 6)
-    // Bezahlter Betrag: früher Spalte H (Index 7) → jetzt Spalte I (Index 8)
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
 
     let fehlendeDaten = [];
 
-    // Monatsweise Berechnung (Monate 1 bis 12)
     let guvData = {};
     for (let m = 1; m <= 12; m++) {
-        guvData[m] = {
-            einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0
-        };
+        guvData[m] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
     }
 
-    // Einnahmen auswerten
     einnahmenData.forEach((row, index) => {
-        let date = row[0]; // Datum in Spalte A
+        let date = row[0];
         if (!(date instanceof Date)) {
             fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}`);
             return;
         }
-        let netto = parseFloat(row[4]) || 0;     // Nettobetrag in Spalte E
-        let mwst = parseFloat(row[6]) || 0;      // MwSt in Spalte G
-        let bezahlt = parseFloat(row[8]) || 0;   // Bezahlter Betrag in Spalte I
         let monat = date.getMonth() + 1;
+        let netto = parseFloat(row[4]) || 0;
+        let mwst = parseFloat(row[6]) || 0;
+        let bezahlt = parseFloat(row[8]) || 0;
 
         guvData[monat].einnahmen += bezahlt;
         guvData[monat].umsatzsteuer += bezahlt > 0 ? mwst : 0;
         guvData[monat].einnahmenOffen += netto - bezahlt;
     });
 
-    // Ausgaben auswerten
     ausgabenData.forEach((row, index) => {
-        let date = row[0]; // Datum in Spalte A
+        let date = row[0];
         if (!(date instanceof Date)) {
             fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}`);
             return;
         }
-        let netto = parseFloat(row[4]) || 0;    // Nettobetrag in Spalte E
-        let mwst = parseFloat(row[6]) || 0;     // MwSt in Spalte G
-        let bezahlt = parseFloat(row[8]) || 0;  // Bezahlter Betrag in Spalte I
         let monat = date.getMonth() + 1;
+        let netto = parseFloat(row[4]) || 0;
+        let mwst = parseFloat(row[6]) || 0;
+        let bezahlt = parseFloat(row[8]) || 0;
 
         guvData[monat].ausgaben += bezahlt;
         guvData[monat].vorsteuer += bezahlt > 0 ? mwst : 0;
@@ -335,7 +325,6 @@ function calculateGUV() {
         return;
     }
 
-    // GUV-Blatt erstellen oder leeren
     let guvSheet = ss.getSheetByName("GUV");
     if (!guvSheet) {
         guvSheet = ss.insertSheet("GUV");
@@ -343,28 +332,41 @@ function calculateGUV() {
         guvSheet.clearContents();
     }
 
-    // Kopfzeile schreiben
-    guvSheet.appendRow(["Monat", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
+    guvSheet.appendRow(["Zeitraum", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
         "Umsatzsteuer", "Vorsteuer", "USt-Zahlung", "Ergebnis"]);
 
     let gesamtErgebnis = 0;
+    let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
 
-    // Daten pro Monat eintragen
-    for (let m = 1; m <= 12; m++) {
-        let einnahmen = guvData[m].einnahmen;
-        let einnahmenOffen = guvData[m].einnahmenOffen;
-        let ausgaben = guvData[m].ausgaben;
-        let ausgabenOffen = guvData[m].ausgabenOffen;
-        let umsatzsteuer = guvData[m].umsatzsteuer;
-        let vorsteuer = guvData[m].vorsteuer;
-        let ustZahlung = umsatzsteuer - vorsteuer;
-        let ergebnis = einnahmen - ausgaben;
-
-        gesamtErgebnis += ergebnis;
-        guvSheet.appendRow([`Monat ${m}`, einnahmen, einnahmenOffen, ausgaben, ausgabenOffen, umsatzsteuer, vorsteuer, ustZahlung, ergebnis]);
+    for (let q = 1; q <= 4; q++) {
+        quartalsDaten[q] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
     }
 
-    guvSheet.appendRow(["Gesamtjahr", "", "", "", "", "", "", "", gesamtErgebnis]);
+    for (let m = 1; m <= 12; m++) {
+        let q = Math.ceil(m / 3);
+        let data = guvData[m];
+        quartalsDaten[q].einnahmen += data.einnahmen;
+        quartalsDaten[q].einnahmenOffen += data.einnahmenOffen;
+        quartalsDaten[q].ausgaben += data.ausgaben;
+        quartalsDaten[q].ausgabenOffen += data.ausgabenOffen;
+        quartalsDaten[q].umsatzsteuer += data.umsatzsteuer;
+        quartalsDaten[q].vorsteuer += data.vorsteuer;
+        quartalsDaten[q].ustZahlung += data.umsatzsteuer - data.vorsteuer;
+        quartalsDaten[q].ergebnis += data.einnahmen - data.ausgaben;
+
+        guvSheet.appendRow([`Monat ${m}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
+            data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.einnahmen - data.ausgaben]);
+    }
+
+    for (let q = 1; q <= 4; q++) {
+        let data = quartalsDaten[q];
+        guvSheet.appendRow([`Quartal ${q}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
+            data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
+    }
+
+    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0,0,0,0,0,0,0,0])]);
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
+
