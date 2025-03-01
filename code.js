@@ -526,6 +526,11 @@ function calculateBWA() {
         "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
         "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
 
+    for (let m = 1; m <= 12; m++) {
+        let data = bwaData[m];
+        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
+    }
+
     for (let q = 1; q <= 4; q++) {
         let quartalDaten = Array(17).fill(0);
         for (let m = (q - 1) * 3 + 1; m <= q * 3; m++) {
@@ -533,11 +538,6 @@ function calculateBWA() {
             quartalDaten = quartalDaten.map((val, i) => val + data[i]);
         }
         bwaSheet.appendRow([`Quartal ${q}`, ...quartalDaten]);
-    }
-
-    for (let m = 1; m <= 12; m++) {
-        let data = bwaData[m];
-        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
     }
 
     bwaSheet.appendRow(["Gesamtjahr", ...Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0))]);
