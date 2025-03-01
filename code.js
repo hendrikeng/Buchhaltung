@@ -73,21 +73,28 @@ function importDriveFiles() {
     const ausgabenOrdner = getFolderByName(parentFolder, "Ausgaben");
 
     if (einnahmenOrdner) {
+        // Import in Rechnungen-Eingangsblatt und Hauptübersicht "Einnahmen"
         importFilesFromFolder(einnahmenOrdner, sheetEinnahmen, einnahmenTab, "Einnahme", historyTab);
+        // Spaltenbreite in Rechnungen-Eingang anpassen
+        sheetEinnahmen.autoResizeColumns(1, sheetEinnahmen.getLastColumn());
         if (einnahmenTab.getLastRow() > 1) {
-            // Nach dem Import: nur Formeln und Formatierung aktualisieren (keine Sortierung)
             updateFormulasOnSheet(einnahmenTab);
             applyFormatting(einnahmenTab);
+            einnahmenTab.autoResizeColumns(1, einnahmenTab.getLastColumn());
         }
     } else {
         Logger.log("Fehler: Der 'Einnahmen'-Ordner wurde nicht gefunden.");
     }
 
     if (ausgabenOrdner) {
+        // Import in Rechnungen-Ausgangsblatt und Hauptübersicht "Ausgaben"
         importFilesFromFolder(ausgabenOrdner, sheetAusgaben, ausgabenTab, "Ausgabe", historyTab);
+        // Spaltenbreite in Rechnungen-Ausgang anpassen
+        sheetAusgaben.autoResizeColumns(1, sheetAusgaben.getLastColumn());
         if (ausgabenTab.getLastRow() > 1) {
             updateFormulasOnSheet(ausgabenTab);
             applyFormatting(ausgabenTab);
+            ausgabenTab.autoResizeColumns(1, ausgabenTab.getLastColumn());
         }
     } else {
         Logger.log("Fehler: Der 'Ausgaben'-Ordner wurde nicht gefunden.");
@@ -99,7 +106,7 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
 
     // Vorhandene Dateinamen in Hauptblatt und Import-Sheet ermitteln:
     const existingMainData = mainSheet.getDataRange().getValues();
-    const existingMainFiles = new Set(existingMainData.slice(1).map(row => row[1])); // Spalte 2: Dateiname
+    const existingMainFiles = new Set(existingMainData.slice(1).map(row => row[1])); // Spalte B: Dateiname
 
     const existingImportData = importSheet.getDataRange().getValues();
     const existingImportFiles = new Set(existingImportData.slice(1).map(row => row[0])); // Spalte 1
@@ -119,28 +126,30 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
         const timestamp = new Date();
         let wasImported = false;
 
-        // Neues Array für Haupttabelle (16 Spalten) – jetzt mit eingefügter Spalte "Kategorie" (Spalte C)
-        const currentRow = mainStartRow + newMainRows.length;
-        newMainRows.push([
-            timestamp,               // Spalte A: Datum
-            fileName,                // Spalte B: Dateiname
-            "",                      // Spalte C: Kategorie (neu)
-            "",                      // Spalte D: Kunde (ursprünglich Spalte C)
-            "",                      // Spalte E: Nettobetrag (ursprünglich Spalte D)
-            "",                      // Spalte F: Prozentsatz oder sonstiger Wert (ursprünglich Spalte E, wird als Prozent formatiert)
-            `=E${currentRow}*F${currentRow}`, // Spalte G: MwSt.-Betrag (berechnet aus E und F)
-            `=E${currentRow}+G${currentRow}`, // Spalte H: Bruttobetrag (E plus MwSt)
-            "",                      // Spalte I: (leer, wie zuvor)
-            `=E${currentRow}-(I${currentRow}-G${currentRow})`, // Spalte J: Restbetrag Netto
-            `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Spalte K: Quartal
-            `=IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Offen")`, // Spalte L: Zahlungsstatus
-            "",                      // Spalte M: (leer)
-            fileName,                // Spalte N: Dateiname (wiederholt)
-            fileUrl,                 // Spalte O: Link zur Datei
-            timestamp                // Spalte P: Letzte Aktualisierung
-        ]);
-        existingMainFiles.add(fileName);
-        wasImported = true;
+        // Nur hinzufügen, wenn Datei im Hauptblatt noch nicht vorhanden ist:
+        if (!existingMainFiles.has(fileName)) {
+            const currentRow = mainStartRow + newMainRows.length;
+            newMainRows.push([
+                timestamp,               // Spalte A: Datum
+                fileName,                // Spalte B: Dateiname
+                "",                      // Spalte C: Kategorie (neu)
+                "",                      // Spalte D: Kunde (ursprünglich Spalte C)
+                "",                      // Spalte E: Nettobetrag (ursprünglich Spalte D)
+                "",                      // Spalte F: Prozentsatz (ursprünglich Spalte E, als Prozent formatiert)
+                `=E${currentRow}*F${currentRow}`, // Spalte G: MwSt.-Betrag (berechnet aus E und F)
+                `=E${currentRow}+G${currentRow}`, // Spalte H: Bruttobetrag (E plus MwSt)
+                "",                      // Spalte I: (leer, wie zuvor)
+                `=E${currentRow}-(I${currentRow}-G${currentRow})`, // Spalte J: Restbetrag Netto
+                `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Spalte K: Quartal
+                `=IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Offen")`, // Spalte L: Zahlungsstatus
+                "",                      // Spalte M: (leer)
+                fileName,                // Spalte N: Dateiname (wiederholt)
+                fileUrl,                 // Spalte O: Link zur Datei
+                timestamp                // Spalte P: Letzte Aktualisierung
+            ]);
+            existingMainFiles.add(fileName);
+            wasImported = true;
+        }
 
         // Eintrag im Import-Sheet hinzufügen, wenn noch nicht vorhanden:
         if (!existingImportFiles.has(fileName)) {
@@ -198,6 +207,7 @@ function updateSheetOnCurrentSheet() {
     }
     updateFormulasOnSheet(sheet);
     applyFormatting(sheet);
+    sheet.autoResizeColumns(1, sheet.getLastColumn());
 }
 
 function sortSheetByColumn(sheet, column) {
@@ -335,9 +345,7 @@ function calculateGUV() {
     guvSheet.appendRow(["Zeitraum", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
         "Umsatzsteuer", "Vorsteuer", "USt-Zahlung", "Ergebnis"]);
 
-    let gesamtErgebnis = 0;
     let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
-
     for (let q = 1; q <= 4; q++) {
         quartalsDaten[q] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
             umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0 };
@@ -365,8 +373,26 @@ function calculateGUV() {
             data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
     }
 
-    guvSheet.appendRow(["Gesamtjahr", ...Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0,0,0,0,0,0,0,0])]);
+    // Gesamtjahr berechnen
+    let gesamtjahr = [0,0,0,0,0,0,0,0];
+    for (let q = 1; q <= 4; q++) {
+        let data = quartalsDaten[q];
+        gesamtjahr[0] += data.einnahmen;
+        gesamtjahr[1] += data.einnahmenOffen;
+        gesamtjahr[2] += data.ausgaben;
+        gesamtjahr[3] += data.ausgabenOffen;
+        gesamtjahr[4] += data.umsatzsteuer;
+        gesamtjahr[5] += data.vorsteuer;
+        gesamtjahr[6] += data.umsatzsteuer - data.vorsteuer;
+        gesamtjahr[7] += data.ergebnis;
+    }
+    guvSheet.appendRow(["Gesamtjahr", "", "", "", "", "", "", "", gesamtjahr[7]]);
+
+    let lastRow = guvSheet.getLastRow();
+    guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00 €");
+
+    // Automatisch Spaltenbreiten anpassen (Fit-to-Content)
+    guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
-
