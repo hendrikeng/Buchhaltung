@@ -1,3 +1,5 @@
+
+
 function setupTrigger() {
     const triggers = ScriptApp.getProjectTriggers();
     const triggerExists = triggers.some(trigger => trigger.getHandlerFunction() === "onOpen");
@@ -273,9 +275,10 @@ function calculateGUV() {
 
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
-    let fehlendeDaten = [];
-
     let guvData = {};
+    let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
+    let gesamtJahr = {einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0, umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0};
+
     for (let m = 1; m <= 12; m++) {
         guvData[m] = {
             einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
@@ -283,40 +286,66 @@ function calculateGUV() {
         };
     }
 
+    for (let q = 1; q <= 4; q++) {
+        quartalsDaten[q] = {einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0, umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0};
+    }
+
+    let fehlendeDaten = [];
+
     einnahmenData.forEach((row, index) => {
-        let date = row[0];
-        if (!(date instanceof Date)) {
-            fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}`);
-            return;
-        }
-        let monat = date.getMonth() + 1;
+        let zahlungsDatum = row[12]; // "Letzte Zahlung am"
         let netto = parseFloat(row[4]) || 0;
         let mwst = parseFloat(row[6]) || 0;
-        let bezahlt = parseFloat(row[8]) || 0;
+        let bezahltBrutto = parseFloat(row[8]) || 0;
+        let bezahltNetto = bezahltBrutto / 1.19;
+        let bezahltMwst = bezahltBrutto - bezahltNetto;
 
-        guvData[monat].einnahmen += bezahlt;
-        guvData[monat].umsatzsteuer += bezahlt > 0 ? mwst : 0;
-        guvData[monat].einnahmenOffen += netto - bezahlt;
+        if (bezahltBrutto > 0 && !(zahlungsDatum instanceof Date)) {
+            fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
+            return;
+        }
+
+        if (zahlungsDatum instanceof Date) {
+            let monat = zahlungsDatum.getMonth() + 1;
+            let quartal = Math.ceil(monat / 3);
+
+            guvData[monat].einnahmen += bezahltNetto;
+            guvData[monat].umsatzsteuer += bezahltMwst;
+            quartalsDaten[quartal].einnahmen += bezahltNetto;
+            quartalsDaten[quartal].umsatzsteuer += bezahltMwst;
+        }
+
+        guvData[index + 1].einnahmenOffen += Math.max(0, netto - bezahltNetto);
     });
 
     ausgabenData.forEach((row, index) => {
-        let date = row[0];
-        if (!(date instanceof Date)) {
-            fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}`);
-            return;
-        }
-        let monat = date.getMonth() + 1;
+        let zahlungsDatum = row[12]; // "Letzte Zahlung am"
         let netto = parseFloat(row[4]) || 0;
         let mwst = parseFloat(row[6]) || 0;
-        let bezahlt = parseFloat(row[8]) || 0;
+        let bezahltBrutto = parseFloat(row[8]) || 0;
+        let bezahltNetto = bezahltBrutto / 1.19;
+        let bezahltMwst = bezahltBrutto - bezahltNetto;
 
-        guvData[monat].ausgaben += bezahlt;
-        guvData[monat].vorsteuer += bezahlt > 0 ? mwst : 0;
-        guvData[monat].ausgabenOffen += netto - bezahlt;
+        if (bezahltBrutto > 0 && !(zahlungsDatum instanceof Date)) {
+            fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
+            return;
+        }
+
+        if (zahlungsDatum instanceof Date) {
+            let monat = zahlungsDatum.getMonth() + 1;
+            let quartal = Math.ceil(monat / 3);
+
+            guvData[monat].ausgaben += bezahltNetto;
+            guvData[monat].vorsteuer += bezahltMwst;
+            quartalsDaten[quartal].ausgaben += bezahltNetto;
+            quartalsDaten[quartal].vorsteuer += bezahltMwst;
+        }
+
+        guvData[index + 1].ausgabenOffen += Math.max(0, netto - bezahltNetto);
     });
 
     if (fehlendeDaten.length > 0) {
-        SpreadsheetApp.getUi().alert("Fehler: Es gibt Einträge ohne Datum! Bitte überprüfe folgende Zeilen:\n" + fehlendeDaten.join("\n"));
+        SpreadsheetApp.getUi().alert("Fehlende Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
         return;
     }
 
@@ -327,40 +356,27 @@ function calculateGUV() {
         guvSheet.clearContents();
     }
 
-    guvSheet.appendRow(["Zeitraum", "Einnahmen", "Offene Forderungen", "Ausgaben", "Offene Verbindlichkeiten",
-        "Umsatzsteuer", "Vorsteuer", "USt-Zahlung", "Ergebnis"]);
-
-    let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
-    for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = {
-            einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0
-        };
-    }
+    guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen (netto)", "Ausgaben (netto)", "Offene Verbindlichkeiten (netto)",
+        "Umsatzsteuer (19%)", "Vorsteuer (19%)", "USt-Zahlung", "Ergebnis (Gewinn/Verlust netto)"]);
 
     for (let m = 1; m <= 12; m++) {
-        let q = Math.ceil(m / 3);
         let data = guvData[m];
-        quartalsDaten[q].einnahmen += data.einnahmen;
-        quartalsDaten[q].einnahmenOffen += data.einnahmenOffen;
-        quartalsDaten[q].ausgaben += data.ausgaben;
-        quartalsDaten[q].ausgabenOffen += data.ausgabenOffen;
-        quartalsDaten[q].umsatzsteuer += data.umsatzsteuer;
-        quartalsDaten[q].vorsteuer += data.vorsteuer;
-        quartalsDaten[q].ustZahlung += data.umsatzsteuer - data.vorsteuer;
-        quartalsDaten[q].ergebnis += data.einnahmen - data.ausgaben;
-
+        let ustZahlung = data.umsatzsteuer - data.vorsteuer;
+        let ergebnis = data.einnahmen - data.ausgaben - ustZahlung;
         guvSheet.appendRow([`Monat ${m}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
-            data.umsatzsteuer, data.vorsteuer, data.umsatzsteuer - data.vorsteuer, data.ergebnis]);
+            data.umsatzsteuer, data.vorsteuer, ustZahlung, ergebnis]);
 
         if (m % 3 === 0) {
+            let q = Math.ceil(m / 3);
             let quartalData = quartalsDaten[q];
+            let quartalUstZahlung = quartalData.umsatzsteuer - quartalData.vorsteuer;
+            let quartalErgebnis = quartalData.einnahmen - quartalData.ausgaben - quartalUstZahlung;
             guvSheet.appendRow([`Quartal ${q}`, quartalData.einnahmen, quartalData.einnahmenOffen, quartalData.ausgaben, quartalData.ausgabenOffen,
-                quartalData.umsatzsteuer, quartalData.vorsteuer, quartalData.ustZahlung, quartalData.ergebnis]);
+                quartalData.umsatzsteuer, quartalData.vorsteuer, quartalUstZahlung, quartalErgebnis]);
         }
     }
 
-    let jahreswerte = Object.values(quartalsDaten).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), [0, 0, 0, 0, 0, 0, 0, 0]);
+    let jahreswerte = Object.values(guvData).reduce((acc, m) => acc.map((val, i) => val + Object.values(m)[i]), Array(8).fill(0));
     guvSheet.appendRow(["Gesamtjahr", ...jahreswerte]);
 
     let lastRow = guvSheet.getLastRow();
@@ -369,7 +385,7 @@ function calculateGUV() {
         guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     }
 
-    SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
+    SpreadsheetApp.getUi().alert("GUV-Berechnung mit Ist-Besteuerung abgeschlossen und aktualisiert.");
 }
 
 function calculateBWA() {
