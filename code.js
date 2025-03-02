@@ -15,7 +15,7 @@ function onOpen() {
     const ui = SpreadsheetApp.getUi();
     ui.createMenu("📂 Buchhaltung")
         .addItem("📥 Rechnungen importieren", "importDriveFiles")
-        .addItem("🔄 Aktualisieren (Formeln & Formatierung)", "updateSheetOnCurrentSheet")
+        .addItem("🔄 Aktualisieren (Formeln & Formatierung)", "updateEinnahmenAusgaben")
         .addItem("📊 GUV berechnen", "calculateGUV")
         .addItem("📈 BWA berechnen", "calculateBWA")
         .addToUi();
@@ -64,9 +64,7 @@ function importDriveFiles() {
         // Spaltenbreite in Rechnungen-Eingang anpassen
         sheetEinnahmen.autoResizeColumns(1, sheetEinnahmen.getLastColumn());
         if (einnahmenTab.getLastRow() > 1) {
-            updateFormulasOnSheet(einnahmenTab);
-            applyFormatting(einnahmenTab);
-            einnahmenTab.autoResizeColumns(1, einnahmenTab.getLastColumn());
+            updateEinnahmenAusgabenTab(einnahmenTab);
         }
     } else {
         Logger.log("Fehler: Der 'Einnahmen'-Ordner wurde nicht gefunden.");
@@ -78,9 +76,7 @@ function importDriveFiles() {
         // Spaltenbreite in Rechnungen-Ausgang anpassen
         sheetAusgaben.autoResizeColumns(1, sheetAusgaben.getLastColumn());
         if (ausgabenTab.getLastRow() > 1) {
-            updateFormulasOnSheet(ausgabenTab);
-            applyFormatting(ausgabenTab);
-            ausgabenTab.autoResizeColumns(1, ausgabenTab.getLastColumn());
+            updateEinnahmenAusgabenTab(ausgabenTab);
         }
     } else {
         Logger.log("Fehler: Der 'Ausgaben'-Ordner wurde nicht gefunden.");
@@ -171,24 +167,29 @@ function getFolderByName(parentFolder, folderName) {
     return folderIter.hasNext() ? folderIter.next() : null;
 }
 
-function updateSheetOnCurrentSheet() {
+function updateEinnahmenAusgaben() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getActiveSheet();
-    const name = sheet.getName();
-    if (name !== "Einnahmen" && name !== "Ausgaben") {
-        SpreadsheetApp.getUi().alert("Diese Funktion ist nur für die Blätter 'Einnahmen' und 'Ausgaben' verfügbar.");
+    const einnahmenTab = ss.getSheetByName("Einnahmen");
+    const ausgabenTab = ss.getSheetByName("Ausgaben");
+
+    if (!einnahmenTab || !ausgabenTab) {
+        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
         return;
     }
-    updateFormulasOnSheet(sheet);
-    applyFormatting(sheet);
-    sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+    // Beide Tabs aktualisieren
+    updateEinnahmenAusgabenTab(einnahmenTab);
+    updateEinnahmenAusgabenTab(ausgabenTab);
+
+    SpreadsheetApp.getUi().alert("Einnahmen und Ausgaben wurden erfolgreich aktualisiert!");
 }
 
-function updateFormulasOnSheet(sheet) {
+function updateEinnahmenAusgabenTab(sheet) {
     const lastRow = sheet.getLastRow();
     const numRows = lastRow - 1;
     if (numRows < 1) return;
 
+    // Formeln aktualisieren
     const formulas6 = [];
     const formulas7 = [];
     const formulas9 = [];
@@ -196,11 +197,11 @@ function updateFormulasOnSheet(sheet) {
     const formulas11 = [];
 
     for (let i = 2; i <= lastRow; i++) {
-        formulas6.push([`=E${i}*F${i}`]); // MwSt.-Betrag (Spalte G)
-        formulas7.push([`=E${i}+G${i}`]); // Bruttobetrag (Spalte H)
-        formulas9.push([`=E${i}-(I${i}-G${i})`]); // Restbetrag Netto (Spalte J)
-        formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Quartal (Spalte K)
-        formulas11.push([`=IF(OR(I${i}=""; I${i}=0); "Offen"; IF(I${i}>=H${i}; "Bezahlt"; "Teilbezahlt"))`]);
+        formulas6.push([`=E${i}*F${i}`]);                        // Spalte G: MwSt.-Betrag
+        formulas7.push([`=E${i}+G${i}`]);                        // Spalte H: Bruttobetrag
+        formulas9.push([`=E${i}-(I${i}-G${i})`]);                // Spalte J: Restbetrag netto
+        formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Spalte K: Quartal
+        formulas11.push([`=IF(OR(I${i}=""; I${i}=0); "Offen"; IF(I${i}>=H${i}; "Bezahlt"; "Teilbezahlt"))`]); // Spalte L: Zahlungsstatus
     }
 
     sheet.getRange(2, 7, numRows, 1).setFormulas(formulas6);
@@ -208,34 +209,19 @@ function updateFormulasOnSheet(sheet) {
     sheet.getRange(2, 10, numRows, 1).setFormulas(formulas9);
     sheet.getRange(2, 11, numRows, 1).setFormulas(formulas10);
     sheet.getRange(2, 12, numRows, 1).setFormulas(formulas11);
-}
 
-function applyFormatting(sheet) {
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-        // Spalte A (Datum)
-        sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
+    // Formatierung anwenden
+    sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");               // Datum in Spalte A
+    sheet.getRange(`M2:M${lastRow}`).setNumberFormat("DD.MM.YYYY");               // Datum in Spalte M
+    sheet.getRange(`I2:I${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");       // Währungsformat in Spalte I
+    sheet.getRange(`P2:P${lastRow}`).setNumberFormat("DD.MM.YYYY");               // Datum in Spalte P
+    sheet.getRange(`E2:E${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");       // Nettobetrag in Spalte E
+    sheet.getRange(`G2:G${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");       // MwSt.-Betrag in Spalte G
+    sheet.getRange(`H2:H${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");       // Bruttobetrag in Spalte H
+    sheet.getRange(`J2:J${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");       // Restbetrag in Spalte J
+    sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");                     // Prozentsatz in Spalte F
 
-        // Spalte M (z.B. weiterer Datumswert)
-        sheet.getRange(`M2:M${lastRow}`).setNumberFormat("DD.MM.YYYY");
-
-        // Spalte I als Währung (Accounting)
-        sheet.getRange(`I2:I${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-
-        // Spalte P (Letzte Aktualisierung, Datum)
-        sheet.getRange(`P2:P${lastRow}`).setNumberFormat("DD.MM.YYYY");
-
-        // Spalte E (Nettobetrag) als Währung
-        sheet.getRange(`E2:E${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-
-        // MwSt, Bruttobetrag und Restbetrag in G, H und J als Währung
-        sheet.getRange(`G2:G${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        sheet.getRange(`H2:H${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-        sheet.getRange(`J2:J${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00");
-
-        // Spalte F (Prozentsatz)
-        sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
-    }
+    sheet.autoResizeColumns(1, sheet.getLastColumn());
 }
 
 /**
