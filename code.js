@@ -229,16 +229,9 @@ function updateEinnahmenAusgabenTab(sheet) {
  *
  * 📌 Zweck:
  *  - Erstellt eine Gewinn- und Verlustrechnung (GuV) nach dem Prinzip der Ist-Besteuerung.
- *  - Berücksichtigt Einnahmen und Ausgaben nur, wenn sie tatsächlich bezahlt wurden.
- *  - Offene Posten (kein Zahlungsdatum) erscheinen nur in der Jahresübersicht,
- *    nicht in den Monats- oder Quartalswerten.
- *
- * ✅ Verbesserungen & Fixes:
+ *  - Berücksichtigt Einnahmen und Ausgaben nur, wenn sie tatsächlich bezahlt wurden, anhand des Zahlungsdatums.
  *  - Dynamische Berechnung des MwSt.-Satzes (0%, 7%, 19%) mit separaten Spalten.
- *  - Validierung des Zahlungsdatums (keine zukünftigen Zahlungen erlaubt).
- *  - Gutschriften & Erstattungen (negative Werte korrekt berücksichtigt).
  *  - Korrekte Berechnung des Gewinns (ohne Umsatzsteuerabzug).
- *  - Fix für doppelte Addition von offenen Forderungen/Verbindlichkeiten in der Jahresübersicht.
  *
  * 📂 Benötigte Tabellenblätter:
  *  - "Einnahmen" (benötigte Spalten: Netto-Betrag, MwSt.-Satz, Bezahlter Brutto-Betrag, Zahlungsdatum).
@@ -372,13 +365,6 @@ function createEmptyGuVObject() {
  * zu den offenen Beträgen (je nach Kategorie) addiert.
  */
 function processGuVRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDaten) {
-    // Annahmen zu den Spalten:
-    // row[0] = Rechnungsdatum
-    // row[4] = Nettobetrag
-    // row[5] = MwSt.-Satz (z. B. 7, 19)
-    // row[8] = Bezahlter Bruttobetrag
-    // row[12] = Zahlungsdatum (falls vorhanden)
-
     var invoiceDate = parseDate(row[0]);       // Rechnungsdatum
     var paymentDate = parseDate(row[12]);        // Zahlungsdatum
     var netto = parseCurrency(row[4]);
@@ -445,7 +431,6 @@ function processGuVRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDat
         return;
     }
 }
-
 
 // Hilfsfunktion: Berechnet die Jahressumme über alle Monatswerte
 function calculateYearlySum(guvData) {
@@ -586,12 +571,6 @@ function getBwaCategory(category, isIncome, rowIndex, fehlendeKategorien) {
  * - Offene Posten (bei Teilzahlungen oder fehlendem Datum) werden separat erfasst.
  */
 function processBwaRow(row, index, bwaData, isIncome, fehlendeDaten, fehlendeKategorien) {
-    // Annahme:
-    // row[2] = Kategorie
-    // row[4] = Rechnungs-Netto (z.B. Gesamtnetto)
-    // row[5] = MwSt.-Satz (z.B. 0, 7, 19)
-    // row[8] = Bezahlter Bruttobetrag
-    // row[12] = Zahlungsdatum
     const category = row[2];
     const nettoRechnung = parseCurrency(row[4]);
     const mwstRate = parseMwstRate(row[5]);
