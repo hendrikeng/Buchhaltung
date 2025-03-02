@@ -321,22 +321,37 @@ function calculateGUV() {
         "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis"]);
 
     for (let m = 1; m <= 12; m++) {
+        guvData[m].einnahmenOffen = offeneTotals.einnahmen; // Offene Forderungen eintragen
+        guvData[m].ausgabenOffen = offeneTotals.ausgaben; // Offene Verbindlichkeiten eintragen
         appendRowToSheet(guvSheet, `Monat ${m}`, guvData[m]);
         if (m % 3 === 0) {
             let q = Math.ceil(m / 3);
+            quartalsDaten[q].einnahmenOffen = offeneTotals.einnahmen;
+            quartalsDaten[q].ausgabenOffen = offeneTotals.ausgaben;
             appendRowToSheet(guvSheet, `Quartal ${q}`, quartalsDaten[q]);
         }
     }
 
     let jahresSumme = calculateYearlySum(guvData);
-    jahresSumme.einnahmenOffen += offeneTotals.einnahmen;
-    jahresSumme.ausgabenOffen += offeneTotals.ausgaben;
+    jahresSumme.einnahmenOffen = offeneTotals.einnahmen;
+    jahresSumme.ausgabenOffen = offeneTotals.ausgaben;
 
     appendRowToSheet(guvSheet, "Gesamtjahr", jahresSumme);
 
     guvSheet.getRange(`B2:M${guvSheet.getLastRow()}`).setNumberFormat("#,##0.00€");
     guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
+}
+
+// Hilfsfunktion: Erstellt eine leere GuV-Datenstruktur
+function createEmptyGuVObject() {
+    return {
+        einnahmen: 0, einnahmenOffen: 0,
+        ausgaben: 0, ausgabenOffen: 0,
+        ust_0: 0, ust_7: 0, ust_19: 0,
+        vst_0: 0, vst_7: 0, vst_19: 0,
+        ustZahlung: 0, ergebnis: 0
+    };
 }
 
 /**
@@ -399,30 +414,16 @@ function processGuVRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDat
     quartalsDaten[quartal][isIncome ? "einnahmen" : "ausgaben"] += bezahltNetto;
 }
 
-function createEmptyGuVObject() {
-    return {
-        einnahmen: 0, einnahmenOffen: 0,
-        ausgaben: 0, ausgabenOffen: 0,
-        ust_0: 0, ust_7: 0, ust_19: 0,
-        vst_0: 0, vst_7: 0, vst_19: 0,
-        ustZahlung: 0, ergebnis: 0
-    };
-}
-
-/**
- * Berechnet die Jahressumme über alle Monatswerte.
- */
+// Hilfsfunktion: Berechnet die Jahressumme über alle Monatswerte
 function calculateYearlySum(guvData) {
-    let sum = JSON.parse(JSON.stringify(guvData[1]));
-    for (let m = 2; m <= 12; m++) {
+    let sum = createEmptyGuVObject();
+    for (let m = 1; m <= 12; m++) {
         Object.keys(sum).forEach(k => sum[k] += guvData[m][k]);
     }
     return sum;
 }
 
-/**
- * Hängt eine Zeile mit den Daten zum angegebenen Label an das Sheet an.
- */
+// Hilfsfunktion: Fügt eine Zeile in die GuV-Tabelle ein
 function appendRowToSheet(sheet, label, data) {
     sheet.appendRow([
         label,
