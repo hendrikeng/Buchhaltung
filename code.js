@@ -13,30 +13,11 @@ function setupTrigger() {
 
 function onOpen() {
     const ui = SpreadsheetApp.getUi();
-
-    // Submenü für globale Funktionen (Rechnungen importieren)
-    const rechnungenMenu = ui.createMenu("🧾 Rechnungen");
-    rechnungenMenu.addItem("📥 Rechnungen importieren", "importDriveFiles");
-
-    // Submenü für Funktionen, die nur für "Einnahmen" und "Ausgaben" gelten
-    const einnahmenAusgabenMenu = ui.createMenu("💰 Einnahmen/Ausgaben");
-    einnahmenAusgabenMenu.addItem("🔀 Tabelle sortieren", "sortCurrentSheetByColumn");
-    einnahmenAusgabenMenu.addItem("🔄 Aktualisieren (Formeln & Formatierung)", "updateSheetOnCurrentSheet");
-
-    // Submenü für GUV
-    const guvMenu = ui.createMenu("📊 GUV");
-    guvMenu.addItem("✅ GUV berechnen", "calculateGUV");
-
-    // Submenü für BWA
-    const bwaMenu = ui.createMenu("📈 BWA");
-    bwaMenu.addItem("📊 BWA berechnen", "calculateBWA");
-
-    // Hauptmenü "Buchhaltung" mit allen Submenüs
     ui.createMenu("📂 Buchhaltung")
-        .addSubMenu(rechnungenMenu)
-        .addSubMenu(einnahmenAusgabenMenu)
-        .addSubMenu(guvMenu)
-        .addSubMenu(bwaMenu)  // Hier wird BWA hinzugefügt
+        .addItem("📥 Rechnungen importieren", "importDriveFiles")
+        .addItem("🔄 Aktualisieren (Formeln & Formatierung)", "updateSheetOnCurrentSheet")
+        .addItem("📊 GUV berechnen", "calculateGUV")
+        .addItem("📈 BWA berechnen", "calculateBWA")
         .addToUi();
 }
 
@@ -188,18 +169,6 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
 function getFolderByName(parentFolder, folderName) {
     const folderIter = parentFolder.getFoldersByName(folderName);
     return folderIter.hasNext() ? folderIter.next() : null;
-}
-
-/* ----- Funktionen ausschließlich für die Tabellen "Einnahmen" und "Ausgaben" ----- */
-function sortCurrentSheetByColumn() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getActiveSheet();
-    const name = sheet.getName();
-    if (name !== "Einnahmen" && name !== "Ausgaben") {
-        SpreadsheetApp.getUi().alert("Diese Funktion ist nur für die Blätter 'Einnahmen' und 'Ausgaben' verfügbar.");
-        return;
-    }
-    sortSheetByColumn(sheet, 2);
 }
 
 function updateSheetOnCurrentSheet() {
