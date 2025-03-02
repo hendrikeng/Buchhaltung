@@ -558,11 +558,6 @@ function appendRowToSheet(sheet, label, data) {
     ]);
 }
 
-/* Hilfsfunktionen */
-function parseCurrency(value) {
-    return parseFloat(value.toString().replace(/[^\d,.-]/g, "").replace(",", ".")) || 0;
-}
-
 /**
  * parseDate:
  * - Erzeugt ein Date-Objekt aus einem Wert.
@@ -570,19 +565,194 @@ function parseCurrency(value) {
  */
 function parseDate(value) {
     let d = (typeof value === "string") ? new Date(value) : (value instanceof Date ? value : null);
-    // Wenn das Datum ungültig ist, d.h. getTime() liefert NaN, gib null zurück.
+    // Wenn das Datum ungültig ist (getTime() => NaN), gib null zurück
     if (d && isNaN(d.getTime())) {
         return null;
     }
     return d;
 }
 
+/**
+ * parseCurrency:
+ * - Wandelt einen Währungs-/Zahlenstring in eine float-Variable um
+ *   (z. B. "1.234,56" → 1234.56).
+ */
+function parseCurrency(value) {
+    return parseFloat(
+        value
+            .toString()
+            .replace(/[^\d,.-]/g, "")
+            .replace(",", ".")
+    ) || 0;
+}
+
+/**
+ * parseMwstRate:
+ * - Konvertiert einen MwSt.-Wert in Prozent (0, 7, 19, etc.).
+ * - Beispiel: 0,07 => 7, "19%" => 19, "0,07" => 7, usw.
+ */
 function parseMwstRate(value) {
-    let rate = (typeof value === "number") ? (value < 1 ? value * 100 : value) :
-        parseFloat(value.toString().replace("%", "").replace(",", "."));
+    let rate = (typeof value === "number")
+        ? (value < 1 ? value * 100 : value)
+        : parseFloat(value.toString().replace("%", "").replace(",", "."));
     return isNaN(rate) ? 19 : rate;
 }
 
+/**
+ * Liefert das BWA-Datenobjekt für einen einzelnen Monat,
+ * das alle benötigten Felder enthält.
+ */
+function createEmptyBwaMonth() {
+    return {
+        // Einnahmen-Kategorien
+        dienstleistungen: 0,
+        produkte: 0,
+        sonstigeEinnahmen: 0,
+        gesamtEinnahmen: 0,
+
+        // Ausgaben-Kategorien
+        betriebskosten: 0,
+        marketing: 0,
+        reisen: 0,
+        einkauf: 0,
+        personal: 0,
+        gesamtAusgaben: 0,
+
+        // Offene Posten
+        offeneForderungen: 0,
+        offeneVerbindlichkeiten: 0,
+
+        // Ergebnis- und Liquiditätskennzahlen
+        rohertrag: 0,
+        betriebsergebnis: 0,
+        ergebnisVorSteuern: 0,
+        ergebnisNachSteuern: 0,
+
+        // Bank-/Liquiditätsstand
+        liquiditaet: 0
+    };
+}
+
+/**
+ * categoryMapping:
+ * - Weist die Textkategorien den Feldern im BWA-Objekt zu.
+ * - Falls unbekannt, weicht man auf "sonstigeEinnahmen" (bei Einnahmen)
+ *   oder "betriebskosten" (bei Ausgaben) aus.
+ */
+function getBwaCategory(category, isIncome, rowIndex, fehlendeKategorien) {
+    const map = {
+        "Dienstleistungen": "dienstleistungen",
+        "Produkte & Waren": "produkte",
+        "Sonstige Einnahmen": "sonstigeEinnahmen",
+        "Betriebskosten": "betriebskosten",
+        "Marketing & Werbung": "marketing",
+        "Reisen & Mobilität": "reisen",
+        "Wareneinkauf & Dienstleistungen": "einkauf",
+        "Personal & Gehälter": "personal"
+    };
+
+    if (!category || !map[category]) {
+        let fallback = isIncome ? "sonstigeEinnahmen" : "betriebskosten";
+        fehlendeKategorien.push(
+            `Zeile ${rowIndex}: Unbekannte Kategorie "${category || "N/A"}" → Verwende "${fallback}"`
+        );
+        return fallback;
+    }
+    return map[category];
+}
+
+/**
+ * processBwaRow:
+ * - Verarbeitet eine einzelne Zeile aus Einnahmen/Ausgaben.
+ * - Prüft das Zahlungsdatum, ggf. Fehlermeldung bei ungültigen Daten.
+ * - **WICHTIG**: Spalte [8] = bezahlter Bruttobetrag => wir ermitteln den Nettoanteil.
+ * - Summiert offene Posten, falls nur Teilbeträge bezahlt wurden oder kein Datum vorliegt.
+ */
+function processBwaRow(row, index, bwaData, isIncome, fehlendeDaten, fehlendeKategorien) {
+    // Wir gehen von folgender Spaltenstruktur aus (analog GuV):
+    // row[2] = Kategorie
+    // row[4] = Rechnungs-Netto (z.B. Gesamtnetto der Rechnung)
+    // row[5] = MwSt.-Satz (z.B. 0, 7, 19)
+    // row[8] = Bezahlter Bruttobetrag
+    // row[12] = Zahlungsdatum
+
+    const category = row[2];
+    const nettoRechnung = parseCurrency(row[4]);         // Nettobetrag lt. Rechnung
+    const mwstRate = parseMwstRate(row[5]);                // z.B. 19
+    const bezahltBrutto = parseCurrency(row[8]);           // Tatsächlich bezahlter Bruttobetrag
+    const zahlungsDatum = parseDate(row[12]);
+
+    // Falls MwSt.-Satz > 0 => factor = 1 + (mwstRate/100), sonst 1
+    const factor = mwstRate > 0 ? 1 + (mwstRate / 100) : 1;
+    // Nettoanteil an der tatsächlichen Zahlung
+    const bezahltNetto = bezahltBrutto / factor;
+
+    // Datum-Check 1: Zahlung ohne Datum
+    if (bezahltBrutto !== 0 && !zahlungsDatum) {
+        fehlendeDaten.push(
+            `${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Zahlung ohne gültiges Zahlungsdatum!`
+        );
+        return;
+    }
+
+    // Datum-Check 2: Datum in der Zukunft
+    if (zahlungsDatum && zahlungsDatum > new Date()) {
+        fehlendeDaten.push(
+            `${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Zahlungsdatum liegt in der Zukunft!`
+        );
+        return;
+    }
+
+    // Falls überhaupt kein Datum => offener Posten, wir zählen NICHT in die Monatssummen
+    if (!zahlungsDatum) {
+        if (isIncome) {
+            bwaData.offeneForderungen += nettoRechnung;
+        } else {
+            bwaData.offeneVerbindlichkeiten += nettoRechnung;
+        }
+        return;
+    }
+
+    // Bestimme den Monat (1..12)
+    const monat = zahlungsDatum.getMonth() + 1;
+
+    // Kategorie zuordnen
+    const mappedCat = getBwaCategory(category, isIncome, index + 2, fehlendeKategorien);
+
+    // Offener Teil: Falls nur Teilbetrag bezahlt wurde
+    const restOffen = Math.max(0, nettoRechnung - bezahltNetto);
+    if (restOffen > 0) {
+        if (isIncome) {
+            bwaData.offeneForderungen += restOffen;
+        } else {
+            bwaData.offeneVerbindlichkeiten += restOffen;
+        }
+    }
+
+    // Monatsobjekt anlegen, falls noch nicht vorhanden
+    let monthObj = bwaData.monats[monat];
+    if (!monthObj) {
+        bwaData.monats[monat] = createEmptyBwaMonth();
+        monthObj = bwaData.monats[monat];
+    }
+
+    // Nur den Netto-Anteil in die Kategorien summieren
+    if (isIncome) {
+        monthObj[mappedCat] += bezahltNetto;
+        monthObj.gesamtEinnahmen += bezahltNetto;
+    } else {
+        monthObj[mappedCat] += bezahltNetto;
+        monthObj.gesamtAusgaben += bezahltNetto;
+    }
+}
+
+/**
+ * calculateBWA:
+ * - Liest Daten aus "Einnahmen", "Ausgaben" und "Bankbewegungen".
+ * - Erzeugt/aktualisiert ein "BWA"-Sheet mit Monats-, Quartals- und Jahreswerten.
+ * - Geht davon aus, dass in Spalte [8] der BEZAHLTE BRUTTOBETRAG steht.
+ *   => Wir rechnen den Nettoanteil via MwSt.-Satz heraus.
+ */
 function calculateBWA() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const einnahmenSheet = ss.getSheetByName("Einnahmen");
@@ -590,132 +760,198 @@ function calculateBWA() {
     const bankSheet = ss.getSheetByName("Bankbewegungen");
 
     if (!einnahmenSheet || !ausgabenSheet || !bankSheet) {
-        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen', 'Ausgaben' oder 'Bankbewegungen' wurde nicht gefunden.");
+        SpreadsheetApp.getUi().alert(
+            "Fehlende Tabellenblätter! Bitte prüfe 'Einnahmen', 'Ausgaben' und 'Bankbewegungen'."
+        );
         return;
     }
 
+    // Daten auslesen (ohne Kopfzeile)
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
     const bankData = bankSheet.getDataRange().getValues().slice(1);
+
+    // Zentrales BWA-Datenobjekt
+    // monats: Dictionary { 1: {...}, 2: {...}, ..., 12: {...} }
+    // + Felder für Gesamt-Offene Posten (ohne Datum)
+    let bwaData = {
+        monats: {},
+        offeneForderungen: 0,
+        offeneVerbindlichkeiten: 0
+    };
+
+    // Fehlersammlungen
+    let fehlendeDaten = [];
     let fehlendeKategorien = [];
 
-    let bwaData = {};
-    let lastSaldo = 0;
-
-    for (let m = 1; m <= 12; m++) {
-        bwaData[m] = {
-            dienstleistungen: 0, produkte: 0, sonstigeEinnahmen: 0, gesamtEinnahmen: 0,
-            betriebskosten: 0, marketing: 0, reisen: 0, einkauf: 0, personal: 0, gesamtAusgaben: 0,
-            offeneForderungen: 0, offeneVerbindlichkeiten: 0,
-            rohertrag: 0, betriebsergebnis: 0, ergebnisVorSteuern: 0, ergebnisNachSteuern: 0,
-            liquiditaet: lastSaldo
-        };
-    }
-
-    function getCategoryMapping(category, zeile, typ) {
-        const categoryMap = {
-            "Dienstleistungen": "dienstleistungen",
-            "Produkte & Waren": "produkte",
-            "Sonstige Einnahmen": "sonstigeEinnahmen",
-            "Betriebskosten": "betriebskosten",
-            "Marketing & Werbung": "marketing",
-            "Reisen & Mobilität": "reisen",
-            "Wareneinkauf & Dienstleistungen": "einkauf",
-            "Personal & Gehälter": "personal"
-        };
-
-        if (!category || !categoryMap[category]) {
-            let ersatzKategorie = typ === "Einnahme" ? "sonstigeEinnahmen" : "betriebskosten";
-            fehlendeKategorien.push(`Zeile ${zeile}: ${category || "KEINE KATEGORIE"} → Ersetzt durch '${ersatzKategorie}'`);
-            return ersatzKategorie;
-        }
-
-        return categoryMap[category];
-    }
-
+    // 1) Einnahmen durchgehen
     einnahmenData.forEach((row, index) => {
-        let date = row[0];
-        let category = row[2];
-        let netto = parseFloat(row[4]) || 0;
-        let bezahlt = parseFloat(row[8]) || 0;
-        let monat = date instanceof Date ? date.getMonth() + 1 : null;
-
-        if (!monat) return;
-
-        let mappedCategory = getCategoryMapping(category, index + 2, "Einnahme");
-        bwaData[monat][mappedCategory] += bezahlt;
-        bwaData[monat].gesamtEinnahmen += bezahlt;
-        bwaData[monat].offeneForderungen += netto - bezahlt;
+        processBwaRow(row, index, bwaData, true, fehlendeDaten, fehlendeKategorien);
     });
 
+    // 2) Ausgaben durchgehen
     ausgabenData.forEach((row, index) => {
-        let date = row[0];
-        let category = row[2];
-        let netto = parseFloat(row[4]) || 0;
-        let bezahlt = parseFloat(row[8]) || 0;
-        let monat = date instanceof Date ? date.getMonth() + 1 : null;
-
-        if (!monat) return;
-
-        let mappedCategory = getCategoryMapping(category, index + 2, "Ausgabe");
-        bwaData[monat][mappedCategory] += bezahlt;
-        bwaData[monat].gesamtAusgaben += bezahlt;
-        bwaData[monat].offeneVerbindlichkeiten += netto - bezahlt;
+        processBwaRow(row, index, bwaData, false, fehlendeDaten, fehlendeKategorien);
     });
 
-    bankData.forEach(row => {
-        let date = row[0];
-        let saldo = parseFloat(row[3]) || lastSaldo;
-        let monat = date instanceof Date ? date.getMonth() + 1 : null;
-        if (monat) {
-            bwaData[monat].liquiditaet = saldo;
-            lastSaldo = saldo;
+    // 3) Bankbewegungen => Liquidität
+    //    Hier: row[0] = Buchungsdatum, row[3] = Saldo
+    bankData.forEach((row) => {
+        const buchungsDatum = parseDate(row[0]);
+        if (!buchungsDatum || buchungsDatum > new Date()) return;
+
+        const saldo = parseCurrency(row[3]);
+        const monat = buchungsDatum.getMonth() + 1;
+
+        // Monatsobjekt anlegen, falls nicht vorhanden
+        if (!bwaData.monats[monat]) {
+            bwaData.monats[monat] = createEmptyBwaMonth();
+        }
+        // Nur den Saldo der letzten Buchung im Monat übernehmen:
+        if (!bwaData.monats[monat].__lastBankDate || buchungsDatum > bwaData.monats[monat].__lastBankDate) {
+            bwaData.monats[monat].liquiditaet = saldo;
+            bwaData.monats[monat].__lastBankDate = buchungsDatum;
         }
     });
-
-    let bwaSheet = ss.getSheetByName("BWA");
-    if (!bwaSheet) {
-        bwaSheet = ss.insertSheet("BWA");
-    } else {
-        bwaSheet.clearContents();
+    // Bereinige das Hilfsfeld __lastBankDate aus allen Monatsobjekten
+    for (let m in bwaData.monats) {
+        delete bwaData.monats[m].__lastBankDate;
     }
 
-    bwaSheet.appendRow(["Zeitraum", "Dienstleistungen", "Produkte", "Sonstige Einnahmen", "Gesamt-Einnahmen",
-        "Betriebskosten", "Marketing", "Reisen", "Einkauf", "Personal", "Gesamt-Ausgaben",
-        "Offene Forderungen", "Offene Verbindlichkeiten", "Rohertrag", "Betriebsergebnis",
-        "Ergebnis vor Steuern", "Ergebnis nach Steuern", "Liquidität"]);
+    // Falls gravierende Fehler: Abbruch
+    if (fehlendeDaten.length > 0) {
+        SpreadsheetApp.getUi().alert(
+            "Fehlerhafte Datensätze:\n" + fehlendeDaten.join("\n")
+        );
+        return;
+    }
 
+    // ---- Monatsweise Kennzahlen berechnen (rohertrag, betriebsergebnis, etc.) ----
     for (let m = 1; m <= 12; m++) {
-        let data = bwaData[m];
-        bwaSheet.appendRow([`Monat ${m}`, ...Object.values(data)]);
+        let moObj = bwaData.monats[m];
+        if (!moObj) {
+            // Falls keine Einträge, lege leeres Objekt an
+            bwaData.monats[m] = createEmptyBwaMonth();
+            moObj = bwaData.monats[m];
+            // Fallback: Setze Liquidität auf den zuletzt bekannten Saldo (falls vorhanden)
+        }
+
+        // Beispielberechnungen:
+        // Rohertrag = gesamtEinnahmen - Einkauf
+        moObj.rohertrag = moObj.gesamtEinnahmen - moObj.einkauf;
+
+        // Betriebsergebnis = Rohertrag - (alle anderen Ausgaben außer Einkauf)
+        let sonstigeAusgaben = moObj.gesamtAusgaben - moObj.einkauf;
+        moObj.betriebsergebnis = moObj.rohertrag - sonstigeAusgaben;
+
+        // Ergebnis vor Steuern = Betriebsergebnis
+        moObj.ergebnisVorSteuern = moObj.betriebsergebnis;
+
+        // Ergebnis nach Steuern (hier identisch, ggf. anpassen)
+        moObj.ergebnisNachSteuern = moObj.ergebnisVorSteuern;
+    }
+
+    // ---- Ausgabe ins "BWA"-Sheet ----
+    let bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
+    bwaSheet.clearContents();
+
+    // Kopfzeile
+    bwaSheet.appendRow([
+        "Zeitraum",
+        "Dienstleistungen", "Produkte", "Sonst. Einnahmen", "Gesamt-Einnahmen",
+        "Betriebskosten", "Marketing", "Reisen", "Einkauf", "Personal", "Gesamt-Ausgaben",
+        "Offene Forderungen", "Offene Verbindlichkeiten",
+        "Rohertrag", "Betriebsergebnis", "Ergebnis vor Steuern", "Ergebnis nach Steuern",
+        "Liquidität"
+    ]);
+
+    // Hilfsfunktion, um Daten aus dem Monatsobjekt in ein Array zu packen
+    function toRowData(moObj, label) {
+        return [
+            label,
+            moObj.dienstleistungen,
+            moObj.produkte,
+            moObj.sonstigeEinnahmen,
+            moObj.gesamtEinnahmen,
+            moObj.betriebskosten,
+            moObj.marketing,
+            moObj.reisen,
+            moObj.einkauf,
+            moObj.personal,
+            moObj.gesamtAusgaben,
+            moObj.offeneForderungen,
+            moObj.offeneVerbindlichkeiten,
+            moObj.rohertrag,
+            moObj.betriebsergebnis,
+            moObj.ergebnisVorSteuern,
+            moObj.ergebnisNachSteuern,
+            moObj.liquiditaet
+        ];
+    }
+
+    // Quartalssummen: Sammler
+    let quartalsSum = {
+        1: createEmptyBwaMonth(),
+        2: createEmptyBwaMonth(),
+        3: createEmptyBwaMonth(),
+        4: createEmptyBwaMonth()
+    };
+
+    // Jahreswerte (alle 12 Monate addiert)
+    let jahresSum = createEmptyBwaMonth();
+    // + Offene Posten ohne Datum
+    jahresSum.offeneForderungen = bwaData.offeneForderungen;
+    jahresSum.offeneVerbindlichkeiten = bwaData.offeneVerbindlichkeiten;
+
+    // Zeilen ausgeben
+    for (let m = 1; m <= 12; m++) {
+        let moObj = bwaData.monats[m];
+        let rowData = toRowData(moObj, `Monat ${m}`);
+        bwaSheet.appendRow(rowData);
+
+        // Quartal bestimmen
+        let q = Math.ceil(m / 3);
+
+        // Felder addieren ins Quartalsobjekt
+        for (let key in moObj) {
+            if (typeof moObj[key] === "number") {
+                quartalsSum[q][key] += moObj[key];
+            }
+        }
+
+        // Jahreswerte aufsummieren
+        for (let key in moObj) {
+            if (typeof moObj[key] === "number") {
+                jahresSum[key] += moObj[key];
+            }
+        }
+
+        // Nach jedem Quartalsende eine zusätzliche Zeile
         if (m % 3 === 0) {
-            let quartalDaten = Object.values(bwaData).slice(m - 2, m + 1).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0));
-            bwaSheet.appendRow([`Quartal ${Math.ceil(m / 3)}`, ...quartalDaten]);
+            let label = `Quartal ${q}`;
+            bwaSheet.appendRow(toRowData(quartalsSum[q], label));
         }
     }
 
-    let jahreswerte = Object.values(bwaData).reduce((acc, q) => acc.map((val, i) => val + Object.values(q)[i]), Array(17).fill(0));
-    bwaSheet.appendRow(["Gesamtjahr", ...jahreswerte]);
+    // Jahreszeile
+    bwaSheet.appendRow(toRowData(jahresSum, "Gesamtjahr"));
 
-    let lastRow = bwaSheet.getLastRow();
+    // Formatierung
+    const lastRow = bwaSheet.getLastRow();
     if (lastRow > 1) {
+        // Spalten B bis R: Währung
         bwaSheet.getRange(`B2:R${lastRow}`).setNumberFormat("#,##0.00€");
         bwaSheet.autoResizeColumns(1, bwaSheet.getLastColumn());
     }
 
+    // Hinweis auf fehlende Kategorien
     if (fehlendeKategorien.length > 0) {
         SpreadsheetApp.getUi().alert(
-            "Achtung! Einige Kategorien fehlen oder sind unbekannt:\n" +
+            "Achtung! Unbekannte Kategorien gefunden:\n" +
             fehlendeKategorien.join("\n") +
-            "\n→ Standardkategorie 'Sonstige Einnahmen' oder 'Betriebskosten' wurde genutzt."
+            "\n\n→ Es wurde 'sonstigeEinnahmen' bzw. 'betriebskosten' verwendet."
         );
     }
 
     SpreadsheetApp.getUi().alert("BWA-Berechnung abgeschlossen und aktualisiert.");
 }
-
-
-
-
-
-
