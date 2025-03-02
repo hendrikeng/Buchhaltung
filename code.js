@@ -127,7 +127,7 @@ function importFilesFromFolder(folder, importSheet, mainSheet, type, historyTab)
                 "",                      // Spalte I: (wird als Währung formatiert)
                 `=E${currentRow}-(I${currentRow}-G${currentRow})`, // Spalte J: Restbetrag Netto
                 `=IF(A${currentRow}=""; ""; ROUNDUP(MONTH(A${currentRow})/3;0))`, // Spalte K: Quartal
-                `=IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Offen")`, // Spalte L: Zahlungsstatus
+                `=IF(OR(I${currentRow}=""; I${currentRow}=0); "Offen"; IF(I${currentRow}>=H${currentRow}; "Bezahlt"; "Teilbezahlt"))`, // Spalte L: Zahlungsstatus
                 "",                      // Spalte M: (wird als Datum formatiert)
                 fileName,                // Spalte N: Dateiname (wiederholt)
                 fileUrl,                 // Spalte O: Link zur Datei
@@ -184,28 +184,6 @@ function updateSheetOnCurrentSheet() {
     sheet.autoResizeColumns(1, sheet.getLastColumn());
 }
 
-function sortSheetByColumn(sheet, column) {
-    const range = sheet.getDataRange();
-    const values = range.getValues();
-    if (values.length <= 1) {
-        Logger.log("Keine Daten zum Sortieren.");
-        return;
-    }
-    const header = values.shift();
-    values.sort((a, b) => {
-        const valA = a[column - 1];
-        const valB = b[column - 1];
-        if (typeof valA === "number" && typeof valB === "number") {
-            return valA - valB;
-        }
-        return String(valA).localeCompare(String(valB));
-    });
-    sheet.clearContents();
-    sheet.appendRow(header);
-    sheet.getRange(2, 1, values.length, values[0].length).setValues(values);
-    updateFormulasOnSheet(sheet);
-}
-
 function updateFormulasOnSheet(sheet) {
     const lastRow = sheet.getLastRow();
     const numRows = lastRow - 1;
@@ -222,7 +200,7 @@ function updateFormulasOnSheet(sheet) {
         formulas7.push([`=E${i}+G${i}`]); // Bruttobetrag (Spalte H)
         formulas9.push([`=E${i}-(I${i}-G${i})`]); // Restbetrag Netto (Spalte J)
         formulas10.push([`=IF(A${i}=""; ""; ROUNDUP(MONTH(A${i})/3;0))`]); // Quartal (Spalte K)
-        formulas11.push([`=IF(OR(I${i}=""; I${i}=0); "Offen"; IF(I${i}>=H${i}; "Bezahlt"; "Offen"))`]); // Zahlungsstatus (Spalte L)
+        formulas11.push([`=IF(OR(I${i}=""; I${i}=0); "Offen"; IF(I${i}>=H${i}; "Bezahlt"; "Teilbezahlt"))`]);
     }
 
     sheet.getRange(2, 7, numRows, 1).setFormulas(formulas6);
@@ -294,9 +272,8 @@ function calculateGUV() {
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
 
     let guvData = {}, quartalsDaten = {}, fehlendeDaten = [];
-    let offeneTotals = { einnahmen: 0, ausgaben: 0 }; // Hier werden offene Posten gesammelt
+    let offeneTotals = { einnahmen: 0, ausgaben: 0 };
 
-    // Initialisiere Monats- und Quartalsdaten
     for (let m = 1; m <= 12; m++) {
         guvData[m] = createEmptyGuVObject();
     }
@@ -304,25 +281,22 @@ function calculateGUV() {
         quartalsDaten[q] = createEmptyGuVObject();
     }
 
-    // Verarbeitung von Einnahmen und Ausgaben
     einnahmenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
     ausgabenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
 
-    // Falls Fehler vorhanden sind (z.B. fehlendes Zahlungsdatum), abbrechen
     if (fehlendeDaten.length > 0) {
         SpreadsheetApp.getUi().alert("Fehlende oder fehlerhafte Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
         return;
     }
 
-    // Erstellung oder Bereinigung der GuV-Tabelle
     let guvSheet = ss.getSheetByName("GuV") || ss.insertSheet("GuV");
     guvSheet.clearContents();
     guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen", "Ausgaben (netto)", "Offene Verbindlichkeiten",
         "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis"]);
 
     for (let m = 1; m <= 12; m++) {
-        guvData[m].einnahmenOffen = offeneTotals.einnahmen; // Offene Forderungen eintragen
-        guvData[m].ausgabenOffen = offeneTotals.ausgaben; // Offene Verbindlichkeiten eintragen
+        guvData[m].einnahmenOffen = offeneTotals.einnahmen;
+        guvData[m].ausgabenOffen = offeneTotals.ausgaben;
         appendRowToSheet(guvSheet, `Monat ${m}`, guvData[m]);
         if (m % 3 === 0) {
             let q = Math.ceil(m / 3);
@@ -335,7 +309,6 @@ function calculateGUV() {
     let jahresSumme = calculateYearlySum(guvData);
     jahresSumme.einnahmenOffen = offeneTotals.einnahmen;
     jahresSumme.ausgabenOffen = offeneTotals.ausgaben;
-
     appendRowToSheet(guvSheet, "Gesamtjahr", jahresSumme);
 
     guvSheet.getRange(`B2:M${guvSheet.getLastRow()}`).setNumberFormat("#,##0.00€");
