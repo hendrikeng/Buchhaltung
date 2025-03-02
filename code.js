@@ -262,8 +262,48 @@ function applyFormatting(sheet) {
     }
 }
 
-/* ----- Neue Funktion: GUV-Berechnung ----- */
+/**
+ * calculateGUV (Ist-Besteuerung)
+ *
+ * Zweck:
+ *  - Führt eine GuV-Berechnung durch, bei der Einnahmen und Ausgaben nur dann erfasst werden,
+ *    wenn sie tatsächlich bezahlt wurden (Ist-Besteuerung).
+ *  - Offene Posten (kein Zahlungsdatum) werden nicht in die Monats-/Quartalswerte übernommen,
+ *    sondern nur als Gesamtsumme offener Forderungen/Verbindlichkeiten ausgewiesen.
+ *
+ * Benötigte Tabellenblätter:
+ *  - "Einnahmen" (mit mindestens diesen Spalten):
+ *      - Netto-Betrag (z.B. Spalte E)
+ *      - MwSt (z.B. Spalte G)
+ *      - Bezahlter Brutto-Betrag (z.B. Spalte I)
+ *      - Zahlungsdatum (z.B. Spalte M)
+ *  - "Ausgaben" (mit mindestens den gleichen relevanten Spalten)
+ *  - "GUV" (wird automatisch erzeugt oder überschrieben, falls schon vorhanden)
+ *
+ * Wichtige Schritte:
+ *  1) Einlesen aller Daten aus "Einnahmen" und "Ausgaben".
+ *  2) Für jede Zeile:
+ *     - Wenn ein Zahlungsdatum vorhanden ist, werden die gezahlten Netto- und MwSt-Beträge
+ *       in den passenden Monat (und das passende Quartal) eingetragen.
+ *     - Sofern nur ein Teilbetrag gezahlt wurde, wird der Restbetrag als "offen" im selben Zeitraum ausgewiesen.
+ *     - Wenn kein Zahlungsdatum existiert, wird der gesamte Netto-Betrag als "offen" in der Jahressumme verbucht.
+ *  3) Aufsummierung der Daten in einer Monats- und Quartalsübersicht.
+ *  4) Zusammenfassung der Werte in einer "Gesamtjahr"-Zeile, inklusive aller komplett offenen Posten
+ *     (ohne Zahlungsdatum).
+ *  5) Formatierung der Ausgabedaten (z.B. Euro-Formatierung).
+ *
+ * Voraussetzungen & Hinweise:
+ *  - Es muss sichergestellt sein, dass in Spalte "Letzte Zahlung am" (z.B. Spalte M) nur gültige Datumswerte stehen,
+ *    wenn ein Teil- oder Vollbetrag bezahlt wurde.
+ *  - Für die Berechnung der Netto- und MwSt-Anteile wird aktuell von 19% ausgegangen. Dies kann bei Bedarf angepasst werden.
+ *  - Das Skript zeigt eine Fehlermeldung an, wenn ein bezahlter Betrag existiert, aber kein Zahlungsdatum.
+ *  - Ist-Besteuerung bedeutet, dass nur tatsächlich geflossene Zahlungen für Umsatzsteuer, Vorsteuer,
+ *    Gewinn und Verlust berücksichtigt werden.
+ *  - Offene Forderungen (Einnahmen ohne Zahlungsdatum) und offene Verbindlichkeiten (Ausgaben ohne Zahlungsdatum)
+ *    fließen nicht in die Monats-/Quartalswerte ein, sondern nur in die Jahressumme.
+ */
 function calculateGUV() {
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const einnahmenSheet = ss.getSheetByName("Einnahmen");
     const ausgabenSheet = ss.getSheetByName("Ausgaben");
@@ -273,82 +313,143 @@ function calculateGUV() {
         return;
     }
 
+    // Alle Daten einlesen (ohne Kopfzeile)
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
-    let guvData = {};
-    let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
-    let gesamtJahr = {einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0, umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0};
 
+    // Datenstrukturen für Monate und Quartale vorbereiten
+    let guvData = {};
     for (let m = 1; m <= 12; m++) {
         guvData[m] = {
-            einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0
+            einnahmen: 0,
+            einnahmenOffen: 0,
+            ausgaben: 0,
+            ausgabenOffen: 0,
+            umsatzsteuer: 0,
+            vorsteuer: 0,
+            ustZahlung: 0,
+            ergebnis: 0
         };
     }
 
+    let quartalsDaten = {1: {}, 2: {}, 3: {}, 4: {}};
     for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = {einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0, umsatzsteuer: 0, vorsteuer: 0, ustZahlung: 0, ergebnis: 0};
+        quartalsDaten[q] = {
+            einnahmen: 0,
+            einnahmenOffen: 0,
+            ausgaben: 0,
+            ausgabenOffen: 0,
+            umsatzsteuer: 0,
+            vorsteuer: 0,
+            ustZahlung: 0,
+            ergebnis: 0
+        };
     }
+
+    // Variable für komplett offene Beträge (ohne Zahlungsdatum)
+    let offeneEinnahmenGesamt = 0;
+    let offeneAusgabenGesamt = 0;
 
     let fehlendeDaten = [];
 
+    //--------------------------------
+    // Einnahmen verarbeiten
+    //--------------------------------
     einnahmenData.forEach((row, index) => {
         let zahlungsDatum = row[12]; // "Letzte Zahlung am"
-        let netto = parseFloat(row[4]) || 0;
-        let mwst = parseFloat(row[6]) || 0;
-        let bezahltBrutto = parseFloat(row[8]) || 0;
+        let netto = parseFloat(row[4]) || 0;     // z. B. Spalte E
+        let mwst = parseFloat(row[6]) || 0;      // z. B. Spalte G
+        let bezahltBrutto = parseFloat(row[8]) || 0; // z. B. Spalte I
+
+        // Annahme: Alles mit 19% USt
         let bezahltNetto = bezahltBrutto / 1.19;
         let bezahltMwst = bezahltBrutto - bezahltNetto;
 
+        // 1) Wenn bezahlt, aber kein Zahlungsdatum => Fehler
         if (bezahltBrutto > 0 && !(zahlungsDatum instanceof Date)) {
             fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
             return;
         }
 
+        // 2) Falls es ein Zahlungsdatum gibt: Auf den entsprechenden Monat buchen
         if (zahlungsDatum instanceof Date) {
             let monat = zahlungsDatum.getMonth() + 1;
             let quartal = Math.ceil(monat / 3);
 
+            // Tatsächlich bezahlter Anteil
             guvData[monat].einnahmen += bezahltNetto;
             guvData[monat].umsatzsteuer += bezahltMwst;
+
             quartalsDaten[quartal].einnahmen += bezahltNetto;
             quartalsDaten[quartal].umsatzsteuer += bezahltMwst;
-        }
 
-        guvData[index + 1].einnahmenOffen += Math.max(0, netto - bezahltNetto);
+            // Falls nur Teilbetrag bezahlt wurde, ist der Rest offen
+            let offenerBetrag = Math.max(0, netto - bezahltNetto);
+            if (offenerBetrag > 0) {
+                guvData[monat].einnahmenOffen += offenerBetrag;
+                quartalsDaten[quartal].einnahmenOffen += offenerBetrag;
+            }
+
+        } else {
+            // KEIN Zahlungsdatum => kompletter Betrag offen (keinerlei Buchung in Monate/Quartale)
+            offeneEinnahmenGesamt += netto;
+        }
     });
 
+    //--------------------------------
+    // Ausgaben verarbeiten
+    //--------------------------------
     ausgabenData.forEach((row, index) => {
         let zahlungsDatum = row[12]; // "Letzte Zahlung am"
         let netto = parseFloat(row[4]) || 0;
         let mwst = parseFloat(row[6]) || 0;
         let bezahltBrutto = parseFloat(row[8]) || 0;
+
+        // Annahme: Alles mit 19% Vorsteuer
         let bezahltNetto = bezahltBrutto / 1.19;
         let bezahltMwst = bezahltBrutto - bezahltNetto;
 
+        // 1) Wenn bezahlt, aber kein Zahlungsdatum => Fehler
         if (bezahltBrutto > 0 && !(zahlungsDatum instanceof Date)) {
             fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
             return;
         }
 
+        // 2) Falls es ein Zahlungsdatum gibt: Auf den entsprechenden Monat buchen
         if (zahlungsDatum instanceof Date) {
             let monat = zahlungsDatum.getMonth() + 1;
             let quartal = Math.ceil(monat / 3);
 
             guvData[monat].ausgaben += bezahltNetto;
             guvData[monat].vorsteuer += bezahltMwst;
+
             quartalsDaten[quartal].ausgaben += bezahltNetto;
             quartalsDaten[quartal].vorsteuer += bezahltMwst;
-        }
 
-        guvData[index + 1].ausgabenOffen += Math.max(0, netto - bezahltNetto);
+            // Falls nur Teilbetrag bezahlt wurde, ist der Rest offen
+            let offenerBetrag = Math.max(0, netto - bezahltNetto);
+            if (offenerBetrag > 0) {
+                guvData[monat].ausgabenOffen += offenerBetrag;
+                quartalsDaten[quartal].ausgabenOffen += offenerBetrag;
+            }
+
+        } else {
+            // KEIN Zahlungsdatum => kompletter Betrag offen
+            offeneAusgabenGesamt += netto;
+        }
     });
 
+    // Falls Fehler (Bezahlung ohne Datum), abbrechen
     if (fehlendeDaten.length > 0) {
-        SpreadsheetApp.getUi().alert("Fehlende Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
+        SpreadsheetApp.getUi().alert(
+            "Fehlende Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n")
+        );
         return;
     }
 
+    //--------------------------------
+    // GUV-Sheet aufbauen
+    //--------------------------------
     let guvSheet = ss.getSheetByName("GUV");
     if (!guvSheet) {
         guvSheet = ss.insertSheet("GUV");
@@ -356,37 +457,127 @@ function calculateGUV() {
         guvSheet.clearContents();
     }
 
-    guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen (netto)", "Ausgaben (netto)", "Offene Verbindlichkeiten (netto)",
-        "Umsatzsteuer (19%)", "Vorsteuer (19%)", "USt-Zahlung", "Ergebnis (Gewinn/Verlust netto)"]);
+    guvSheet.appendRow([
+        "Zeitraum",
+        "Einnahmen (netto)",
+        "Offene Forderungen (netto)",
+        "Ausgaben (netto)",
+        "Offene Verbindlichkeiten (netto)",
+        "Umsatzsteuer (19%)",
+        "Vorsteuer (19%)",
+        "USt-Zahlung",
+        "Ergebnis (Gewinn/Verlust netto)"
+    ]);
 
+    // Monate ausgeben
     for (let m = 1; m <= 12; m++) {
         let data = guvData[m];
-        let ustZahlung = data.umsatzsteuer - data.vorsteuer;
-        let ergebnis = data.einnahmen - data.ausgaben - ustZahlung;
-        guvSheet.appendRow([`Monat ${m}`, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
-            data.umsatzsteuer, data.vorsteuer, ustZahlung, ergebnis]);
 
+        // USt-Zahlung = Umsatzsteuer - Vorsteuer
+        let ustZahlung = data.umsatzsteuer - data.vorsteuer;
+        // Gewinn/Verlust
+        let ergebnis = data.einnahmen - data.ausgaben - ustZahlung;
+
+        // Werte in der Struktur aktualisieren (damit sie später summiert werden können)
+        data.ustZahlung = ustZahlung;
+        data.ergebnis = ergebnis;
+
+        guvSheet.appendRow([
+            `Monat ${m}`,
+            data.einnahmen,
+            data.einnahmenOffen,
+            data.ausgaben,
+            data.ausgabenOffen,
+            data.umsatzsteuer,
+            data.vorsteuer,
+            ustZahlung,
+            ergebnis
+        ]);
+
+        // Jedes Quartal nach dem 3., 6., 9. und 12. Monat ausgeben
         if (m % 3 === 0) {
             let q = Math.ceil(m / 3);
-            let quartalData = quartalsDaten[q];
-            let quartalUstZahlung = quartalData.umsatzsteuer - quartalData.vorsteuer;
-            let quartalErgebnis = quartalData.einnahmen - quartalData.ausgaben - quartalUstZahlung;
-            guvSheet.appendRow([`Quartal ${q}`, quartalData.einnahmen, quartalData.einnahmenOffen, quartalData.ausgaben, quartalData.ausgabenOffen,
-                quartalData.umsatzsteuer, quartalData.vorsteuer, quartalUstZahlung, quartalErgebnis]);
+            let qData = quartalsDaten[q];
+
+            // USt-Zahlung = Umsatzsteuer - Vorsteuer
+            let qUstZahlung = qData.umsatzsteuer - qData.vorsteuer;
+            // Gewinn/Verlust
+            let qErgebnis = qData.einnahmen - qData.ausgaben - qUstZahlung;
+
+            // Werte in der Struktur aktualisieren
+            qData.ustZahlung = qUstZahlung;
+            qData.ergebnis = qErgebnis;
+
+            guvSheet.appendRow([
+                `Quartal ${q}`,
+                qData.einnahmen,
+                qData.einnahmenOffen,
+                qData.ausgaben,
+                qData.ausgabenOffen,
+                qData.umsatzsteuer,
+                qData.vorsteuer,
+                qUstZahlung,
+                qErgebnis
+            ]);
         }
     }
 
-    let jahreswerte = Object.values(guvData).reduce((acc, m) => acc.map((val, i) => val + Object.values(m)[i]), Array(8).fill(0));
-    guvSheet.appendRow(["Gesamtjahr", ...jahreswerte]);
+    //--------------------------------
+    // Jahreswerte berechnen und ausgeben
+    //--------------------------------
+    // Alle Monate summieren
+    let jahresSumme = {
+        einnahmen: 0,
+        einnahmenOffen: 0,
+        ausgaben: 0,
+        ausgabenOffen: 0,
+        umsatzsteuer: 0,
+        vorsteuer: 0,
+        ustZahlung: 0,
+        ergebnis: 0
+    };
 
+    for (let m = 1; m <= 12; m++) {
+        jahresSumme.einnahmen += guvData[m].einnahmen;
+        jahresSumme.einnahmenOffen += guvData[m].einnahmenOffen;
+        jahresSumme.ausgaben += guvData[m].ausgaben;
+        jahresSumme.ausgabenOffen += guvData[m].ausgabenOffen;
+        jahresSumme.umsatzsteuer += guvData[m].umsatzsteuer;
+        jahresSumme.vorsteuer += guvData[m].vorsteuer;
+        jahresSumme.ustZahlung += guvData[m].ustZahlung;
+        jahresSumme.ergebnis += guvData[m].ergebnis;
+    }
+
+    // Nun noch die komplett offenen Posten (ohne Zahlungsdatum) hinzufügen
+    // Sie tauchen hier als "Offene Forderungen" bzw. "Offene Verbindlichkeiten" im Gesamtjahr auf
+    jahresSumme.einnahmenOffen += offeneEinnahmenGesamt;
+    jahresSumme.ausgabenOffen += offeneAusgabenGesamt;
+
+    // Ergebnis bleibt davon unberührt, da bei Ist-Besteuerung erst bei Zahlung relevant
+    // (nur wenn du willst, kannst du das "theoretische" Ergebnis um die offenen Beträge ergänzen)
+
+    guvSheet.appendRow([
+        "Gesamtjahr",
+        jahresSumme.einnahmen,
+        jahresSumme.einnahmenOffen,
+        jahresSumme.ausgaben,
+        jahresSumme.ausgabenOffen,
+        jahresSumme.umsatzsteuer,
+        jahresSumme.vorsteuer,
+        jahresSumme.ustZahlung,
+        jahresSumme.ergebnis
+    ]);
+
+    // Formatierungen
     let lastRow = guvSheet.getLastRow();
     if (lastRow > 1) {
         guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00€");
         guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     }
 
-    SpreadsheetApp.getUi().alert("GUV-Berechnung mit Ist-Besteuerung abgeschlossen und aktualisiert.");
+    SpreadsheetApp.getUi().alert("GUV-Berechnung (Ist-Besteuerung) abgeschlossen und aktualisiert.");
 }
+
 
 function calculateBWA() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
