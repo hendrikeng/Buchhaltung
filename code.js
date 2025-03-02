@@ -261,7 +261,7 @@ function applyFormatting(sheet) {
 }
 
 /**
- * calculateGUV (Ist-Besteuerung) – überarbeitete Version
+ * calculateGUV (Ist-Besteuerung) – optimierte Version mit MwSt.-Differenzierung
  *
  * 📌 Zweck:
  *  - Erstellt eine Gewinn- und Verlustrechnung (GuV) nach dem Prinzip der Ist-Besteuerung.
@@ -270,7 +270,7 @@ function applyFormatting(sheet) {
  *    nicht in den Monats- oder Quartalswerten.
  *
  * ✅ Verbesserungen & Fixes:
- *  - **Dynamische Berechnung des MwSt.-Satzes** (statt pauschal 19%).
+ *  - **Dynamische Berechnung des MwSt.-Satzes** (0%, 7%, 19%) mit separaten Spalten.
  *  - **Validierung des Zahlungsdatums** (keine zukünftigen Zahlungen erlaubt).
  *  - **Gutschriften & Erstattungen** (negative Werte korrekt berücksichtigt).
  *  - **Korrekte Berechnung des Gewinns** (ohne Umsatzsteuerabzug).
@@ -280,288 +280,131 @@ function applyFormatting(sheet) {
  *  - **"Einnahmen"** (benötigte Spalten: Netto-Betrag, MwSt.-Satz, Bezahlter Brutto-Betrag, Zahlungsdatum).
  *  - **"Ausgaben"** (benötigte Spalten wie bei Einnahmen).
  *  - **"GUV"** (wird automatisch erzeugt oder aktualisiert).
- *
- * 🔄 Wichtige Schritte:
- *  1️⃣ **Daten einlesen**: Einnahmen und Ausgaben aus den Tabellenblättern extrahieren.
- *  2️⃣ **Datenvalidierung**: Überprüfung auf fehlende oder fehlerhafte Zahlungsdaten.
- *  3️⃣ **Berechnungen**:
- *     - Aufteilung der Beträge auf Netto, MwSt., Brutto.
- *     - Berechnung von offenen Posten (falls nur Teilzahlungen erfolgt sind).
- *     - Monats- und Quartalswerte summieren.
- *  4️⃣ **Ausgabe in das "GUV"-Sheet**:
- *     - Monats- und Quartalswerte auflisten.
- *     - Jahreswerte berechnen und formatieren.
- *  5️⃣ **Formatierung**: Währungsformat (€, zwei Nachkommastellen), automatische Spaltenbreite.
- *
- * ⚠️ Voraussetzungen & Hinweise:
- *  - Spalte "Letzte Zahlung am" (z. B. Spalte M) muss ein gültiges Datum enthalten, wenn eine Zahlung erfolgt ist.
- *  - **Nur Ist-Besteuerung**: Berücksichtigung von Einnahmen und Ausgaben erst bei Zahlung.
- *  - **Offene Forderungen/Verbindlichkeiten** erscheinen nur in der Jahresübersicht.
  */
 function calculateGUV() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const einnahmenSheet = ss.getSheetByName("Einnahmen");
     const ausgabenSheet = ss.getSheetByName("Ausgaben");
-
     if (!einnahmenSheet || !ausgabenSheet) {
         SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
         return;
     }
 
-    // Alle Daten einlesen (ohne Kopfzeile)
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
 
-    // ✅ Fix: Richtig initialisierte `guvData` Struktur
-    let guvData = {};
+    let guvData = {}, quartalsDaten = {}, offeneEinnahmenGesamt = 0, offeneAusgabenGesamt = 0, fehlendeDaten = [];
     for (let m = 1; m <= 12; m++) {
-        guvData[m] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
+        guvData[m] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            ust_0: 0, ust_7: 0, ust_19: 0, vst_0: 0, vst_7: 0, vst_19: 0,
+            ustZahlung: 0, ergebnis: 0 };
     }
-
-    // ✅ Fix: `quartalsDaten` korrekt initialisiert
-    let quartalsDaten = {};
     for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            umsatzsteuer: 0, vorsteuer: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
+        quartalsDaten[q] = JSON.parse(JSON.stringify(guvData[1]));
     }
 
-    let offeneEinnahmenGesamt = 0;
-    let offeneAusgabenGesamt = 0;
-    let fehlendeDaten = [];
+    einnahmenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, true));
+    ausgabenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, false));
 
-    //--------------------------------
-    // Einnahmen verarbeiten
-    //--------------------------------
-    einnahmenData.forEach((row, index) => {
-        let zahlungsDatum = parseDate(row[12]);
-        let netto = parseCurrency(row[4]);
-        let mwstRate = parseMwstRate(row[5]);
-        let bezahltBrutto = parseCurrency(row[8]);
-
-        let factor = (mwstRate > 0) ? 1 + (mwstRate / 100) : 1;
-        let bezahltNetto = bezahltBrutto / factor;
-        let bezahltMwst = bezahltBrutto - bezahltNetto;
-
-        if (bezahltBrutto !== 0 && !zahlungsDatum) {
-            fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
-            return;
-        }
-
-        if (zahlungsDatum && zahlungsDatum > new Date()) {
-            fehlendeDaten.push(`Einnahmen - Zeile ${index + 2}: Zahlungsdatum liegt in der Zukunft`);
-            return;
-        }
-
-        if (zahlungsDatum) {
-            let monat = zahlungsDatum.getMonth() + 1;
-            let quartal = Math.ceil(monat / 3);
-
-            // ✅ Fix: Stelle sicher, dass `guvData[monat]` existiert
-            if (!guvData[monat]) guvData[monat] = {};
-            if (!quartalsDaten[quartal]) quartalsDaten[quartal] = {};
-
-            guvData[monat].einnahmen += bezahltNetto;
-            guvData[monat].umsatzsteuer += bezahltMwst;
-            quartalsDaten[quartal].einnahmen += bezahltNetto;
-            quartalsDaten[quartal].umsatzsteuer += bezahltMwst;
-
-            let offenerBetrag = Math.max(0, netto - bezahltNetto);
-            if (offenerBetrag > 0) {
-                guvData[monat].einnahmenOffen += offenerBetrag;
-                quartalsDaten[quartal].einnahmenOffen += offenerBetrag;
-            }
-        } else {
-            offeneEinnahmenGesamt += netto;
-        }
-    });
-
-    //--------------------------------
-    // Ausgaben verarbeiten
-    //--------------------------------
-    ausgabenData.forEach((row, index) => {
-        let zahlungsDatum = parseDate(row[12]);
-        let netto = parseCurrency(row[4]);
-        let mwstRate = parseMwstRate(row[5]);
-        let bezahltBrutto = parseCurrency(row[8]);
-
-        let factor = (mwstRate > 0) ? 1 + (mwstRate / 100) : 1;
-        let bezahltNetto = bezahltBrutto / factor;
-        let bezahltMwst = bezahltBrutto - bezahltNetto;
-
-        if (zahlungsDatum && zahlungsDatum > new Date()) {
-            fehlendeDaten.push(`Ausgaben - Zeile ${index + 2}: Zahlungsdatum liegt in der Zukunft`);
-            return;
-        }
-
-        if (zahlungsDatum) {
-            let monat = zahlungsDatum.getMonth() + 1;
-            let quartal = Math.ceil(monat / 3);
-
-            guvData[monat].ausgaben += bezahltNetto;
-            guvData[monat].vorsteuer += bezahltMwst;
-            quartalsDaten[quartal].ausgaben += bezahltNetto;
-            quartalsDaten[quartal].vorsteuer += bezahltMwst;
-
-            // Falls nur Teilbetrag bezahlt wurde, ist der Rest offen
-            let offenerBetrag = Math.max(0, netto - bezahltNetto);
-            if (offenerBetrag > 0) {
-                guvData[monat].ausgabenOffen += offenerBetrag;
-                quartalsDaten[quartal].ausgabenOffen += offenerBetrag;
-            }
-        } else {
-            // KEIN Zahlungsdatum => kompletter Betrag offen
-            offeneAusgabenGesamt += netto;
-        }
-    });
-
-    // Falls Fehler (Bezahlung ohne Datum), abbrechen
     if (fehlendeDaten.length > 0) {
-        SpreadsheetApp.getUi().alert(
-            "Fehlende Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n")
-        );
+        SpreadsheetApp.getUi().alert("Fehlende Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
         return;
     }
 
-    //--------------------------------
-    // GUV-Sheet aufbauen
-    //--------------------------------
     let guvSheet = ss.getSheetByName("GUV") || ss.insertSheet("GUV");
     guvSheet.clearContents();
+    guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen", "Ausgaben (netto)", "Offene Verbindlichkeiten",
+        "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis"]);
 
-    guvSheet.appendRow([
-        "Zeitraum",
-        "Einnahmen (netto)",
-        "Offene Forderungen (netto)",
-        "Ausgaben (netto)",
-        "Offene Verbindlichkeiten (netto)",
-        "Umsatzsteuer (19%)",
-        "Vorsteuer (19%)",
-        "USt-Zahlung",
-        "Ergebnis (Gewinn/Verlust netto)"
-    ]);
-
-// Monate ausgeben
     for (let m = 1; m <= 12; m++) {
-        let data = guvData[m];
-
-        let einnahmen = Math.round((data.einnahmen || 0) * 100) / 100;
-        let ausgaben = Math.round((data.ausgaben || 0) * 100) / 100;
-        let umsatzsteuer = Math.round((data.umsatzsteuer || 0) * 100) / 100;
-        let vorsteuer = Math.round((data.vorsteuer || 0) * 100) / 100;
-
-        // Fix: Korrekte Berechnung der USt-Zahlung (aber nicht für Gewinn relevant)
-        let ustZahlung = Math.round((umsatzsteuer - vorsteuer) * 100) / 100;
-
-        // Fix: Gewinn/Verlust richtig berechnen (ohne Steuerabzug!)
-        let ergebnis = einnahmen - ausgaben;
-
-        // Werte in der Datenstruktur aktualisieren
-        data.ustZahlung = ustZahlung;
-        data.ergebnis = ergebnis;
-
-        guvSheet.appendRow([
-            `Monat ${m}`,
-            einnahmen,
-            data.einnahmenOffen || 0,
-            ausgaben,
-            data.ausgabenOffen || 0,
-            umsatzsteuer,
-            vorsteuer,
-            ustZahlung,
-            ergebnis
-        ]);
-
-        // Jedes Quartal nach dem 3., 6., 9. und 12. Monat ausgeben
+        appendRowToSheet(guvSheet, `Monat ${m}`, guvData[m]);
         if (m % 3 === 0) {
             let q = Math.ceil(m / 3);
-            let qData = quartalsDaten[q];
-
-            // Fix: Gewinn korrekt berechnen (ohne Umsatzsteuerabzug)
-            let qUstZahlung = Math.round((qData.umsatzsteuer - qData.vorsteuer) * 100) / 100;
-            let qErgebnis = qData.einnahmen - qData.ausgaben; // Fix hier!
-
-            // Werte in der Struktur aktualisieren
-            qData.ustZahlung = qUstZahlung;
-            qData.ergebnis = qErgebnis;
-
-            guvSheet.appendRow([
-                `Quartal ${q}`,
-                qData.einnahmen || 0,
-                qData.einnahmenOffen || 0,
-                qData.ausgaben || 0,
-                qData.ausgabenOffen || 0,
-                qData.umsatzsteuer || 0,
-                qData.vorsteuer || 0,
-                qUstZahlung,
-                qErgebnis // Fix hier!
-            ]);
+            appendRowToSheet(guvSheet, `Quartal ${q}`, quartalsDaten[q]);
         }
     }
 
-//--------------------------------
-// Jahreswerte berechnen und ausgeben
-//--------------------------------
-    let jahresSumme = {
-        einnahmen: 0,
-        einnahmenOffen: 0,
-        ausgaben: 0,
-        ausgabenOffen: 0,
-        umsatzsteuer: 0,
-        vorsteuer: 0,
-        ustZahlung: 0,
-        ergebnis: 0
-    };
+    let jahresSumme = calculateYearlySum(guvData);
+    appendRowToSheet(guvSheet, "Gesamtjahr", jahresSumme);
 
-    for (let m = 1; m <= 12; m++) {
-        jahresSumme.einnahmen += guvData[m].einnahmen || 0;
-        jahresSumme.einnahmenOffen += guvData[m].einnahmenOffen || 0;
-        jahresSumme.ausgaben += guvData[m].ausgaben || 0;
-        jahresSumme.ausgabenOffen += guvData[m].ausgabenOffen || 0;
-        jahresSumme.umsatzsteuer += guvData[m].umsatzsteuer || 0;
-        jahresSumme.vorsteuer += guvData[m].vorsteuer || 0;
-        jahresSumme.ustZahlung += guvData[m].ustZahlung || 0;
-        jahresSumme.ergebnis += guvData[m].ergebnis || 0;
-    }
-
-// ✅ Offene Forderungen und Verbindlichkeiten EINMALIG hinzufügen!
-    jahresSumme.einnahmenOffen += offeneEinnahmenGesamt;
-    jahresSumme.ausgabenOffen += offeneAusgabenGesamt;
-
-// Fix: Jahresergebnis korrekt berechnen
-    jahresSumme.ergebnis = jahresSumme.einnahmen - jahresSumme.ausgaben;
-
-    guvSheet.appendRow([
-        "Gesamtjahr",
-        jahresSumme.einnahmen,
-        jahresSumme.einnahmenOffen,
-        jahresSumme.ausgaben,
-        jahresSumme.ausgabenOffen,
-        jahresSumme.umsatzsteuer,
-        jahresSumme.vorsteuer,
-        jahresSumme.ustZahlung,
-        jahresSumme.ergebnis // Fix hier!
-    ]);
-
-// Formatierungen
-    let lastRow = guvSheet.getLastRow();
-    if (lastRow > 1) {
-        guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00€");
-        guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
-    }
-
-
+    guvSheet.getRange(`B2:M${guvSheet.getLastRow()}`).setNumberFormat("#,##0.00€");
+    guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
 
+function processRow(row, index, guvData, quartalsDaten, isIncome) {
+    let zahlungsDatum = parseDate(row[12]);
+    let netto = parseCurrency(row[4]);
+    let mwstRate = parseMwstRate(row[5]);
+    let bezahltBrutto = parseCurrency(row[8]);
+    let factor = (mwstRate > 0) ? 1 + (mwstRate / 100) : 1;
+    let bezahltNetto = bezahltBrutto / factor;
+    let bezahltMwst = bezahltBrutto - bezahltNetto;
+
+    if (bezahltBrutto !== 0 && !zahlungsDatum) {
+        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung`);
+        return;
+    }
+
+    if (zahlungsDatum && zahlungsDatum > new Date()) {
+        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Zahlungsdatum liegt in der Zukunft`);
+        return;
+    }
+
+    if (!zahlungsDatum) return;
+
+    let monat = zahlungsDatum.getMonth() + 1;
+    let quartal = Math.ceil(monat / 3);
+    let category = isIncome ? "ust" : "vst";
+
+    // 🔥 **Fix: Sicherstellen, dass die Datenstrukturen existieren**
+    if (!guvData[monat]) {
+        guvData[monat] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            ust_0: 0, ust_7: 0, ust_19: 0, vst_0: 0, vst_7: 0, vst_19: 0,
+            ustZahlung: 0, ergebnis: 0 };
+    }
+
+    if (!quartalsDaten[quartal]) {
+        quartalsDaten[quartal] = { einnahmen: 0, einnahmenOffen: 0, ausgaben: 0, ausgabenOffen: 0,
+            ust_0: 0, ust_7: 0, ust_19: 0, vst_0: 0, vst_7: 0, vst_19: 0,
+            ustZahlung: 0, ergebnis: 0 };
+    }
+
+    // 🔥 **Fix: Sicherstellen, dass `ust_X` oder `vst_X` nicht undefined sind**
+    if (typeof guvData[monat][`${category}_${mwstRate}`] === "undefined") {
+        guvData[monat][`${category}_${mwstRate}`] = 0;
+    }
+
+    if (typeof quartalsDaten[quartal][`${category}_${mwstRate}`] === "undefined") {
+        quartalsDaten[quartal][`${category}_${mwstRate}`] = 0;
+    }
+
+    guvData[monat][`${category}_${mwstRate}`] += bezahltMwst;
+    quartalsDaten[quartal][`${category}_${mwstRate}`] += bezahltMwst;
+
+    guvData[monat][isIncome ? "einnahmen" : "ausgaben"] += bezahltNetto;
+    quartalsDaten[quartal][isIncome ? "einnahmen" : "ausgaben"] += bezahltNetto;
+
+    let offenerBetrag = Math.max(0, netto - bezahltNetto);
+    if (offenerBetrag > 0) {
+        guvData[monat][isIncome ? "einnahmenOffen" : "ausgabenOffen"] += offenerBetrag;
+        quartalsDaten[quartal][isIncome ? "einnahmenOffen" : "ausgabenOffen"] += offenerBetrag;
+    }
+}
+
+function calculateYearlySum(guvData) {
+    let sum = JSON.parse(JSON.stringify(guvData[1]));
+    for (let m = 2; m <= 12; m++) {
+        Object.keys(sum).forEach(k => sum[k] += guvData[m][k]);
+    }
+    return sum;
+}
+
+function appendRowToSheet(sheet, label, data) {
+    sheet.appendRow([label, data.einnahmen, data.einnahmenOffen, data.ausgaben, data.ausgabenOffen,
+        data.ust_0, data.ust_7, data.ust_19, data.vst_0, data.vst_7, data.vst_19,
+        data.ust_19 - data.vst_19, data.einnahmen - data.ausgaben]);
+}
 
 // Hilfsfunktionen
 function parseCurrency(value) {
