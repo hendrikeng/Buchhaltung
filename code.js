@@ -293,40 +293,29 @@ function calculateGUV() {
     const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
     const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
 
-    let guvData = {},
-        quartalsDaten = {},
-        fehlendeDaten = [];
+    let guvData = {}, quartalsDaten = {}, fehlendeDaten = [];
+    let offeneTotals = { einnahmen: 0, ausgaben: 0 }; // Hier werden offene Posten gesammelt
 
-    // Offene Beträge als Objekt, damit wir sie innerhalb von processRow verändern können.
-    let offeneTotals = { einnahmen: 0, ausgaben: 0 };
-
-    // Initialisiere Monatsdaten
+    // Initialisiere Monats- und Quartalsdaten
     for (let m = 1; m <= 12; m++) {
-        guvData[m] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            ust_0: 0, ust_7: 0, ust_19: 0,
-            vst_0: 0, vst_7: 0, vst_19: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
+        guvData[m] = createEmptyGuVObject();
     }
-    // Initialisiere Quartalsdaten als Kopie der Monatsstruktur (z.B. von Monat 1)
     for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = JSON.parse(JSON.stringify(guvData[1]));
+        quartalsDaten[q] = createEmptyGuVObject();
     }
 
-    // Verarbeitung der Einnahmen und Ausgaben (offeneTotals wird mitgegeben)
+    // Verarbeitung von Einnahmen und Ausgaben
     einnahmenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
     ausgabenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
 
-    // Falls Fehler (Bezahlung ohne Datum oder zukünftiges Datum) vorhanden sind, abbrechen
+    // Falls Fehler vorhanden sind (z.B. fehlendes Zahlungsdatum), abbrechen
     if (fehlendeDaten.length > 0) {
         SpreadsheetApp.getUi().alert("Fehlende oder fehlerhafte Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
         return;
     }
 
-    // Aufbau des GUV-Sheets
-    let guvSheet = ss.getSheetByName("GUV") || ss.insertSheet("GUV");
+    // Erstellung oder Bereinigung der GuV-Tabelle
+    let guvSheet = ss.getSheetByName("GuV") || ss.insertSheet("GuV");
     guvSheet.clearContents();
     guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen", "Ausgaben (netto)", "Offene Verbindlichkeiten",
         "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis"]);
@@ -340,98 +329,6 @@ function calculateGUV() {
     }
 
     let jahresSumme = calculateYearlySum(guvData);
-    // Offene Beträge aus Zeilen ohne Datum hinzufügen
-    jahresSumme.einnahmenOffen += offeneTotals.einnahmen;
-    jahresSumme.ausgabenOffen += offeneTotals.ausgaben;
-
-    appendRowToSheet(guvSheet, "Gesamtjahr", jahresSumme);
-
-    guvSheet.getRange(`B2:M${guvSheet.getLastRow()}`).setNumberFormat("#,##0.00€");
-    guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
-    SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
-}
-
-/**
- * calculateGUV (Ist-Besteuerung) – optimierte Version mit MwSt.-Differenzierung
- *
- * 📌 Zweck:
- *  - Erstellt eine Gewinn- und Verlustrechnung (GuV) nach dem Prinzip der Ist-Besteuerung.
- *  - Berücksichtigt Einnahmen und Ausgaben nur, wenn sie tatsächlich bezahlt wurden.
- *  - Offene Posten (kein Zahlungsdatum) erscheinen nur in der Jahresübersicht,
- *    nicht in den Monats- oder Quartalswerten.
- *
- * ✅ Verbesserungen & Fixes:
- *  - Dynamische Berechnung des MwSt.-Satzes (0%, 7%, 19%) mit separaten Spalten.
- *  - Validierung des Zahlungsdatums (keine zukünftigen Zahlungen erlaubt).
- *  - Gutschriften & Erstattungen (negative Werte korrekt berücksichtigt).
- *  - Korrekte Berechnung des Gewinns (ohne Umsatzsteuerabzug).
- *  - Fix für doppelte Addition von offenen Forderungen/Verbindlichkeiten in der Jahresübersicht.
- *
- * 📂 Benötigte Tabellenblätter:
- *  - "Einnahmen" (benötigte Spalten: Netto-Betrag, MwSt.-Satz, Bezahlter Brutto-Betrag, Zahlungsdatum).
- *  - "Ausgaben" (benötigte Spalten wie bei Einnahmen).
- *  - "GUV" (wird automatisch erzeugt oder aktualisiert).
- */
-function calculateGUV() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const einnahmenSheet = ss.getSheetByName("Einnahmen");
-    const ausgabenSheet = ss.getSheetByName("Ausgaben");
-    if (!einnahmenSheet || !ausgabenSheet) {
-        SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
-        return;
-    }
-
-    const einnahmenData = einnahmenSheet.getDataRange().getValues().slice(1);
-    const ausgabenData = ausgabenSheet.getDataRange().getValues().slice(1);
-
-    let guvData = {},
-        quartalsDaten = {},
-        fehlendeDaten = [];
-
-    // Offene Beträge als Objekt, damit wir sie innerhalb von processRow verändern können.
-    let offeneTotals = { einnahmen: 0, ausgaben: 0 };
-
-    // Initialisiere Monatsdaten
-    for (let m = 1; m <= 12; m++) {
-        guvData[m] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            ust_0: 0, ust_7: 0, ust_19: 0,
-            vst_0: 0, vst_7: 0, vst_19: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
-    }
-    // Initialisiere Quartalsdaten als Kopie der Monatsstruktur (z.B. von Monat 1)
-    for (let q = 1; q <= 4; q++) {
-        quartalsDaten[q] = JSON.parse(JSON.stringify(guvData[1]));
-    }
-
-    // Verarbeitung der Einnahmen und Ausgaben (offeneTotals wird mitgegeben)
-    einnahmenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
-    ausgabenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
-
-    // Falls Fehler (Bezahlung mit ungültigem Datum oder zukünftiges Datum) vorhanden sind, abbrechen
-    if (fehlendeDaten.length > 0) {
-        SpreadsheetApp.getUi().alert("Fehlende oder fehlerhafte Zahlungsdaten gefunden:\n" + fehlendeDaten.join("\n"));
-        return;
-    }
-
-    // Aufbau des GUV-Sheets
-    let guvSheet = ss.getSheetByName("GUV") || ss.insertSheet("GUV");
-    guvSheet.clearContents();
-    guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Offene Forderungen", "Ausgaben (netto)", "Offene Verbindlichkeiten",
-        "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis"]);
-
-    for (let m = 1; m <= 12; m++) {
-        appendRowToSheet(guvSheet, `Monat ${m}`, guvData[m]);
-        if (m % 3 === 0) {
-            let q = Math.ceil(m / 3);
-            appendRowToSheet(guvSheet, `Quartal ${q}`, quartalsDaten[q]);
-        }
-    }
-
-    let jahresSumme = calculateYearlySum(guvData);
-    // Offene Beträge aus Zeilen ohne Datum hinzufügen
     jahresSumme.einnahmenOffen += offeneTotals.einnahmen;
     jahresSumme.ausgabenOffen += offeneTotals.ausgaben;
 
