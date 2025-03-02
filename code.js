@@ -263,44 +263,40 @@ function applyFormatting(sheet) {
 /**
  * calculateGUV (Ist-Besteuerung) – überarbeitete Version
  *
- * Zweck:
- *  - Führt eine GuV-Berechnung durch, bei der Einnahmen und Ausgaben nur dann erfasst werden,
- *    wenn sie tatsächlich bezahlt wurden (Ist-Besteuerung).
- *  - Offene Posten (kein Zahlungsdatum) werden nicht in die Monats-/Quartalswerte übernommen,
- *    sondern nur als Gesamtsumme offener Forderungen/Verbindlichkeiten in der Jahresübersicht ausgewiesen.
+ * 📌 Zweck:
+ *  - Erstellt eine Gewinn- und Verlustrechnung (GuV) nach dem Prinzip der Ist-Besteuerung.
+ *  - Berücksichtigt Einnahmen und Ausgaben nur, wenn sie tatsächlich bezahlt wurden.
+ *  - Offene Posten (kein Zahlungsdatum) erscheinen nur in der Jahresübersicht,
+ *    nicht in den Monats- oder Quartalswerten.
  *
- * Verbesserungen:
- *  - Dynamische Ermittlung des Mehrwertsteuersatzes (statt pauschal 19% anzunehmen)
- *  - Validierung, dass das Zahlungsdatum nicht in der Zukunft liegt
- *  - Behandlung von Gutschriften/Erstattungen (negative Werte) durch direkte Berechnung des offenen Betrags
+ * ✅ Verbesserungen & Fixes:
+ *  - **Dynamische Berechnung des MwSt.-Satzes** (statt pauschal 19%).
+ *  - **Validierung des Zahlungsdatums** (keine zukünftigen Zahlungen erlaubt).
+ *  - **Gutschriften & Erstattungen** (negative Werte korrekt berücksichtigt).
+ *  - **Korrekte Berechnung des Gewinns** (ohne Umsatzsteuerabzug).
+ *  - **Fix für doppelte Addition** von offenen Forderungen/Verbindlichkeiten in der Jahresübersicht.
  *
- * Benötigte Tabellenblätter:
- *  - "Einnahmen" (mit mindestens diesen Spalten):
- *      - Netto-Betrag (z. B. Spalte E)
- *      - MwSt-Satz (z. B. Spalte G; als String, z. B. "19,00%" oder "7,00%")
- *      - Bezahlter Brutto-Betrag (z. B. Spalte I)
- *      - Zahlungsdatum (z. B. Spalte M)
- *  - "Ausgaben" (mit denselben relevanten Spalten)
- *  - "GUV" (wird automatisch erzeugt oder überschrieben, falls schon vorhanden)
+ * 📂 Benötigte Tabellenblätter:
+ *  - **"Einnahmen"** (benötigte Spalten: Netto-Betrag, MwSt.-Satz, Bezahlter Brutto-Betrag, Zahlungsdatum).
+ *  - **"Ausgaben"** (benötigte Spalten wie bei Einnahmen).
+ *  - **"GUV"** (wird automatisch erzeugt oder aktualisiert).
  *
- * Wichtige Schritte:
- *  1) Einlesen aller Daten aus "Einnahmen" und "Ausgaben".
- *  2) Für jede Zeile:
- *     - Wird geprüft, ob ein gültiges Zahlungsdatum vorhanden ist und ob dieses nicht in der Zukunft liegt.
- *     - Der tatsächliche MwSt.-Satz wird dynamisch ermittelt und die Netto- sowie MwSt-Anteile werden berechnet.
- *     - Bei Teilzahlungen wird der offene Anteil (netto - bezahltNetto) berechnet – auch negative Differenzen
- *       (z. B. bei Gutschriften) bleiben erhalten.
- *     - Ohne Zahlungsdatum wird der gesamte Netto-Betrag als offen in der Jahresübersicht erfasst.
- *  3) Aufsummierung der Daten in Monats- und Quartalsübersicht.
- *  4) Ausgabe in einem "GUV"-Sheet inklusive einer Gesamtjahreszeile.
- *  5) Formatierung der Ausgabedaten (z. B. Euro-Formatierung).
+ * 🔄 Wichtige Schritte:
+ *  1️⃣ **Daten einlesen**: Einnahmen und Ausgaben aus den Tabellenblättern extrahieren.
+ *  2️⃣ **Datenvalidierung**: Überprüfung auf fehlende oder fehlerhafte Zahlungsdaten.
+ *  3️⃣ **Berechnungen**:
+ *     - Aufteilung der Beträge auf Netto, MwSt., Brutto.
+ *     - Berechnung von offenen Posten (falls nur Teilzahlungen erfolgt sind).
+ *     - Monats- und Quartalswerte summieren.
+ *  4️⃣ **Ausgabe in das "GUV"-Sheet**:
+ *     - Monats- und Quartalswerte auflisten.
+ *     - Jahreswerte berechnen und formatieren.
+ *  5️⃣ **Formatierung**: Währungsformat (€, zwei Nachkommastellen), automatische Spaltenbreite.
  *
- * Voraussetzungen & Hinweise:
- *  - Es muss sichergestellt sein, dass in Spalte "Letzte Zahlung am" (z. B. Spalte M) nur gültige Datumswerte stehen,
- *    wenn ein Teil- oder Vollbetrag bezahlt wurde.
- *  - Ist-Besteuerung bedeutet, dass nur tatsächlich geflossene Zahlungen für Umsatzsteuer, Vorsteuer,
- *    Gewinn und Verlust berücksichtigt werden.
- *  - Offene Forderungen/Ausgaben fließen nicht in die Monats-/Quartalswerte ein, sondern nur in die Jahresübersicht.
+ * ⚠️ Voraussetzungen & Hinweise:
+ *  - Spalte "Letzte Zahlung am" (z. B. Spalte M) muss ein gültiges Datum enthalten, wenn eine Zahlung erfolgt ist.
+ *  - **Nur Ist-Besteuerung**: Berücksichtigung von Einnahmen und Ausgaben erst bei Zahlung.
+ *  - **Offene Forderungen/Verbindlichkeiten** erscheinen nur in der Jahresübersicht.
  */
 function calculateGUV() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -453,27 +449,33 @@ function calculateGUV() {
         "Ergebnis (Gewinn/Verlust netto)"
     ]);
 
-    // Monate ausgeben
+// Monate ausgeben
     for (let m = 1; m <= 12; m++) {
         let data = guvData[m];
 
-        // USt-Zahlung = Umsatzsteuer - Vorsteuer
-        let ustZahlung = data.umsatzsteuer - data.vorsteuer;
-        // Gewinn/Verlust
-        let ergebnis = data.einnahmen - data.ausgaben - ustZahlung;
+        let einnahmen = Math.round((data.einnahmen || 0) * 100) / 100;
+        let ausgaben = Math.round((data.ausgaben || 0) * 100) / 100;
+        let umsatzsteuer = Math.round((data.umsatzsteuer || 0) * 100) / 100;
+        let vorsteuer = Math.round((data.vorsteuer || 0) * 100) / 100;
 
-        // Werte in der Struktur aktualisieren (damit sie später summiert werden können)
+        // Fix: Korrekte Berechnung der USt-Zahlung (aber nicht für Gewinn relevant)
+        let ustZahlung = Math.round((umsatzsteuer - vorsteuer) * 100) / 100;
+
+        // Fix: Gewinn/Verlust richtig berechnen (ohne Steuerabzug!)
+        let ergebnis = einnahmen - ausgaben;
+
+        // Werte in der Datenstruktur aktualisieren
         data.ustZahlung = ustZahlung;
         data.ergebnis = ergebnis;
 
         guvSheet.appendRow([
             `Monat ${m}`,
-            data.einnahmen,
-            data.einnahmenOffen,
-            data.ausgaben,
-            data.ausgabenOffen,
-            data.umsatzsteuer,
-            data.vorsteuer,
+            einnahmen,
+            data.einnahmenOffen || 0,
+            ausgaben,
+            data.ausgabenOffen || 0,
+            umsatzsteuer,
+            vorsteuer,
             ustZahlung,
             ergebnis
         ]);
@@ -483,10 +485,9 @@ function calculateGUV() {
             let q = Math.ceil(m / 3);
             let qData = quartalsDaten[q];
 
-            // USt-Zahlung = Umsatzsteuer - Vorsteuer
-            let qUstZahlung = qData.umsatzsteuer - qData.vorsteuer;
-            // Gewinn/Verlust
-            let qErgebnis = qData.einnahmen - qData.ausgaben - qUstZahlung;
+            // Fix: Gewinn korrekt berechnen (ohne Umsatzsteuerabzug)
+            let qUstZahlung = Math.round((qData.umsatzsteuer - qData.vorsteuer) * 100) / 100;
+            let qErgebnis = qData.einnahmen - qData.ausgaben; // Fix hier!
 
             // Werte in der Struktur aktualisieren
             qData.ustZahlung = qUstZahlung;
@@ -494,22 +495,21 @@ function calculateGUV() {
 
             guvSheet.appendRow([
                 `Quartal ${q}`,
-                qData.einnahmen,
-                qData.einnahmenOffen,
-                qData.ausgaben,
-                qData.ausgabenOffen,
-                qData.umsatzsteuer,
-                qData.vorsteuer,
+                qData.einnahmen || 0,
+                qData.einnahmenOffen || 0,
+                qData.ausgaben || 0,
+                qData.ausgabenOffen || 0,
+                qData.umsatzsteuer || 0,
+                qData.vorsteuer || 0,
                 qUstZahlung,
-                qErgebnis
+                qErgebnis // Fix hier!
             ]);
         }
     }
 
-    //--------------------------------
-    // Jahreswerte berechnen und ausgeben
-    //--------------------------------
-    // Alle Monate summieren
+//--------------------------------
+// Jahreswerte berechnen und ausgeben
+//--------------------------------
     let jahresSumme = {
         einnahmen: 0,
         einnahmenOffen: 0,
@@ -522,23 +522,22 @@ function calculateGUV() {
     };
 
     for (let m = 1; m <= 12; m++) {
-        jahresSumme.einnahmen += guvData[m].einnahmen;
-        jahresSumme.einnahmenOffen += guvData[m].einnahmenOffen;
-        jahresSumme.ausgaben += guvData[m].ausgaben;
-        jahresSumme.ausgabenOffen += guvData[m].ausgabenOffen;
-        jahresSumme.umsatzsteuer += guvData[m].umsatzsteuer;
-        jahresSumme.vorsteuer += guvData[m].vorsteuer;
-        jahresSumme.ustZahlung += guvData[m].ustZahlung;
-        jahresSumme.ergebnis += guvData[m].ergebnis;
+        jahresSumme.einnahmen += guvData[m].einnahmen || 0;
+        jahresSumme.einnahmenOffen += guvData[m].einnahmenOffen || 0;
+        jahresSumme.ausgaben += guvData[m].ausgaben || 0;
+        jahresSumme.ausgabenOffen += guvData[m].ausgabenOffen || 0;
+        jahresSumme.umsatzsteuer += guvData[m].umsatzsteuer || 0;
+        jahresSumme.vorsteuer += guvData[m].vorsteuer || 0;
+        jahresSumme.ustZahlung += guvData[m].ustZahlung || 0;
+        jahresSumme.ergebnis += guvData[m].ergebnis || 0;
     }
 
-    // Nun noch die komplett offenen Posten (ohne Zahlungsdatum) hinzufügen
-    // Sie tauchen hier als "Offene Forderungen" bzw. "Offene Verbindlichkeiten" im Gesamtjahr auf
+// ✅ Offene Forderungen und Verbindlichkeiten EINMALIG hinzufügen!
     jahresSumme.einnahmenOffen += offeneEinnahmenGesamt;
     jahresSumme.ausgabenOffen += offeneAusgabenGesamt;
 
-    // Ergebnis bleibt davon unberührt, da bei Ist-Besteuerung erst bei Zahlung relevant
-    // (nur wenn du willst, kannst du das "theoretische" Ergebnis um die offenen Beträge ergänzen)
+// Fix: Jahresergebnis korrekt berechnen
+    jahresSumme.ergebnis = jahresSumme.einnahmen - jahresSumme.ausgaben;
 
     guvSheet.appendRow([
         "Gesamtjahr",
@@ -549,15 +548,16 @@ function calculateGUV() {
         jahresSumme.umsatzsteuer,
         jahresSumme.vorsteuer,
         jahresSumme.ustZahlung,
-        jahresSumme.ergebnis
+        jahresSumme.ergebnis // Fix hier!
     ]);
 
-    // Formatierungen
+// Formatierungen
     let lastRow = guvSheet.getLastRow();
     if (lastRow > 1) {
         guvSheet.getRange(`B2:I${lastRow}`).setNumberFormat("#,##0.00€");
         guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
     }
+
 
     SpreadsheetApp.getUi().alert("GUV-Berechnung abgeschlossen und aktualisiert.");
 }
