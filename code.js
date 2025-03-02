@@ -316,8 +316,8 @@ function calculateGUV() {
     }
 
     // Verarbeitung der Einnahmen und Ausgaben (offeneTotals wird mitgegeben)
-    einnahmenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
-    ausgabenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
+    einnahmenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
+    ausgabenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
 
     // Falls Fehler (Bezahlung ohne Datum oder zukünftiges Datum) vorhanden sind, abbrechen
     if (fehlendeDaten.length > 0) {
@@ -407,8 +407,8 @@ function calculateGUV() {
     }
 
     // Verarbeitung der Einnahmen und Ausgaben (offeneTotals wird mitgegeben)
-    einnahmenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
-    ausgabenData.forEach((row, index) => processRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
+    einnahmenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, true, fehlendeDaten, offeneTotals));
+    ausgabenData.forEach((row, index) => processGuVRow(row, index, guvData, quartalsDaten, false, fehlendeDaten, offeneTotals));
 
     // Falls Fehler (Bezahlung mit ungültigem Datum oder zukünftiges Datum) vorhanden sind, abbrechen
     if (fehlendeDaten.length > 0) {
@@ -450,7 +450,7 @@ function calculateGUV() {
  * dass kein Zahlungsdatum gesetzt wurde. In diesem Fall wird der Nettobetrag
  * zu den offenen Beträgen (je nach Kategorie) addiert.
  */
-function processRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDaten, offeneTotals) {
+function processGuVRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDaten, offeneTotals) {
     let zahlungsDatum = parseDate(row[12]);
     let netto = parseCurrency(row[4]);
     let mwstRate = parseMwstRate(row[5]);
@@ -458,59 +458,41 @@ function processRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDaten,
     let factor = (mwstRate > 0) ? 1 + (mwstRate / 100) : 1;
     let bezahltNetto = bezahltBrutto / factor;
     let bezahltMwst = bezahltBrutto - bezahltNetto;
+    let restbetrag = Math.max(0, netto - bezahltNetto);
 
-    // Falls eine Zahlung erfolgt ist, aber kein (gültiges) Datum gesetzt wurde, Fehler melden.
+    // Falls eine Zahlung erfolgt ist, aber kein Datum gesetzt wurde -> Fehler
     if (bezahltBrutto !== 0 && !zahlungsDatum) {
-        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Fehlendes oder ungültiges Zahlungsdatum trotz Zahlung`);
+        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Fehlendes Zahlungsdatum trotz Zahlung!`);
         return;
     }
 
-    // Prüfe, ob das Zahlungsdatum in der Zukunft liegt.
+    // Falls Zahlungsdatum in der Zukunft liegt -> Fehler
     if (zahlungsDatum && zahlungsDatum > new Date()) {
-        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Zahlungsdatum liegt in der Zukunft`);
+        fehlendeDaten.push(`${isIncome ? "Einnahmen" : "Ausgaben"} - Zeile ${index + 2}: Zahlungsdatum in der Zukunft!`);
         return;
     }
 
-    // Wenn kein Datum gesetzt ist, gilt der Betrag als offener Posten.
-    if (!zahlungsDatum) {
-        if (isIncome) {
-            offeneTotals.einnahmen += netto;
-        } else {
-            offeneTotals.ausgaben += netto;
-        }
-        return;
-    }
-
-    let monat = zahlungsDatum.getMonth() + 1;
-    let quartal = Math.ceil(monat / 3);
+    let monat = zahlungsDatum ? zahlungsDatum.getMonth() + 1 : null;
+    let quartal = zahlungsDatum ? Math.ceil(monat / 3) : null;
     let category = isIncome ? "ust" : "vst";
+
+    // Falls eine Rechnung offen ist -> Zu offenen Forderungen/Verbindlichkeiten hinzufügen
+    if (!zahlungsDatum || restbetrag > 0) {
+        if (isIncome) {
+            offeneTotals.einnahmen += restbetrag;
+        } else {
+            offeneTotals.ausgaben += restbetrag;
+        }
+    }
+
+    if (!zahlungsDatum) return; // Offene Rechnungen werden nicht für Umsatzsteuer berechnet
 
     // Sicherstellen, dass die Datenstrukturen existieren
     if (!guvData[monat]) {
-        guvData[monat] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            ust_0: 0, ust_7: 0, ust_19: 0,
-            vst_0: 0, vst_7: 0, vst_19: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
+        guvData[monat] = createEmptyGuVObject();
     }
     if (!quartalsDaten[quartal]) {
-        quartalsDaten[quartal] = {
-            einnahmen: 0, einnahmenOffen: 0,
-            ausgaben: 0, ausgabenOffen: 0,
-            ust_0: 0, ust_7: 0, ust_19: 0,
-            vst_0: 0, vst_7: 0, vst_19: 0,
-            ustZahlung: 0, ergebnis: 0
-        };
-    }
-
-    // Sicherstellen, dass `ust_X` bzw. `vst_X` initialisiert sind
-    if (typeof guvData[monat][`${category}_${mwstRate}`] === "undefined") {
-        guvData[monat][`${category}_${mwstRate}`] = 0;
-    }
-    if (typeof quartalsDaten[quartal][`${category}_${mwstRate}`] === "undefined") {
-        quartalsDaten[quartal][`${category}_${mwstRate}`] = 0;
+        quartalsDaten[quartal] = createEmptyGuVObject();
     }
 
     guvData[monat][`${category}_${mwstRate}`] += bezahltMwst;
@@ -518,12 +500,16 @@ function processRow(row, index, guvData, quartalsDaten, isIncome, fehlendeDaten,
 
     guvData[monat][isIncome ? "einnahmen" : "ausgaben"] += bezahltNetto;
     quartalsDaten[quartal][isIncome ? "einnahmen" : "ausgaben"] += bezahltNetto;
+}
 
-    let offenerBetrag = Math.max(0, netto - bezahltNetto);
-    if (offenerBetrag > 0) {
-        guvData[monat][isIncome ? "einnahmenOffen" : "ausgabenOffen"] += offenerBetrag;
-        quartalsDaten[quartal][isIncome ? "einnahmenOffen" : "ausgabenOffen"] += offenerBetrag;
-    }
+function createEmptyGuVObject() {
+    return {
+        einnahmen: 0, einnahmenOffen: 0,
+        ausgaben: 0, ausgabenOffen: 0,
+        ust_0: 0, ust_7: 0, ust_19: 0,
+        vst_0: 0, vst_7: 0, vst_19: 0,
+        ustZahlung: 0, ergebnis: 0
+    };
 }
 
 /**
