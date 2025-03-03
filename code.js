@@ -461,7 +461,6 @@ const GuVCalculator = (() => {
     return { calculateGuV };
 })();
 
-
 // ================= Modul: BWACalculator =================
 const BWACalculator = (() => {
     // Ermittelt die interne BWA-Kategorie mithilfe der zentralen Konfiguration.
@@ -503,10 +502,15 @@ const BWACalculator = (() => {
                 bankWarnings = bankWarnings.concat(Validator.validateBankSheet(bankData[i], i + 1, bankData.length));
             }
         }
-        if (revenueWarnings.length > 0 || expenseWarnings.length > 0 || bankWarnings.length > 0) {
-            const msg = "Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n") +
-                "\n\nFehler in 'Ausgaben':\n" + expenseWarnings.join("\n") +
-                (bankSheet ? ("\n\nFehler in 'Bankbewegungen':\n" + bankWarnings.join("\n")) : "");
+
+        // Baue die Fehlermeldung nur aus nicht-leeren Warnungen
+        let msgArr = [];
+        if (revenueWarnings.length > 0) msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+        if (expenseWarnings.length > 0) msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+        if (bankSheet && bankWarnings.length > 0) msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+        const msg = msgArr.join("\n\n");
+
+        if (msg !== "") {
             SpreadsheetApp.getUi().alert(msg);
             return;
         }
