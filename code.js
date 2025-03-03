@@ -50,67 +50,46 @@ const CategoryConfig = {
 
 
 // ================= Modul: Validator =================
-// Dieses Modul stellt Funktionen zur Validierung von Zeilendaten zur Verfügung.
+// Hier fassen wir gemeinsame Prüfungen zusammen, sodass wir den Code etwas kürzen können.
 const Validator = (() => {
-    // Validiert eine Zeile aus dem GuV-/BWA-Kontext (Einnahmen/Ausgaben).
-    // Erwartete Felder:
-    //  A: Rechnungsdatum, B: Rechnungsnummer, C: Kategorie, D: Kunde,
-    //  E: Netto (numerisch), F: Mehrwertsteuer (numerisch, 0% wird akzeptiert),
-    //  L: Zahlungsstatus, M: Zahlungsdatum.
+    // Hilfsfunktion: Prüft, ob ein Wert nicht leer ist.
+    const isEmpty = value => !value || value.toString().trim() === "";
+
+    // Validiert eine Zeile aus dem Revenue-/Expense-Bereich (GuV/BWA).
+    // Erwartete Felder (Spaltenindex):
+    // A: Datum, B: Rechnungsnummer, C: Kategorie, D: Kunde, E: Netto, F: MwSt, L: Zahlungsstatus, M: Zahlungsdatum.
     const validateRevenueAndExpenses = (row, rowIndex) => {
-        const warnings = [];
-        if (!row[0] || row[0].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsdatum fehlt.`);
-        }
-        if (!row[1] || row[1].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsnummer fehlt.`);
-        }
-        if (!row[2] || row[2].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (E/A): Kategorie fehlt.`);
-        }
-        if (!row[3] || row[3].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (E/A): Kunde fehlt.`);
-        }
-        if (!row[4] || isNaN(parseFloat(row[4].toString().trim()))) {
+        let warnings = [];
+        if (isEmpty(row[0])) warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsdatum fehlt.`);
+        if (isEmpty(row[1])) warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsnummer fehlt.`);
+        if (isEmpty(row[2])) warnings.push(`Zeile ${rowIndex} (E/A): Kategorie fehlt.`);
+        if (isEmpty(row[3])) warnings.push(`Zeile ${rowIndex} (E/A): Kunde fehlt.`);
+        if (isEmpty(row[4]) || isNaN(parseFloat(row[4].toString().trim())))
             warnings.push(`Zeile ${rowIndex} (E/A): Nettobetrag fehlt oder ungültig.`);
-        }
-        // Hier: Mehrwertsteuer – 0% darf gültig sein
+        // MwSt: 0% soll akzeptiert werden
         const mwstStr = row[5] ? row[5].toString().trim() : "";
-        if (mwstStr === "" || isNaN(parseFloat(mwstStr.replace("%", "")))) {
+        if (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", ""))))
             warnings.push(`Zeile ${rowIndex} (E/A): Mehrwertsteuer fehlt oder ungültig.`);
-        }
-        // Zahlungsstatus (Spalte L) und Zahlungsdatum (Spalte M)
-        const zahlungsstatus = row[11] ? row[11].toString().trim().toLowerCase() : "";
+
+        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
         const zahlungsdatum = row[12] ? row[12].toString().trim() : "";
-        if (zahlungsstatus === "offen") {
-            if (zahlungsdatum !== "") {
-                warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum darf nicht gesetzt sein, wenn Zahlungsstatus "Offen" ist.`);
-            }
+        if (status === "offen") {
+            if (!isEmpty(zahlungsdatum)) warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum darf nicht gesetzt sein, wenn "Offen".`);
         } else {
-            if (zahlungsdatum === "") {
-                warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum muss gesetzt sein, wenn Rechnung bezahlt/teilbezahlt ist.`);
-            }
+            if (isEmpty(zahlungsdatum)) warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
         }
         return warnings;
     };
 
-    // Validiert eine Zeile aus dem Buchhaltungs-/Bankbewegungskontext.
-    // Erwartete Felder:
-    //  A: Buchungsdatum, B: Buchungstext, C: Betrag (numerisch), F: Kategorie.
+    // Validiert eine Zeile aus dem Bankbewegungssheet.
+    // Erwartete Felder: A: Buchungsdatum, B: Buchungstext, C: Betrag, F: Kategorie.
     const validateBankSheet = (row, rowIndex) => {
-        const warnings = [];
-        if (!row[0] || row[0].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (Bank): Buchungsdatum fehlt.`);
-        }
-        if (!row[1] || row[1].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (Bank): Buchungstext fehlt.`);
-        }
-        if (!row[2] || isNaN(parseFloat(row[2].toString().trim()))) {
+        let warnings = [];
+        if (isEmpty(row[0])) warnings.push(`Zeile ${rowIndex} (Bank): Buchungsdatum fehlt.`);
+        if (isEmpty(row[1])) warnings.push(`Zeile ${rowIndex} (Bank): Buchungstext fehlt.`);
+        if (isEmpty(row[2]) || isNaN(parseFloat(row[2].toString().trim())))
             warnings.push(`Zeile ${rowIndex} (Bank): Betrag fehlt oder ungültig.`);
-        }
-        if (!row[5] || row[5].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex} (Bank): Kategorie fehlt.`);
-        }
+        if (isEmpty(row[5])) warnings.push(`Zeile ${rowIndex} (Bank): Kategorie fehlt.`);
         return warnings;
     };
 
@@ -236,8 +215,9 @@ const Buchhaltung = (() => {
         return folderIter.hasNext() ? folderIter.next() : null;
     };
 
-    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung, Dropdown (Kategorie).
-    // Die Validierung erfolgt ausschließlich in calculateGuV.
+    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung und Dropdown (Kategorie).
+    // Validierung erfolgt ausschließlich in calculateGuV.
+    // Zusätzlich wird in Spalte I (Bezahlt) der Default-Wert 0 gesetzt, falls keine Eingabe vorhanden ist.
     const refreshSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
@@ -273,13 +253,13 @@ const Buchhaltung = (() => {
 
         // Setzt in Spalte I (Bezahlt) den Default-Wert 0, wenn leer
         for (let r = 2; r <= lastRow; r++) {
-            const cell = sheet.getRange(r, 9); // Spalte I hat Index 9
+            const cell = sheet.getRange(r, 9);
             if (cell.getValue() === "" || cell.getValue() === null) {
                 cell.setValue(0);
             }
         }
 
-        // Datenvalidierung (Dropdown) für Kategorie-Spalte (Spalte C) bei Einnahmen/Ausgaben
+        // Datenvalidierung (Dropdown) für Kategorie-Spalte (Spalte C) – nur für Einnahmen und Ausgaben
         const sheetName = sheet.getName();
         if (sheetName === "Einnahmen") {
             const validationRule = SpreadsheetApp.newDataValidation()
@@ -296,8 +276,10 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Refresh für Bankbewegungen: Setzt Formeln, Formatierung, Dropdown (Typ).
-    // Die Validierung erfolgt ausschließlich in calculateBWA.
+    // Refresh für Bankbewegungen: Setzt Formeln, Formatierung und Dropdown (Typ).
+    // Hier: Zeile 2 (Anfangssaldo) und die letzte Zeile (Endsaldo) werden nicht validiert.
+    // In Spalte E wird nur der Typ ("Umsatzerlöse" bei positiv, "Betriebskosten" bei negativ) gesetzt,
+    // während die Detailkategorie in Spalte F erfolgt.
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -309,7 +291,7 @@ const Buchhaltung = (() => {
         });
         sheet.getRange(3, 4, numRows, 1).setFormulas(saldoFormulas);
 
-        // Standard-Zuordnung in Spalte E: Positive -> "Umsatzerlöse", Negative -> "Betriebskosten"
+        // Setzt in Spalte E (Typ) nur "Umsatzerlöse" bei positiven Beträgen, "Betriebskosten" bei negativen.
         for (let row = 3; row <= lastRow; row++) {
             const betrag = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
             const typeCell = sheet.getRange(row, 5);
@@ -321,27 +303,11 @@ const Buchhaltung = (() => {
                 typeCell.clearContent();
             }
         }
-        // Datenvalidierung (Dropdown) in Spalte E gemäß Bank-Konfiguration
-        const validationRule = SpreadsheetApp.newDataValidation()
-            .requireValueInList(CategoryConfig.bank.allowed, true)
+        // Dropdown in Spalte E: Nur erlaubte Typen (definiert in CategoryConfig.bank.typeAllowed)
+        const typeValidationRule = SpreadsheetApp.newDataValidation()
+            .requireValueInList(CategoryConfig.bank.typeAllowed, true)
             .build();
-        sheet.getRange(2, 5, lastRow - 1, 1).setDataValidation(validationRule);
-
-        const existingRules = sheet.getConditionalFormatRules() || [];
-        const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Umsatzerlöse")
-            .setBackground("#C6EFCE")
-            .setFontColor("#006100")
-            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
-            .build();
-        const ruleAusgabe = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Betriebskosten")
-            .setBackground("#FFC7CE")
-            .setFontColor("#9C0006")
-            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
-            .build();
-        existingRules.push(ruleEinnahme, ruleAusgabe);
-        sheet.setConditionalFormatRules(existingRules);
+        sheet.getRange(2, 5, lastRow - 1, 1).setDataValidation(typeValidationRule);
 
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
@@ -381,7 +347,7 @@ const GuVCalculator = (() => {
     const parseMwstRate = value => {
         let rate = parseFloat(value.toString().replace("%", "").trim());
         if (isNaN(rate)) return 19;
-        return rate; // 0%, 7% und 19% werden jetzt korrekt akzeptiert.
+        return rate;
     };
 
     const createEmptyGuV = () => ({
@@ -459,7 +425,6 @@ const GuVCalculator = (() => {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
         }
-        // Validierung: Separat für Einnahmen und Ausgaben
         let revenueWarnings = [];
         revenueSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
             revenueWarnings = revenueWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
@@ -469,8 +434,8 @@ const GuVCalculator = (() => {
             expenseWarnings = expenseWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
         if (revenueWarnings.length > 0 || expenseWarnings.length > 0) {
-            const msg = "Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n") +
-                "\n\nFehler in 'Ausgaben':\n" + expenseWarnings.join("\n");
+            const msg = "Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n")
+                + "\n\nFehler in 'Ausgaben':\n" + expenseWarnings.join("\n");
             SpreadsheetApp.getUi().alert(msg);
             return;
         }
@@ -524,7 +489,7 @@ const GuVCalculator = (() => {
 
 // ------------------ Modul: BWA-Berechnung ------------------
 const BWACalculator = (() => {
-    // Ermittelt die interne BWA-Kategorie mithilfe der zentralen Konfiguration.
+    // Ermittelt die interne BWA-Kategorie anhand der zentralen Konfiguration.
     function getBwaCategory(category, isIncome, rowIndex, fehlendeKategorien, type = "operativ") {
         const mapping = type === "bank"
             ? CategoryConfig.bank.bwaMapping
@@ -538,6 +503,7 @@ const BWACalculator = (() => {
     }
 
     // Berechnet die BWA, nachdem Einnahmen, Ausgaben und Bankbewegungen validiert wurden.
+    // Validierung erfolgt getrennt für Einnahmen, Ausgaben und Bank (wobei beim Bankbereich die erste und letzte Zeile ausgelassen werden).
     function calculateBWA() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -545,7 +511,6 @@ const BWACalculator = (() => {
         const bankSheet = ss.getSheetByName("Bankbewegungen");
         const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
 
-        // Validierung für Einnahmen und Ausgaben
         let revenueWarnings = [];
         revenueSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
             revenueWarnings = revenueWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
@@ -554,17 +519,18 @@ const BWACalculator = (() => {
         expenseSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
             expenseWarnings = expenseWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
-        // Validierung für Bankbewegungen (sofern vorhanden)
         let bankWarnings = [];
         if (bankSheet) {
-            bankSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
-                bankWarnings = bankWarnings.concat(Validator.validateBankSheet(row, index + 2));
-            });
+            // Überspringe Zeile 2 (Anfangssaldo) und letzte Zeile (Endsaldo)
+            const bankData = bankSheet.getDataRange().getValues();
+            for (let i = 1; i < bankData.length - 1; i++) {
+                bankWarnings = bankWarnings.concat(Validator.validateBankSheet(bankData[i], i + 1));
+            }
         }
         if (revenueWarnings.length > 0 || expenseWarnings.length > 0 || bankWarnings.length > 0) {
-            const msg = "Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n")
-                + "\n\nFehler in 'Ausgaben':\n" + expenseWarnings.join("\n")
-                + (bankSheet ? ("\n\nFehler in 'Bankbewegungen':\n" + bankWarnings.join("\n")) : "");
+            const msg = "Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n") +
+                "\n\nFehler in 'Ausgaben':\n" + expenseWarnings.join("\n") +
+                (bankSheet ? ("\n\nFehler in 'Bankbewegungen':\n" + bankWarnings.join("\n")) : "");
             SpreadsheetApp.getUi().alert(msg);
             return;
         }
@@ -580,7 +546,6 @@ const BWACalculator = (() => {
         let totalLiquiditaet = 0;
         const fehlendeKategorien = [];
 
-        // Verarbeitung Einnahmen
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         revenueData.forEach((row, index) => {
             const kategorieUser = row[2];
@@ -592,7 +557,6 @@ const BWACalculator = (() => {
             offeneForderungen += restBetrag;
         });
 
-        // Verarbeitung Ausgaben
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
         expenseData.forEach((row, index) => {
             const kategorieUser = row[2];
@@ -604,25 +568,23 @@ const BWACalculator = (() => {
             offeneVerbindlichkeiten += restBetrag;
         });
 
-        // Verarbeitung Bankbewegungen: Aktueller Kontostand
         if (bankSheet) {
-            const bankData = bankSheet.getDataRange().getValues().slice(1);
-            bankData.forEach(row => {
+            const bankData = bankSheet.getDataRange().getValues();
+            // Überspringe erste und letzte Zeile
+            for (let i = 1; i < bankData.length - 1; i++) {
+                const row = bankData[i];
                 const saldo = parseFloat(row[3]) || 0;
                 totalLiquiditaet = saldo;
-            });
+            }
         }
 
-        // BWA-Sheet füllen
         bwaSheet.clearContents();
         bwaSheet.appendRow(["Position", "Betrag (€)"]);
-
         bwaSheet.appendRow(["--- EINNAHMEN ---", ""]);
         Object.keys(categories.einnahmen).forEach(key => bwaSheet.appendRow([key, categories.einnahmen[key]]));
         bwaSheet.appendRow(["Gesamteinnahmen", totalEinnahmen]);
         bwaSheet.appendRow(["Erhaltene Einnahmen", totalEinnahmen - offeneForderungen]);
         bwaSheet.appendRow(["Offene Forderungen", offeneForderungen]);
-
         bwaSheet.appendRow(["--- AUSGABEN ---", ""]);
         Object.keys(categories.ausgaben).forEach(key => bwaSheet.appendRow([key, -categories.ausgaben[key]]));
         bwaSheet.appendRow(["Gesamtausgaben", -totalAusgaben]);
@@ -630,7 +592,6 @@ const BWACalculator = (() => {
 
         const ergebnis = totalEinnahmen - totalAusgaben;
         bwaSheet.appendRow(["Betriebsergebnis", ergebnis]);
-
         bwaSheet.appendRow(["--- STEUERN ---", ""]);
         bwaSheet.appendRow(["Umsatzsteuer-Zahlung", 0]);
         bwaSheet.appendRow(["Vorsteuer", 0]);
@@ -638,13 +599,11 @@ const BWACalculator = (() => {
         bwaSheet.appendRow(["Gewerbesteuer", 0]);
         const ergebnisNachSteuern = ergebnis;
         bwaSheet.appendRow(["Ergebnis nach Steuern", ergebnisNachSteuern]);
-
         bwaSheet.appendRow(["--- FINANZIERUNG ---", ""]);
         bwaSheet.appendRow(["Eigenbeleg", 0]);
         bwaSheet.appendRow(["Privateinlage", 0]);
         bwaSheet.appendRow(["Privatentnahme", 0]);
         bwaSheet.appendRow(["Darlehen", 0]);
-
         bwaSheet.appendRow(["--- LIQUIDITÄT ---", ""]);
         bwaSheet.appendRow(["Kontostand (Bankbewegungen)", totalLiquiditaet]);
 
