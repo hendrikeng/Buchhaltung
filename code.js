@@ -327,10 +327,12 @@ const Buchhaltung = (() => {
 
 // ================= Modul: GuV-Berechnung =================
 const GuVCalculator = (() => {
-    const parseMwstRate = value => {
-        let rate = parseFloat(value.toString().replace("%", "").trim());
+    function parseMwstRate(value) {
+        let rate = (typeof value === "number")
+            ? (value < 1 ? value * 100 : value)
+            : parseFloat(value.toString().replace("%", "").replace(",", "."));
         return isNaN(rate) ? 19 : rate;
-    };
+    }
 
     const createEmptyGuV = () => ({
         einnahmen: 0,
