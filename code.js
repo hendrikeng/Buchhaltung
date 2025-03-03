@@ -87,6 +87,7 @@ const Validator = (() => {
     const validateBankSheet = (row, rowIndex, totalRows) => {
         const warnings = [];
         if (rowIndex === 2 || rowIndex === totalRows) {
+            isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex} (Bank): Buchungsdatum fehlt.`);
             isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex} (Bank): Buchungstext fehlt.`);
             (isEmpty(row[3]) || isNaN(parseFloat(row[3].toString().trim()))) &&
             warnings.push(`Zeile ${rowIndex} (Bank): Saldo fehlt oder ungültig.`);
