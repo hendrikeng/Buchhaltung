@@ -48,28 +48,86 @@ const CategoryConfig = {
     }
 };
 
+
 // ================= Modul: Validator =================
+// Dieses Modul stellt Funktionen zur Validierung von Zeilendaten zur Verfügung.
 const Validator = (() => {
-    const validateRow = (row, rowIndex, requiredColumns) => {
+    // Validiert eine Zeile aus dem GuV-/BWA-Kontext.
+    // Erwartete Felder:
+    //  - Spalte A (0): Rechnungsdatum
+    //  - Spalte B (1): Rechnungsnummer
+    //  - Spalte C (2): Kategorie
+    //  - Spalte D (3): Kunde
+    //  - Spalte E (4): Netto (numerisch)
+    //  - Spalte F (5): Mehrwertsteuer (numerisch)
+    //  - Spalte L (11): Zahlungsstatus (z. B. "Offen", "Bezahlt", "Teilbezahlt")
+    //  - Spalte M (12): Zahlungsdatum
+    // Bedingung: Falls Zahlungsstatus "Offen" ist, darf kein Zahlungsdatum vorhanden sein; andernfalls muss eins vorhanden sein.
+    const validateRevenueAndExpenses = (row, rowIndex) => {
         const warnings = [];
-        if (!row[requiredColumns.date] || row[requiredColumns.date].toString().trim() === "") {
-            warnings.push(`Zeile ${rowIndex}: Buchungsdatum fehlt.`);
+        if (!row[0] || row[0].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
         }
-        if (!row[requiredColumns.category] || row[requiredColumns.category].toString().trim() === "") {
+        if (!row[1] || row[1].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
+        }
+        if (!row[2] || row[2].toString().trim() === "") {
             warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
         }
-        if (!row[requiredColumns.amount] || isNaN(parseFloat(row[requiredColumns.amount]))) {
+        if (!row[3] || row[3].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
+        }
+        if (!row[4] || isNaN(parseFloat(row[4]))) {
             warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
+        }
+        if (!row[5] || isNaN(parseFloat(row[5]))) {
+            warnings.push(`Zeile ${rowIndex}: Mehrwertsteuer fehlt oder ungültig.`);
+        }
+        // Zahlungsstatus in Spalte L (Index 11) und Zahlungsdatum in Spalte M (Index 12)
+        const zahlungsstatus = row[11] ? row[11].toString().trim().toLowerCase() : "";
+        const zahlungsdatum = row[12] ? row[12].toString().trim() : "";
+        if (zahlungsstatus === "offen") {
+            if (zahlungsdatum !== "") {
+                warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn Zahlungsstatus "Offen" ist.`);
+            }
+        } else {
+            // Wenn nicht "offen", muss ein Zahlungsdatum vorhanden sein.
+            if (zahlungsdatum === "") {
+                warnings.push(`Zeile ${rowIndex}: Zahlungsdatum muss gesetzt sein, wenn Rechnung bezahlt/teilbezahlt ist.`);
+            }
         }
         return warnings;
     };
-    return { validateRow };
+
+    // Validiert eine Zeile aus dem Buchhaltungs-/Bankbewegungskontext.
+    // Erwartete Felder:
+    //  - Spalte A (0): Buchungsdatum
+    //  - Spalte B (1): Buchungstext
+    //  - Spalte C (2): Betrag (numerisch)
+    //  - Spalte F (5): Kategorie
+    const validateBankSheet = (row, rowIndex) => {
+        const warnings = [];
+        if (!row[0] || row[0].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Buchungsdatum fehlt.`);
+        }
+        if (!row[1] || row[1].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Buchungstext fehlt.`);
+        }
+        if (!row[2] || isNaN(parseFloat(row[2]))) {
+            warnings.push(`Zeile ${rowIndex}: Betrag fehlt oder ungültig.`);
+        }
+        if (!row[5] || row[5].toString().trim() === "") {
+            warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
+        }
+        return warnings;
+    };
+
+    return { validateRevenueAndExpenses, validateBankSheet };
 })();
 
 
 // ------------------ Modul: Buchhaltung ------------------
 const Buchhaltung = (() => {
-    // Setzt den onOpen-Trigger, falls noch nicht vorhanden
     const setupTrigger = () => {
         const triggers = ScriptApp.getProjectTriggers();
         if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
@@ -81,7 +139,6 @@ const Buchhaltung = (() => {
         }
     };
 
-    // Erstellt das Menü im aktiven Spreadsheet
     const onOpen = () => {
         SpreadsheetApp.getUi()
             .createMenu("📂 Buchhaltung")
@@ -134,11 +191,11 @@ const Buchhaltung = (() => {
             SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
         }
 
-        // Nach dem Import alle Sheets aktualisieren (Formeln, Formatierung, Dropdowns, Validierung)
+        // Nach dem Import alle Sheets aktualisieren
         refreshSheets();
     };
 
-    // Gemeinsame Funktion: Dateien aus einem Ordner in das entsprechende Sheet importieren
+    // Importiert Dateien aus einem Ordner in das entsprechende Sheet
     const importFilesFromFolder = (folder, importSheet, mainSheet, type, historySheet) => {
         const files = folder.getFiles();
         const getExistingFiles = (sheet, colIndex) =>
@@ -192,23 +249,11 @@ const Buchhaltung = (() => {
         return folderIter.hasNext() ? folderIter.next() : null;
     };
 
-    // Refresh für Einnahmen und Ausgaben: Setzt Formeln, Formatierung, Dropdown (Kategorie) und validiert Zeilen
+    // Refresh für Einnahmen und Ausgaben: Setzt Formeln, Formatierung, Dropdown (Kategorie) und validiert Zeilen mithilfe von Validator.validateGuVRow
     const refreshSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
-        let warnings = [];
-        // Annahme: Spalte A = Datum, Spalte C = Kategorie, Spalte E = Nettobetrag
-        const requiredColumns = { date: 0, category: 2, amount: 4 };
-        const data = sheet.getDataRange().getValues();
-        data.forEach((row, index) => {
-            if (index === 0) return; // Header überspringen
-            warnings = warnings.concat(Validator.validateRow(row, index + 1, requiredColumns));
-        });
-        if (warnings.length > 0) {
-            SpreadsheetApp.getUi().alert("Fehlende/ungültige Angaben in " + sheet.getName() + ":\n" + warnings.join("\n"));
-            return;
-        }
 
         // Setzt Formeln (z.B. MwSt, Brutto, Restbetrag, Quartal, Zahlungsstatus)
         const formulas = Array.from({ length: numRows }, (_, i) => {
@@ -227,7 +272,7 @@ const Buchhaltung = (() => {
         sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map(f => [f.quartal]));
         sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map(f => [f.status]));
 
-        // Formatierung: Datum und Währung
+        // Formatierung
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat(dateFormat);
@@ -240,7 +285,7 @@ const Buchhaltung = (() => {
         sheet.getRange(`J2:J${lastRow}`).setNumberFormat(currencyFormat);
         sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
 
-        // Datenvalidierung (Dropdown) für die Kategorie-Spalte (Spalte C) bei Einnahmen und Ausgaben
+        // Datenvalidierung (Dropdown) für die Kategorie-Spalte (Spalte C) je nach Sheet-Namen
         const sheetName = sheet.getName();
         if (sheetName === "Einnahmen") {
             const validationRule = SpreadsheetApp.newDataValidation()
@@ -257,23 +302,10 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Refresh für Bankbewegungen: Setzt Formeln, Formatierung, Dropdown (Typ) und validiert Zeilen
+    // Refresh für Bankbewegungen: Setzt Formeln, Formatierung, Dropdown (Typ) und validiert Zeilen mithilfe von Validator.validateBuchhaltungsRow
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
-
-        // Annahme: Spalte A = Datum, Spalte E = Kategorie, Spalte C = Nettobetrag
-        const requiredColumns = { date: 0, category: 4, amount: 2 };
-        let warnings = [];
-        const data = sheet.getDataRange().getValues();
-        data.forEach((row, index) => {
-            if (index === 0) return;
-            warnings = warnings.concat(Validator.validateRow(row, index + 1, requiredColumns));
-        });
-        if (warnings.length > 0) {
-            SpreadsheetApp.getUi().alert("Fehlende/ungültige Angaben in Bankbewegungen:\n" + warnings.join("\n"));
-            return;
-        }
 
         const numRows = lastRow - 2;
         const saldoFormulas = Array.from({ length: numRows }, (_, i) => {
@@ -282,7 +314,7 @@ const Buchhaltung = (() => {
         });
         sheet.getRange(3, 4, numRows, 1).setFormulas(saldoFormulas);
 
-        // Standard-Zuordnung in Spalte E: Positiv -> "Umsatzerlöse", Negativ -> "Betriebskosten"
+        // Standard-Zuordnung in Spalte E: Positive -> "Umsatzerlöse", Negative -> "Betriebskosten"
         for (let row = 3; row <= lastRow; row++) {
             const betrag = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
             const typeCell = sheet.getRange(row, 5);
@@ -294,13 +326,13 @@ const Buchhaltung = (() => {
                 typeCell.clearContent();
             }
         }
-        // Datenvalidierung (Dropdown) in Spalte E gemäß Bank-Konfiguration
+        // Dropdown in Spalte E gemäß Bank-Konfiguration
         const validationRule = SpreadsheetApp.newDataValidation()
             .requireValueInList(CategoryConfig.bank.allowed, true)
             .build();
         sheet.getRange(2, 5, lastRow - 1, 1).setDataValidation(validationRule);
 
-        // Bedingte Formatierung in Spalte E: Grün für "Umsatzerlöse", Rot für "Betriebskosten"
+        // Bedingte Formatierung in Spalte E
         const existingRules = sheet.getConditionalFormatRules() || [];
         const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo("Umsatzerlöse")
@@ -325,7 +357,7 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Aktualisiert alle relevanten Sheets: Einnahmen, Ausgaben und Bankbewegungen
+    // Aktualisiert alle relevanten Sheets
     const refreshSheets = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -338,7 +370,9 @@ const Buchhaltung = (() => {
             refreshSheet(revenueSheet);
             refreshSheet(expenseSheet);
         }
-        if (bankSheet) {
+        if (!bankSheet) {
+            SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Bankbewegungen'");
+        } else {
             refreshBankSheet(bankSheet);
         }
         SpreadsheetApp.getUi().alert("Alle relevanten Sheets wurden erfolgreich aktualisiert!");
@@ -422,7 +456,7 @@ const GuVCalculator = (() => {
         return sum;
     };
 
-    // Berechnet die GuV, nachdem Einnahmen und Ausgaben validiert wurden.
+    // Berechnet die GuV, nachdem alle Zeilen in Einnahmen und Ausgaben validiert wurden.
     const calculateGuV = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -431,13 +465,13 @@ const GuVCalculator = (() => {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
         }
-        // Validierung: Prüft, ob alle Zeilen in Einnahmen/Ausgaben korrekt ausgefüllt sind.
+        // Verwende die GuV-Validierung für alle Zeilen
         let warnings = [];
         revenueSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
-            warnings = warnings.concat(Validator.validateRow(row, index + 2, { date: 0, category: 2, amount: 4 }));
+            warnings = warnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
         expenseSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
-            warnings = warnings.concat(Validator.validateRow(row, index + 2, { date: 0, category: 2, amount: 4 }));
+            warnings = warnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
         if (warnings.length > 0) {
             SpreadsheetApp.getUi().alert("Fehlende/ungültige Angaben in Einnahmen/Ausgaben:\n" + warnings.join("\n"));
@@ -493,9 +527,7 @@ const GuVCalculator = (() => {
 
 // ------------------ Modul: BWA-Berechnung ------------------
 const BWACalculator = (() => {
-    // Validierung wird hier durch das Validator-Modul bereitgestellt
-
-    // Ermittelt die interne BWA-Kategorie anhand der zentralen Konfiguration
+    // Ermittelt die interne BWA-Kategorie mithilfe der zentralen Konfiguration.
     function getBwaCategory(category, isIncome, rowIndex, fehlendeKategorien, type = "operativ") {
         const mapping = type === "bank"
             ? CategoryConfig.bank.bwaMapping
@@ -508,7 +540,7 @@ const BWACalculator = (() => {
         return mapping[category];
     }
 
-    // Berechnet die BWA, nachdem Einnahmen, Ausgaben und Bankbewegungen validiert wurden.
+    // Berechnet die BWA, nachdem alle Zeilen in Einnahmen und Ausgaben validiert wurden.
     function calculateBWA() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -516,13 +548,13 @@ const BWACalculator = (() => {
         const bankSheet = ss.getSheetByName("Bankbewegungen");
         const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
 
-        // Validierung: Prüfe Einnahmen und Ausgaben auf Pflichtfelder.
+        // Validierung für Einnahmen und Ausgaben
         let warnings = [];
         revenueSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
-            warnings = warnings.concat(Validator.validateRow(row, index + 2, { date: 0, category: 2, amount: 4 }));
+            warnings = warnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
         expenseSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
-            warnings = warnings.concat(Validator.validateRow(row, index + 2, { date: 0, category: 2, amount: 4 }));
+            warnings = warnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
         if (warnings.length > 0) {
             SpreadsheetApp.getUi().alert("Fehlende/ungültige Angaben in Einnahmen/Ausgaben:\n" + warnings.join("\n"));
