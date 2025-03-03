@@ -72,11 +72,23 @@ const Buchhaltung = (() => {
     const importDriveFiles = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheets = {
-            revenue: ss.getSheetByName("Rechnungen Einnahmen"),
-            expense: ss.getSheetByName("Rechnungen Ausgaben"),
             revenueMain: ss.getSheetByName("Einnahmen"),
             expenseMain: ss.getSheetByName("Ausgaben"),
-            history: ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie")
+            revenue: ss.getSheetByName("Rechnungen Einnahmen") || (() => {
+                const s = ss.insertSheet("Rechnungen Einnahmen");
+                s.setIndex(ss.getSheets().length - 1);
+                return s;
+            })(),
+            expense: ss.getSheetByName("Rechnungen Ausgaben") || (() => {
+                const s = ss.insertSheet("Rechnungen Ausgaben");
+                s.setIndex(ss.getSheets().length - 1);
+                return s;
+            })(),
+            history: ss.getSheetByName("Änderungshistorie") || (() => {
+                const s = ss.insertSheet("Änderungshistorie");
+                s.setIndex(ss.getSheets().length - 1);
+                return s;
+            })()
         };
 
         if (sheets.history.getLastRow() === 0) {
@@ -190,7 +202,7 @@ const Buchhaltung = (() => {
         const numRows = lastRow - 1;
         const warnings = [];
         // Annahme: Spalte A = Buchungsdatum, Spalte C = Kategorie, Spalte E = Nettobetrag
-        const requiredColumns = { date: 0, category: 2, amount: 4 };
+        const requiredColumns = {date: 0, category: 2, amount: 4};
         const data = sheet.getDataRange().getValues();
         data.forEach((row, index) => {
             if (index === 0) return;
@@ -200,7 +212,7 @@ const Buchhaltung = (() => {
             Logger.log("Validierungswarnungen in " + sheet.getName() + ":\n" + warnings.join("\n"));
         }
 
-        const formulas = Array.from({ length: numRows }, (_, i) => {
+        const formulas = Array.from({length: numRows}, (_, i) => {
             const row = i + 2;
             return {
                 mwst: `=E${row}*F${row}`,
@@ -251,7 +263,7 @@ const Buchhaltung = (() => {
         if (lastRow < 3) return;
 
         // Validierung: Spalte A = Buchungsdatum, Spalte E = Kategorie, Spalte C = Nettobetrag
-        const requiredColumns = { date: 0, category: 4, amount: 2 };
+        const requiredColumns = {date: 0, category: 4, amount: 2};
         const data = sheet.getDataRange().getValues();
         const warnings = [];
         data.forEach((row, index) => {
@@ -263,7 +275,7 @@ const Buchhaltung = (() => {
         }
 
         const numRows = lastRow - 2;
-        const saldoFormulas = Array.from({ length: numRows }, (_, i) => {
+        const saldoFormulas = Array.from({length: numRows}, (_, i) => {
             const row = i + 3;
             return [`=D${row - 1}+C${row}`];
         });
@@ -331,7 +343,7 @@ const Buchhaltung = (() => {
         SpreadsheetApp.getUi().alert("Alle relevanten Sheets wurden erfolgreich aktualisiert!");
     };
 
-    return { setupTrigger, onOpen, importDriveFiles, refreshSheets, refreshSheet };
+    return {setupTrigger, onOpen, importDriveFiles, refreshSheets, refreshSheet};
 })();
 
 // ------------------ Modul: GuV-Berechnung ------------------
@@ -459,7 +471,7 @@ const GuVCalculator = (() => {
         SpreadsheetApp.getUi().alert("GuV wurde aktualisiert!");
     };
 
-    return { calculateGuV };
+    return {calculateGuV};
 })();
 
 // ------------------ Modul: BWA-Berechnung ------------------
@@ -485,9 +497,16 @@ const BWACalculator = (() => {
         const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
 
         const categories = {
-            einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0 },
-            ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0 },
-            bank: { eigenbeleg: 0, privateinlage: 0, privatentnahme: 0, darlehen: 0 }
+            einnahmen: {umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0},
+            ausgaben: {
+                wareneinsatz: 0,
+                betriebskosten: 0,
+                marketing: 0,
+                reisen: 0,
+                personalkosten: 0,
+                sonstigeAufwendungen: 0
+            },
+            bank: {eigenbeleg: 0, privateinlage: 0, privatentnahme: 0, darlehen: 0}
         };
 
         let totalEinnahmen = 0, totalAusgaben = 0;
@@ -574,7 +593,7 @@ const BWACalculator = (() => {
         SpreadsheetApp.getUi().alert("BWA wurde erfolgreich berechnet und aktualisiert!");
     }
 
-    return { calculateBWA };
+    return {calculateBWA};
 })();
 
 // ------------------ Globale Funktionen ------------------
