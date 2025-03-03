@@ -266,45 +266,32 @@ const parseCurrency = value =>
 
 /**
  * Verarbeitet eine einzelne Zeile (aus Einnahmen oder Ausgaben).
- *
- * Annahmen (Index-Bezüge, beginnend bei 0):
- *   - Index 5 (Spalte F): MwSt.-Satz (z. B. "0,19", "19%" etc.)
- *   - Index 8 (Spalte H bzw. in Deiner Tabelle „Bezahlt (€ Brutto)“): Bezahler Bruttobetrag
- *   - Index 12 (Spalte M): Zahldatum
- *
- * Es wird folgendermaßen vorgegangen:
- *   1. Es wird geprüft, ob ein gültiges Zahldatum vorliegt (und nicht in der Zukunft liegt).
- *   2. Der tatsächlich gezahlte Nettobetrag wird aus dem bezahlten Bruttobetrag errechnet:
- *         effectiveNet = bezahltBrutto / (1 + (MwSt/100))
- *   3. Der Steuerbetrag wird als:
- *         taxAmount = effectiveNet * (MwSt/100)
- *      berechnet.
- *   4. Diese Werte werden dem Monat zugeordnet, in dem das Zahldatum liegt.
  */
-const processGuVRow = (row, guvData, isIncome) => {
+function processGuVRow(row, guvData, isIncome) {
     const paymentDate = parseDate(row[12]);
     if (!paymentDate || paymentDate > new Date()) return; // Nur gültige, nicht zukünftige Zahlungen verarbeiten.
 
     const month = paymentDate.getMonth() + 1;
-    const paidBrutto = parseCurrency(row[8]);
-    if (paidBrutto <= 0) return; // Keine Zahlung erfolgt.
+    const nettoRechnung = parseCurrency(row[4]);
+    const restbetragNetto = parseCurrency(row[9]); // Spalte J: Restbetrag Netto
+
+    // Direkte Berechnung: Netto - Restbetrag Netto
+    const gezahltNetto = nettoRechnung - restbetragNetto;
+    if (gezahltNetto < 0) gezahltNetto = 0; // Falls durch Rundungen negative Werte entstehen, auf 0 setzen
 
     const mwstRate = parseMwstRate(row[5]);
-    const factor = (mwstRate > 0 ? 1 + (mwstRate / 100) : 1);
-    const effectiveNet = paidBrutto / factor;
-    const taxAmount = effectiveNet * (mwstRate / 100);
-
-    // Log-Ausgabe zur Kontrolle
-    Logger.log(`DEBUG: PaymentDate: ${paymentDate.toISOString()}, paidBrutto: ${paidBrutto}, effectiveNet: ${effectiveNet}, mwstRate: ${mwstRate}, taxAmount: ${taxAmount}`);
+    const taxAmount = gezahltNetto * (mwstRate / 100);
 
     if (isIncome) {
-        guvData[month].einnahmen += effectiveNet;
+        guvData[month].einnahmen += gezahltNetto;
         guvData[month][`ust_${Math.round(mwstRate)}`] += taxAmount;
     } else {
-        guvData[month].ausgaben += effectiveNet;
+        guvData[month].ausgaben += gezahltNetto;
         guvData[month][`vst_${Math.round(mwstRate)}`] += taxAmount;
     }
-};
+
+    Logger.log(`DEBUG: Monat ${month}, Netto gezahlt: ${gezahltNetto.toFixed(2)}, USt: ${taxAmount.toFixed(2)}`);
+}
 
 
 /**
@@ -330,7 +317,7 @@ const formatGuVRow = (label, data) => {
 };
 
 /**
- * Aggregiert die GuV-Daten über einen Zeitraum (z. B. ein Quartal oder das Gesamtjahr).
+ * Aggregiert die GuV-Daten über einen Zeitraum (z.B. ein Quartal oder das Gesamtjahr).
  */
 const aggregateQuarterData = (guvData, startMonth, endMonth) => {
     const sum = createEmptyGuVObject();
