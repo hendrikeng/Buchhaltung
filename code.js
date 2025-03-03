@@ -1,6 +1,52 @@
+// Zentrale Kategorien-Konfiguration – BWA-konform und standardisiert
+const CategoryConfig = {
+    einnahmen: {
+        allowed: ["Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge"],
+        bwaMapping: {
+            "Umsatzerlöse": "umsatzerloese",
+            "Provisionserlöse": "provisionserloese",
+            "Sonstige betriebliche Erträge": "sonstigeErtraege"
+        }
+    },
+    ausgaben: {
+        allowed: ["Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen"],
+        bwaMapping: {
+            "Wareneinsatz": "wareneinsatz",
+            "Betriebskosten": "betriebskosten",
+            "Marketing & Werbung": "marketing",
+            "Reisekosten": "reisen",
+            "Personalkosten": "personalkosten",
+            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen"
+        }
+    },
+    bank: {
+        allowed: [
+            // Operative Buchungen:
+            "Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge",
+            "Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen",
+            // Spezielle Banktransaktionen:
+            "Eigenbeleg", "Privateinlage", "Privatentnahme", "Darlehen"
+        ],
+        bwaMapping: {
+            "Umsatzerlöse": "umsatzerloese",
+            "Provisionserlöse": "provisionserloese",
+            "Sonstige betriebliche Erträge": "sonstigeErtraege",
+            "Wareneinsatz": "wareneinsatz",
+            "Betriebskosten": "betriebskosten",
+            "Marketing & Werbung": "marketing",
+            "Reisekosten": "reisen",
+            "Personalkosten": "personalkosten",
+            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
+            "Eigenbeleg": "eigenbeleg",
+            "Privateinlage": "privateinlage",
+            "Privatentnahme": "privatentnahme",
+            "Darlehen": "darlehen"
+        }
+    }
+};
+
 // ------------------ Modul: Buchhaltung ------------------
 const Buchhaltung = (() => {
-    // Erzeugt den onOpen-Trigger, falls nicht vorhanden
     const setupTrigger = () => {
         const triggers = ScriptApp.getProjectTriggers();
         if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
@@ -12,7 +58,6 @@ const Buchhaltung = (() => {
         }
     };
 
-    // Erzeugt das Menü im Spreadsheet
     const onOpen = () => {
         SpreadsheetApp.getUi()
             .createMenu("📂 Buchhaltung")
@@ -23,7 +68,7 @@ const Buchhaltung = (() => {
             .addToUi();
     };
 
-    // Importiert Rechnungen aus den Unterordnern "Einnahmen" und "Ausgaben"
+    // Importiert Dateien aus den Unterordnern "Einnahmen" und "Ausgaben"
     const importDriveFiles = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheets = {
@@ -34,11 +79,9 @@ const Buchhaltung = (() => {
             history: ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie")
         };
 
-        // Kopfzeile für Änderungshistorie setzen, falls leer
         if (sheets.history.getLastRow() === 0) {
             sheets.history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
         }
-        // Überschriften in den Rechnungs-Sheets setzen, falls leer
         if (sheets.revenue.getLastRow() === 0) {
             sheets.revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
         }
@@ -46,46 +89,37 @@ const Buchhaltung = (() => {
             sheets.expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
         }
 
-        // Bestimme den übergeordneten Ordner des Sheets
         const file = DriveApp.getFileById(ss.getId());
         const parentFolder = file.getParents()?.hasNext() ? file.getParents().next() : null;
         if (!parentFolder) {
             Logger.log("Kein übergeordneter Ordner gefunden.");
             return;
         }
-
-        // Suche die Unterordner "Einnahmen" und "Ausgaben"
         const revenueFolder = getFolderByName(parentFolder, "Einnahmen");
         const expenseFolder = getFolderByName(parentFolder, "Ausgaben");
 
         if (revenueFolder) {
-            importFiles(revenueFolder, sheets.revenue, sheets.revenueMain, "Einnahme", sheets.history);
-            sheets.revenue.autoResizeColumns(1, sheets.revenue.getLastColumn());
-            if (sheets.revenueMain.getLastRow() > 1) refreshSheet(sheets.revenueMain);
+            importFilesFromFolder(revenueFolder, sheets.revenue, sheets.revenueMain, "Einnahme", sheets.history);
         } else {
-            Logger.log("Fehler: Der 'Einnahmen'-Ordner wurde nicht gefunden.");
+            Logger.log("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
+        }
+        if (expenseFolder) {
+            importFilesFromFolder(expenseFolder, sheets.expense, sheets.expenseMain, "Ausgabe", sheets.history);
+        } else {
+            Logger.log("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
         }
 
-        if (expenseFolder) {
-            importFiles(expenseFolder, sheets.expense, sheets.expenseMain, "Ausgabe", sheets.history);
-            sheets.expense.autoResizeColumns(1, sheets.expense.getLastColumn());
-            if (sheets.expenseMain.getLastRow() > 1) refreshSheet(sheets.expenseMain);
-        } else {
-            Logger.log("Fehler: Der 'Ausgaben'-Ordner wurde nicht gefunden.");
-        }
+        // Nach dem Import alle Sheets einmal aktualisieren
+        refreshSheets();
     };
 
-    // Importiert Dateien aus einem Ordner in die angegebenen Sheets und aktualisiert die Historie
-    const importFiles = (folder, importSheet, mainSheet, type, historySheet) => {
+    const importFilesFromFolder = (folder, importSheet, mainSheet, type, historySheet) => {
         const files = folder.getFiles();
-
-        // Liefert vorhandene Dateinamen aus der gewünschten Spalte als Set zurück
         const getExistingFiles = (sheet, colIndex) =>
             new Set(sheet.getDataRange().getValues().slice(1).map(row => row[colIndex]));
 
-        const existingMain = getExistingFiles(mainSheet, 1); // Spalte B
-        const existingImport = getExistingFiles(importSheet, 0); // Spalte A
-
+        const existingMain = getExistingFiles(mainSheet, 1); // Dateiname in Spalte B
+        const existingImport = getExistingFiles(importSheet, 0); // Dateiname in Spalte A
         const newMainRows = [];
         const newImportRows = [];
         const newHistoryRows = [];
@@ -100,57 +134,45 @@ const Buchhaltung = (() => {
             if (!existingMain.has(fileName)) {
                 const rowIndex = mainSheet.getLastRow() + newMainRows.length + 1;
                 newMainRows.push([
-                    timestamp,                   // Datum
-                    fileName,                    // Dateiname
-                    "",                          // Kategorie
-                    "",                          // Kunde
-                    "",                          // Nettobetrag
-                    "",                          // Prozentsatz
-                    `=E${rowIndex}*F${rowIndex}`, // MwSt.
-                    `=E${rowIndex}+G${rowIndex}`, // Bruttobetrag
-                    "",                          // Währung
-                    `=E${rowIndex}-(I${rowIndex}-G${rowIndex})`, // Restbetrag
-                    `=IF(A${rowIndex}=""; ""; ROUNDUP(MONTH(A${rowIndex})/3;0))`, // Quartal
-                    `=IF(OR(I${rowIndex}=""; I${rowIndex}=0); "Offen"; IF(I${rowIndex}>=H${rowIndex}; "Bezahlt"; "Teilbezahlt"))`, // Zahlungsstatus
-                    "",                          // Datum (wird formatiert)
-                    fileName,                    // Wiederholter Dateiname
-                    fileUrl,                     // Link zur Datei
-                    timestamp                  // Letzte Aktualisierung
+                    timestamp, fileName, "", "", "", "",
+                    `=E${rowIndex}*F${rowIndex}`,
+                    `=E${rowIndex}+G${rowIndex}`, "",
+                    `=E${rowIndex}-(I${rowIndex}-G${rowIndex})`,
+                    `=IF(A${rowIndex}=""; ""; ROUNDUP(MONTH(A${rowIndex})/3;0))`,
+                    `=IF(OR(I${rowIndex}=""; I${rowIndex}=0); "Offen"; IF(I${rowIndex}>=H${rowIndex}; "Bezahlt"; "Teilbezahlt"))`,
+                    "", fileName, fileUrl, timestamp
                 ]);
                 existingMain.add(fileName);
                 wasImported = true;
             }
-
             if (!existingImport.has(fileName)) {
                 newImportRows.push([fileName, fileUrl, fileName]);
                 existingImport.add(fileName);
                 wasImported = true;
             }
-
             if (wasImported) newHistoryRows.push([timestamp, type, fileName, fileUrl]);
         }
-
         if (newImportRows.length > 0)
-            importSheet.getRange(importSheet.getLastRow() + 1, 1, newImportRows.length, newImportRows[0].length).setValues(newImportRows);
+            importSheet.getRange(importSheet.getLastRow() + 1, 1, newImportRows.length, newImportRows[0].length)
+                .setValues(newImportRows);
         if (newMainRows.length > 0)
-            mainSheet.getRange(mainSheet.getLastRow() + 1, 1, newMainRows.length, newMainRows[0].length).setValues(newMainRows);
+            mainSheet.getRange(mainSheet.getLastRow() + 1, 1, newMainRows.length, newMainRows[0].length)
+                .setValues(newMainRows);
         if (newHistoryRows.length > 0)
-            historySheet.getRange(historySheet.getLastRow() + 1, 1, newHistoryRows.length, newHistoryRows[0].length).setValues(newHistoryRows);
+            historySheet.getRange(historySheet.getLastRow() + 1, 1, newHistoryRows.length, newHistoryRows[0].length)
+                .setValues(newHistoryRows);
     };
 
-    // Sucht in einem Ordner nach einem Unterordner mit dem angegebenen Namen
     const getFolderByName = (parent, name) => {
         const folderIter = parent.getFoldersByName(name);
         return folderIter.hasNext() ? folderIter.next() : null;
     };
 
-    // Aktualisiert ein einzelnes Sheet (Formeln und Formatierung) → Standard-Fall für Einnahmen/Ausgaben
+    // Refresh für Einnahmen und Ausgaben-Sheets: Setzt Formeln, Formatierungen und Datenvalidierung für Kategorie
     const refreshSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
-
-        // Erstelle ein Array von Formeln für jede Zeile (Zeile 2 bis lastRow)
         const formulas = Array.from({ length: numRows }, (_, i) => {
             const row = i + 2;
             return {
@@ -161,14 +183,12 @@ const Buchhaltung = (() => {
                 status: `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))`
             };
         });
-
         sheet.getRange(2, 7, numRows, 1).setFormulas(formulas.map(f => [f.mwst]));
         sheet.getRange(2, 8, numRows, 1).setFormulas(formulas.map(f => [f.brutto]));
         sheet.getRange(2, 10, numRows, 1).setFormulas(formulas.map(f => [f.rest]));
         sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map(f => [f.quartal]));
         sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map(f => [f.status]));
 
-        // Formatierungen
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat(dateFormat);
@@ -180,19 +200,28 @@ const Buchhaltung = (() => {
         sheet.getRange(`I2:I${lastRow}`).setNumberFormat(currencyFormat);
         sheet.getRange(`J2:J${lastRow}`).setNumberFormat(currencyFormat);
         sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
+
+        // Setze Datenvalidierung für die Kategorie-Spalte (Spalte 3) je nach Sheet-Namen
+        const sheetName = sheet.getName();
+        if(sheetName === "Einnahmen") {
+            const validationRule = SpreadsheetApp.newDataValidation()
+                .requireValueInList(CategoryConfig.einnahmen.allowed, true)
+                .build();
+            sheet.getRange(2, 3, lastRow - 1, 1).setDataValidation(validationRule);
+        } else if(sheetName === "Ausgaben") {
+            const validationRule = SpreadsheetApp.newDataValidation()
+                .requireValueInList(CategoryConfig.ausgaben.allowed, true)
+                .build();
+            sheet.getRange(2, 3, lastRow - 1, 1).setDataValidation(validationRule);
+        }
+
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-// NEU: Aktualisiert das Bankbewegungen-Sheet inklusive Dropdown & Styling in Spalte E
+    // Refresh für Bankbewegungen-Sheet: Setzt Formeln, Formatierungen, Dropdown für Typ (Spalte E) und Datenvalidierung für Kategorie (hier Spalte E)
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
-
-        // Wenn nur Kopfzeile + 1 Zeile (Anfangssaldo) vorhanden ist, nichts berechnen
         if (lastRow < 3) return;
-
-        // 1) Formeln für den Saldo in Spalte D ab Zeile 3
-        //    Annahme: D2 enthält den Anfangssaldo, Spalte C enthält den Betrag
-        //    Formel: =D(Vorzeile) + C(Aktuelle Zeile)
         const numRows = lastRow - 2;
         const saldoFormulas = Array.from({ length: numRows }, (_, i) => {
             const row = i + 3;
@@ -200,116 +229,80 @@ const Buchhaltung = (() => {
         });
         sheet.getRange(3, 4, numRows, 1).setFormulas(saldoFormulas);
 
-        // 2) Automatisch Ein-/Ausgabe in Spalte E setzen
-        //    Falls der Betrag (Spalte C) > 0, dann Einnahme; < 0, dann Ausgabe
-        //    = 0 oder leer → wird geleert
+        // Automatische Zuordnung in Spalte E basierend auf Betrag (Spalte C)
         for (let row = 3; row <= lastRow; row++) {
-            const betrag = parseFloat(sheet.getRange(row, 3).getValue()) || 0; // Spalte C
-            const typeCell = sheet.getRange(row, 5);                           // Spalte E
-
+            const betrag = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
+            const typeCell = sheet.getRange(row, 5);
+            // Standard: positive Beträge -> "Umsatzerlöse", negative -> "Betriebskosten"
             if (betrag > 0) {
-                typeCell.setValue("Einnahme");
+                typeCell.setValue("Umsatzerlöse");
             } else if (betrag < 0) {
-                typeCell.setValue("Ausgabe");
+                typeCell.setValue("Betriebskosten");
             } else {
                 typeCell.clearContent();
             }
         }
-
-        // 3) Datenvalidierung (Dropdown) in Spalte E
-        //    Damit Nutzer notfalls manuell "Einnahme" / "Ausgabe" ändern können
+        // Datenvalidierung in Spalte E gemäß Bank-Konfiguration
         const validationRule = SpreadsheetApp.newDataValidation()
-            .requireValueInList(["Einnahme", "Ausgabe"], true) // true => Nur Werte aus der Liste
+            .requireValueInList(CategoryConfig.bank.allowed, true)
             .build();
         sheet.getRange(2, 5, lastRow - 1, 1).setDataValidation(validationRule);
 
-        // 4) Spalte E bedingt formatieren (rot/grün) wie im Screenshot
-        //    - Einnahme: grüner Hintergrund
-        //    - Ausgabe: roter Hintergrund
-        //    - Hier fügen wir unsere neuen Formatierungsregeln zu eventuell bereits vorhandenen hinzu
+        // Bedingte Formatierung in Spalte E: grün für "Umsatzerlöse", rot für "Betriebskosten"
         const existingRules = sheet.getConditionalFormatRules() || [];
-
-        // Tipp: Falls du die alten Regeln in Spalte E löschen willst, müsstest du sie filtern.
-        // Wir lassen sie hier bestehen und fügen nur neue hinzu.
-
-        // Bedingte Formatierung: Einnahme
         const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Einnahme")
-            .setBackground("#C6EFCE") // Hellgrün
-            .setFontColor("#006100")  // Dunkelgrün
+            .whenTextEqualTo("Umsatzerlöse")
+            .setBackground("#C6EFCE")
+            .setFontColor("#006100")
             .setRanges([sheet.getRange(`E2:E${lastRow}`)])
             .build();
-
-        // Bedingte Formatierung: Ausgabe
         const ruleAusgabe = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Ausgabe")
-            .setBackground("#FFC7CE") // Hellrot
-            .setFontColor("#9C0006")  // Dunkelrot
+            .whenTextEqualTo("Betriebskosten")
+            .setBackground("#FFC7CE")
+            .setFontColor("#9C0006")
             .setRanges([sheet.getRange(`E2:E${lastRow}`)])
             .build();
-
         existingRules.push(ruleEinnahme, ruleAusgabe);
         sheet.setConditionalFormatRules(existingRules);
 
-        // 5) Formatierungen für Datum, Betrag, Saldo
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
-
-        // A: Buchungsdatum
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat(dateFormat);
-        // C: Betrag
         sheet.getRange(`C2:C${lastRow}`).setNumberFormat(currencyFormat);
-        // D: Saldo
         sheet.getRange(`D2:D${lastRow}`).setNumberFormat(currencyFormat);
-
-        // Spaltenbreite anpassen
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-
-
-    // Aktualisiert alle relevanten Sheets
+    // Aktualisiert alle relevanten Sheets: Einnahmen, Ausgaben und Bankbewegungen
     const refreshSheets = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
-        const bankSheet = ss.getSheetByName("Bankbewegungen"); // Dein Bankbewegungen-Sheet
+        const bankSheet = ss.getSheetByName("Bankbewegungen");
 
-        // 1) Einnahmen/Ausgaben
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
         } else {
             refreshSheet(revenueSheet);
             refreshSheet(expenseSheet);
         }
-
-        // 2) Bankbewegungen
         if (bankSheet) {
             refreshBankSheet(bankSheet);
         }
-
         SpreadsheetApp.getUi().alert("Alle relevanten Sheets wurden erfolgreich aktualisiert!");
     };
 
-    return {
-        setupTrigger,
-        onOpen,
-        importDriveFiles,
-        refreshSheets,
-        refreshSheet
-    };
+    return { setupTrigger, onOpen, importDriveFiles, refreshSheets, refreshSheet };
 })();
 
 // ------------------ Modul: GuV-Berechnung ------------------
 const GuVCalculator = (() => {
-    // Parst einen Mehrwertsteuersatz
     const parseMwstRate = value => {
         let rate = parseFloat(value.toString().replace("%", "").replace(",", "."));
         if (rate < 1) rate *= 100;
         return isNaN(rate) ? 19 : rate;
     };
 
-    // Liefert ein leeres GuV-Datenobjekt
     const createEmptyGuV = () => ({
         einnahmen: 0,
         ausgaben: 0,
@@ -321,23 +314,20 @@ const GuVCalculator = (() => {
         vst_19: 0
     });
 
-    // Parst ein Datum
     const parseDate = value => {
         const d = typeof value === "string" ? new Date(value) : (value instanceof Date ? value : null);
         return d && !isNaN(d.getTime()) ? d : null;
     };
 
-    // Parst einen Währungswert
     const parseCurrency = value =>
         parseFloat(value.toString().replace(/[^\d,.-]/g, "").replace(",", ".")) || 0;
 
-    // Verarbeitet eine Zeile (GuV) und aktualisiert das Monatsobjekt
     const processGuVRow = (row, guvData, isIncome) => {
         const paymentDate = parseDate(row[12]);
         if (!paymentDate || paymentDate > new Date()) return;
         const month = paymentDate.getMonth() + 1;
         const netto = parseCurrency(row[4]);
-        const restNetto = parseCurrency(row[9]);
+        const restNetto = parseCurrency(row[9]) || 0;
         const gezahltNetto = Math.max(0, netto - restNetto);
         const mwstRate = parseMwstRate(row[5]);
         const tax = gezahltNetto * (mwstRate / 100);
@@ -351,7 +341,6 @@ const GuVCalculator = (() => {
         }
     };
 
-    // Formatiert eine Zeile für das GuV-Sheet
     const formatGuVRow = (label, data) => {
         const ustZahlung = data.ust_19 - data.vst_19;
         const ergebnis = data.einnahmen - data.ausgaben;
@@ -370,7 +359,6 @@ const GuVCalculator = (() => {
         ];
     };
 
-    // Aggregiert die GuV-Daten über den angegebenen Zeitraum
     const aggregateGuV = (guvData, start, end) => {
         const sum = createEmptyGuV();
         for (let m = start; m <= end; m++) {
@@ -381,25 +369,20 @@ const GuVCalculator = (() => {
         return sum;
     };
 
-    // Liest die Daten aus den Sheets "Einnahmen" und "Ausgaben", verarbeitet sie und schreibt die Ergebnisse ins "GuV"-Sheet
     const calculateGuV = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
-
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
         }
-
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
         const guvData = {};
-        // Initialisiere GuV-Daten für jeden Monat (1 bis 12)
         for (let m = 1; m <= 12; m++) {
             guvData[m] = createEmptyGuV();
         }
-
         revenueData.forEach(row => processGuVRow(row, guvData, true));
         expenseData.forEach(row => processGuVRow(row, guvData, false));
 
@@ -418,12 +401,10 @@ const GuVCalculator = (() => {
             "USt-Zahlung",
             "Ergebnis (Gewinn/Verlust)"
         ]);
-
         const monthNames = [
             "Januar", "Februar", "März", "April", "Mai", "Juni",
             "Juli", "August", "September", "Oktober", "November", "Dezember"
         ];
-
         for (let m = 1; m <= 12; m++) {
             guvSheet.appendRow(formatGuVRow(monthNames[m - 1], guvData[m]));
             if (m % 3 === 0) {
@@ -433,8 +414,8 @@ const GuVCalculator = (() => {
         }
         const yearTotal = aggregateGuV(guvData, 1, 12);
         guvSheet.appendRow(formatGuVRow("Gesamtjahr", yearTotal));
-
-        guvSheet.getRange(2, 2, guvSheet.getLastRow() - 1, 9).setNumberFormat("#,##0.00€");
+        guvSheet.getRange(2, 2, guvSheet.getLastRow() - 1, 9)
+            .setNumberFormat("#,##0.00€");
         guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
         SpreadsheetApp.getUi().alert("GuV wurde aktualisiert!");
     };
@@ -443,7 +424,20 @@ const GuVCalculator = (() => {
 })();
 
 // ------------------ Modul: BWA-Berechnung ------------------
-const BWACalculator = (() =>  {
+const BWACalculator = (() => {
+    // Ermittelt anhand der zentralen Konfiguration die interne BWA-Kategorie.
+    function getBwaCategory(category, isIncome, rowIndex, fehlendeKategorien, type = "operativ") {
+        const mapping = type === "bank"
+            ? CategoryConfig.bank.bwaMapping
+            : (isIncome ? CategoryConfig.einnahmen.bwaMapping : CategoryConfig.ausgaben.bwaMapping);
+        if (!category || !mapping[category]) {
+            const fallback = isIncome ? "sonstigeErtraege" : "betriebskosten";
+            fehlendeKategorien.push(`Zeile ${rowIndex}: Unbekannte Kategorie "${category || "N/A"}" → Verwende "${fallback}"`);
+            return fallback;
+        }
+        return mapping[category];
+    }
+
     function calculateBWA() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -451,99 +445,100 @@ const BWACalculator = (() =>  {
         const bankSheet = ss.getSheetByName("Bankbewegungen");
         const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
 
-        // Kategorien für Einnahmen & Ausgaben (angepasst an KBWA-Struktur)
         const categories = {
-            einnahmen: { "Dienstleistungen": 0, "Produkte & Waren": 0, "Sonstige Einnahmen": 0 },
-            ausgaben: { "Marketing & Werbung": 0, "Reisen & Mobilität": 0, "Personal & Gehälter": 0, "Betriebskosten": 0, "Wareneinkauf & Dienstleistungen": 0 }
+            einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0 },
+            ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0 },
+            bank: { eigenbeleg: 0, privateinlage: 0, privatentnahme: 0, darlehen: 0 }
         };
 
-        let totalEinnahmen = 0;
-        let totalAusgaben = 0;
-        let totalSteuern = { ust: 0, vst: 0, kst: 0, gst: 0 };
-        let totalLiquidität = 0;
-        let offeneForderungen = 0;
-        let offeneVerbindlichkeiten = 0;
+        let totalEinnahmen = 0, totalAusgaben = 0;
+        let offeneForderungen = 0, offeneVerbindlichkeiten = 0;
+        let totalLiquiditaet = 0;
+        const fehlendeKategorien = [];
 
-        // Einnahmen verarbeiten (inkl. offene Forderungen)
+        // Einnahmen verarbeiten
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
-        revenueData.forEach(row => {
-            const kategorie = row[2]; // Kategorie in Spalte C
-            const nettoBetrag = parseFloat(row[4]) || 0; // Nettobetrag in Spalte E
-            const restBetrag = parseFloat(row[9]) || 0; // Restbetrag in Spalte J
-
-            if (kategorie.includes("Dienst")) {
-                categories.einnahmen["Dienstleistungen"] += nettoBetrag;
-            } else if (kategorie.includes("Produkt") || kategorie.includes("Ware")) {
-                categories.einnahmen["Produkte & Waren"] += nettoBetrag;
-            } else {
-                categories.einnahmen["Sonstige Einnahmen"] += nettoBetrag;
-            }
-
+        revenueData.forEach((row, index) => {
+            const kategorieUser = row[2];
+            const nettoBetrag = parseFloat(row[4]) || 0;
+            const restBetrag = parseFloat(row[9]) || 0;
+            const bwaCat = getBwaCategory(kategorieUser, true, index + 2, fehlendeKategorien);
+            categories.einnahmen[bwaCat] += nettoBetrag;
             totalEinnahmen += nettoBetrag;
             offeneForderungen += restBetrag;
         });
 
-        // Ausgaben verarbeiten (inkl. offene Verbindlichkeiten)
+        // Ausgaben verarbeiten
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
-        expenseData.forEach(row => {
-            const kategorie = row[2]; // Kategorie in Spalte C
-            const nettoBetrag = parseFloat(row[4]) || 0; // Nettobetrag in Spalte E
-            const restBetrag = parseFloat(row[9]) || 0; // Restbetrag in Spalte J
-
-            if (categories.ausgaben.hasOwnProperty(kategorie)) {
-                categories.ausgaben[kategorie] += nettoBetrag;
-            }
+        expenseData.forEach((row, index) => {
+            const kategorieUser = row[2];
+            const nettoBetrag = parseFloat(row[4]) || 0;
+            const restBetrag = parseFloat(row[9]) || 0;
+            const bwaCat = getBwaCategory(kategorieUser, false, index + 2, fehlendeKategorien);
+            categories.ausgaben[bwaCat] = (categories.ausgaben[bwaCat] || 0) + nettoBetrag;
             totalAusgaben += nettoBetrag;
             offeneVerbindlichkeiten += restBetrag;
         });
 
-        // Bankbewegungen verarbeiten (Liquidität berechnen)
-        const bankData = bankSheet.getDataRange().getValues().slice(1);
-        bankData.forEach(row => {
-            const saldo = parseFloat(row[3]) || 0; // Saldo in Spalte D
-            totalLiquidität = saldo;
-        });
+        // Bankbewegungen: aktueller Kontostand
+        if (bankSheet) {
+            const bankData = bankSheet.getDataRange().getValues().slice(1);
+            bankData.forEach(row => {
+                const saldo = parseFloat(row[3]) || 0;
+                totalLiquiditaet = saldo;
+            });
+        }
 
-        // BWA-Sheet leeren & Header setzen
+        // BWA-Sheet befüllen
         bwaSheet.clearContents();
         bwaSheet.appendRow(["Position", "Betrag (€)"]);
 
-        // Einnahmen eintragen
+        bwaSheet.appendRow(["--- EINNAHMEN ---", ""]);
         Object.keys(categories.einnahmen).forEach(key => bwaSheet.appendRow([key, categories.einnahmen[key]]));
         bwaSheet.appendRow(["Gesamteinnahmen", totalEinnahmen]);
         bwaSheet.appendRow(["Erhaltene Einnahmen", totalEinnahmen - offeneForderungen]);
         bwaSheet.appendRow(["Offene Forderungen", offeneForderungen]);
 
-        // Ausgaben eintragen
+        bwaSheet.appendRow(["--- AUSGABEN ---", ""]);
         Object.keys(categories.ausgaben).forEach(key => bwaSheet.appendRow([key, -categories.ausgaben[key]]));
         bwaSheet.appendRow(["Gesamtausgaben", -totalAusgaben]);
         bwaSheet.appendRow(["Offene Verbindlichkeiten", offeneVerbindlichkeiten]);
 
-        // Betriebsergebnis
         const ergebnis = totalEinnahmen - totalAusgaben;
         bwaSheet.appendRow(["Betriebsergebnis", ergebnis]);
 
-        // Steuern
-        bwaSheet.appendRow(["Umsatzsteuer-Zahlung", -totalSteuern.ust]);
-        bwaSheet.appendRow(["Vorsteuer", totalSteuern.vst]);
-        bwaSheet.appendRow(["Körperschaftsteuer", -totalSteuern.kst]);
-        bwaSheet.appendRow(["Gewerbesteuer", -totalSteuern.gst]);
-
-        // Endergebnis nach Steuern
-        const ergebnisNachSteuern = ergebnis - totalSteuern.ust + totalSteuern.vst - totalSteuern.kst - totalSteuern.gst;
+        bwaSheet.appendRow(["--- STEUERN ---", ""]);
+        bwaSheet.appendRow(["Umsatzsteuer-Zahlung", 0]);
+        bwaSheet.appendRow(["Vorsteuer", 0]);
+        bwaSheet.appendRow(["Körperschaftsteuer", 0]);
+        bwaSheet.appendRow(["Gewerbesteuer", 0]);
+        const ergebnisNachSteuern = ergebnis;
         bwaSheet.appendRow(["Ergebnis nach Steuern", ergebnisNachSteuern]);
 
-        // Liquidität
-        bwaSheet.appendRow(["Liquidität (Kontostand)", totalLiquidität]);
+        bwaSheet.appendRow(["--- FINANZIERUNG ---", ""]);
+        bwaSheet.appendRow(["Eigenbeleg", 0]);
+        bwaSheet.appendRow(["Privateinlage", 0]);
+        bwaSheet.appendRow(["Privatentnahme", 0]);
+        bwaSheet.appendRow(["Darlehen", 0]);
 
+        bwaSheet.appendRow(["--- LIQUIDITÄT ---", ""]);
+        bwaSheet.appendRow(["Kontostand (Bankbewegungen)", totalLiquiditaet]);
+
+        bwaSheet.getRange("A1:B1").setFontWeight("bold");
+        bwaSheet.getRange(2, 2, bwaSheet.getLastRow()-1, 1)
+            .setNumberFormat("€#,##0.00;€-#,##0.00");
+        bwaSheet.autoResizeColumns(1, 2);
+
+        if (fehlendeKategorien.length > 0) {
+            Logger.log("FEHLENDE KATEGORIEN:\n" + fehlendeKategorien.join("\n"));
+        }
         SpreadsheetApp.getUi().alert("BWA wurde erfolgreich berechnet und aktualisiert!");
     }
 
     return { calculateBWA };
 })();
 
-
-// ------------------ Globale Funktionen (für Trigger & Menüs) ------------------
+// ------------------ Globale Funktionen ------------------
 const setupTrigger = () => Buchhaltung.setupTrigger();
 const onOpen = () => Buchhaltung.onOpen();
 const importDriveFiles = () => Buchhaltung.importDriveFiles();
