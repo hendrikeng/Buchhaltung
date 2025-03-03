@@ -55,10 +55,10 @@ const CategoryConfig = {
 // Dieses Modul stellt Funktionen zur Validierung von Zeilendaten zur Verfügung.
 const Validator = (() => {
     // Hilfsfunktion: Prüft, ob ein Wert leer ist.
-    const isEmpty = value => !value || value.toString().trim() === "";
+    const isEmpty = value => value === undefined || value === null || value.toString().trim() === "";
 
     // Validiert eine Zeile aus dem GuV-/BWA-Kontext (Einnahmen/Ausgaben).
-    // Erwartete Felder:
+    // Erwartete Felder (Spaltenindex):
     // A: Rechnungsdatum, B: Rechnungsnummer, C: Kategorie, D: Kunde,
     // E: Nettobetrag, F: Mehrwertsteuer, L: Zahlungsstatus, M: Zahlungsdatum.
     // Bedingung: Ist Zahlungsstatus "offen", darf kein Zahlungsdatum vorhanden sein, andernfalls muss eins vorhanden sein.
@@ -70,8 +70,8 @@ const Validator = (() => {
         if (isEmpty(row[3])) warnings.push(`Zeile ${rowIndex} (E/A): Kunde fehlt.`);
         if (isEmpty(row[4]) || isNaN(parseFloat(row[4].toString().trim())))
             warnings.push(`Zeile ${rowIndex} (E/A): Nettobetrag fehlt oder ungültig.`);
-        // Mehrwertsteuer: "0%" soll erlaubt sein
-        const mwstStr = row[5] ? row[5].toString().trim() : "";
+        // Mehrwertsteuer: "0%" soll erlaubt sein – Achtung: 0 ist ein gültiger numerischer Wert, daher prüfen wir explizit.
+        const mwstStr = (row[5] === undefined || row[5] === null) ? "" : row[5].toString().trim();
         if (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", ""))))
             warnings.push(`Zeile ${rowIndex} (E/A): Mehrwertsteuer fehlt oder ungültig.`);
 
@@ -79,7 +79,7 @@ const Validator = (() => {
         const zahlungsdatum = row[12] ? row[12].toString().trim() : "";
         if (status === "offen") {
             if (!isEmpty(zahlungsdatum))
-                warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum darf nicht gesetzt sein, wenn "Offen".`);
+                warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`);
         } else {
             if (isEmpty(zahlungsdatum))
                 warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
@@ -222,7 +222,7 @@ const Buchhaltung = (() => {
         return folderIter.hasNext() ? folderIter.next() : null;
     };
 
-    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung, Dropdown (Kategorie) und default in Spalte I (Bezahlt).
+    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung, Dropdown (Kategorie) und Standardwert in Spalte I (Bezahlt).
     // Validierung erfolgt ausschließlich in calculateGuV.
     const refreshSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
@@ -257,7 +257,7 @@ const Buchhaltung = (() => {
         sheet.getRange(`J2:J${lastRow}`).setNumberFormat(currencyFormat);
         sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
 
-        // Setzt in Spalte I (Bezahlt) den Default-Wert 0, falls leer
+        // Setzt in Spalte I (Bezahlt) den Standardwert 0, falls leer
         for (let r = 2; r <= lastRow; r++) {
             const cell = sheet.getRange(r, 9);
             if (cell.getValue() === "" || cell.getValue() === null) {
@@ -265,7 +265,7 @@ const Buchhaltung = (() => {
             }
         }
 
-        // Datenvalidierung (Dropdown) für Kategorie (Spalte C) bei Einnahmen/Ausgaben
+        // Datenvalidierung (Dropdown) für Kategorie (Spalte C) – nur für Einnahmen und Ausgaben
         const sheetName = sheet.getName();
         if (sheetName === "Einnahmen") {
             const validationRule = SpreadsheetApp.newDataValidation()
@@ -283,27 +283,32 @@ const Buchhaltung = (() => {
     };
 
     // Refresh für Bankbewegungen:
-    // - Zeile 2 (Anfangssaldo) und die letzte Zeile (Endsaldo) bleiben unberührt.
-    // - In Spalte E (Typ) werden nur "Einnahme" (bei positiv) bzw. "Ausgabe" (bei negativ) gesetzt.
-    // - In Spalte F (Kategorie) wird das Dropdown aus CategoryConfig.bank.allowed gesetzt.
+    // - Zeile 2 (Anfangssaldo) bleibt unberührt.
+    // - Für Zeilen 3 bis zur vorletzten Zeile:
+    //    • In Spalte E (Typ) wird "Einnahme" (bei positiv) bzw. "Ausgabe" (bei negativ) gesetzt.
+    //    • In Spalte F (Kategorie) wird das Dropdown aus CategoryConfig.bank.allowed gesetzt.
+    // - Am Ende wird eine neue Zeile (Endsaldo) angehängt, die als aktueller Endsaldo gilt.
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
 
-        // Für die Transaktionszeilen: von Zeile 3 bis zur vorletzten Zeile.
+        // Datenzeilen: von Zeile 3 bis zur letzten Zeile (Endsaldo wird überschrieben)
         const firstDataRow = 3;
-        const lastDataRow = lastRow - 1;
-        const numDataRows = lastDataRow - firstDataRow + 1;
+        const numDataRows = lastRow - 2; // Zeilen 3 bis letzte Zeile
 
-        // Saldo-Formeln in Spalte D setzen
-        const saldoFormulas = Array.from({ length: numDataRows }, (_, i) => {
-            const row = firstDataRow + i;
-            return [`=D${row - 1}+C${row}`];
-        });
-        sheet.getRange(firstDataRow, 4, numDataRows, 1).setFormulas(saldoFormulas);
+        // Setzt Saldo-Formeln in Spalte D für Zeilen 3 bis (letzte Zeile - 1)
+        // Wir nehmen alle Zeilen, außer der allerletzten, da diese Endsaldo-Zeile neu erstellt wird.
+        const transRows = numDataRows - 1;
+        if (transRows > 0) {
+            const saldoFormulas = Array.from({ length: transRows }, (_, i) => {
+                const row = firstDataRow + i;
+                return [`=D${row - 1}+C${row}`];
+            });
+            sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(saldoFormulas);
+        }
 
-        // In Spalte E (Typ) nur "Einnahme" bei positiven Beträgen, "Ausgabe" bei negativen
-        for (let row = firstDataRow; row <= lastDataRow; row++) {
+        // In Spalte E (Typ) werden für Zeilen 3 bis zur vorletzten Zeile nur "Einnahme" (bei positiv) oder "Ausgabe" (bei negativ) gesetzt.
+        for (let row = firstDataRow; row < lastRow; row++) {
             const amount = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
             const typeCell = sheet.getRange(row, 5);
             if (amount > 0) {
@@ -318,13 +323,13 @@ const Buchhaltung = (() => {
         const typeValidationRule = SpreadsheetApp.newDataValidation()
             .requireValueInList(CategoryConfig.bank.typeAllowed, true)
             .build();
-        sheet.getRange(firstDataRow, 5, numDataRows, 1).setDataValidation(typeValidationRule);
+        sheet.getRange(firstDataRow, 5, lastRow - firstDataRow, 1).setDataValidation(typeValidationRule);
 
         // Dropdown für Kategorie (Spalte F): Alle erlaubten Werte aus CategoryConfig.bank.allowed
         const categoryValidationRule = SpreadsheetApp.newDataValidation()
             .requireValueInList(CategoryConfig.bank.allowed, true)
             .build();
-        sheet.getRange(firstDataRow, 6, numDataRows, 1).setDataValidation(categoryValidationRule);
+        sheet.getRange(firstDataRow, 6, lastRow - firstDataRow, 1).setDataValidation(categoryValidationRule);
 
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
@@ -332,6 +337,14 @@ const Buchhaltung = (() => {
         sheet.getRange("C2:C" + lastRow).setNumberFormat(currencyFormat);
         sheet.getRange("D2:D" + lastRow).setNumberFormat(currencyFormat);
         sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+        // Anschließend wird eine neue Zeile als Endsaldo angehängt.
+        const now = new Date();
+        // Hole den aktuellen Saldo aus der vorletzten Zeile (diese Zeile enthält das Endsaldo der Transaktionen)
+        const lastTransRow = lastRow;
+        const currentSaldo = sheet.getRange(lastTransRow, 4).getValue();
+        // Füge eine neue Zeile ein: Buchungsdatum = aktuelles Datum, Buchungstext = "Endsaldo", Betrag leer, Saldo = aktueller Saldo, Typ und Kategorie bleiben leer.
+        sheet.appendRow([now, "Endsaldo", "", currentSaldo, "", "", "", "", "", "", "", ""]);
     };
 
     const refreshSheets = () => {
@@ -519,7 +532,8 @@ const BWACalculator = (() => {
     }
 
     // Berechnet die BWA, nachdem Einnahmen, Ausgaben und Bankbewegungen validiert wurden.
-    // Validierung: Separat für Einnahmen, Ausgaben und Bankbewegungen (bei Bank: Zeile 2 und letzte Zeile ausgenommen).
+    // Validierung erfolgt getrennt für Einnahmen, Ausgaben und Bankbewegungen (bei Bank: Zeile 2 wird ausgelassen,
+    // und es werden alle Zeilen bis zur vorletzten Zeile validiert, bevor ein Endsaldo angehängt wird).
     function calculateBWA() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -538,7 +552,7 @@ const BWACalculator = (() => {
         let bankWarnings = [];
         if (bankSheet) {
             const bankData = bankSheet.getDataRange().getValues();
-            // Überspringe Zeile 2 (Anfangssaldo) und letzte Zeile (Endsaldo)
+            // Überspringe Zeile 2 (Anfangssaldo) und die letzte Zeile (wird als Endsaldo neu angehängt)
             for (let i = 1; i < bankData.length - 1; i++) {
                 bankWarnings = bankWarnings.concat(Validator.validateBankSheet(bankData[i], i + 1));
             }
@@ -586,7 +600,7 @@ const BWACalculator = (() => {
 
         if (bankSheet) {
             const bankData = bankSheet.getDataRange().getValues();
-            // Überspringe erste (Anfangssaldo) und letzte Zeile (Endsaldo)
+            // Überspringe Zeile 2 (Anfangssaldo) und die letzte Zeile (Endsaldo wird neu erstellt)
             for (let i = 1; i < bankData.length - 1; i++) {
                 const row = bankData[i];
                 const saldo = parseFloat(row[3]) || 0;
