@@ -770,5 +770,6 @@ const calculateBWA = () => {
 // Import von Dateien (über das ImportModule)
 const importDriveFiles = () => {
     ImportModule.importDriveFiles();
+    RefreshModule.refreshDataSheet(revenueSheet);
     RefreshModule.refreshAllSheets();
 };
