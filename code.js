@@ -6,6 +6,11 @@
 const CategoryConfig = {
     einnahmen: {
         allowed: ["Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge"],
+        kontoMapping: {
+            "Umsatzerlöse": { soll: "1200 Bank", gegen: "4400 Umsatzerlöse" },
+            "Provisionserlöse": { soll: "1200 Bank", gegen: "4420 Provisionserlöse" },
+            "Sonstige betriebliche Erträge": { soll: "1200 Bank", gegen: "4490 Sonstige betriebliche Erträge" }
+        },
         bwaMapping: {
             "Umsatzerlöse": "umsatzerloese",
             "Provisionserlöse": "provisionserloese",
@@ -21,6 +26,14 @@ const CategoryConfig = {
             "Personalkosten",
             "Sonstige betriebliche Aufwendungen"
         ],
+        kontoMapping: {
+            "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
+            "Betriebskosten": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
+            "Marketing & Werbung": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
+            "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
+            "Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
+            "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" }
+        },
         bwaMapping: {
             "Wareneinsatz": "wareneinsatz",
             "Betriebskosten": "betriebskosten",
@@ -40,11 +53,7 @@ const CategoryConfig = {
             "Marketing & Werbung",
             "Reisekosten",
             "Personalkosten",
-            "Sonstige betriebliche Aufwendungen",
-            "Eigenbeleg",
-            "Privateinlage",
-            "Privatentnahme",
-            "Darlehen"
+            "Sonstige betriebliche Aufwendungen"
         ],
         typeAllowed: ["Einnahme", "Ausgabe"],
         bwaMapping: {
@@ -56,27 +65,7 @@ const CategoryConfig = {
             "Marketing & Werbung": "marketing",
             "Reisekosten": "reisen",
             "Personalkosten": "personalkosten",
-            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
-            "Eigenbeleg": "eigenbeleg",
-            "Privateinlage": "privateinlage",
-            "Privatentnahme": "privatentnahme",
-            "Darlehen": "darlehen"
-        },
-        // SKR04-Konto­zuordnung – standardisierte Werte
-        kontoMapping: {
-            "Umsatzerlöse": { soll: "1200 Bank", gegen: "4400 Umsatzerlöse" },
-            "Provisionserlöse": { soll: "1200 Bank", gegen: "4420 Provisionserlöse" },
-            "Sonstige betriebliche Erträge": { soll: "1200 Bank", gegen: "4490 Sonstige betriebliche Erträge" },
-            "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
-            "Betriebskosten": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
-            "Marketing & Werbung": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
-            "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
-            "Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
-            "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" },
-            "Eigenbeleg": { soll: "1890 Eigenbeleg", gegen: "1200 Bank" },
-            "Privateinlage": { soll: "1200 Bank", gegen: "1800 Privateinlage" },
-            "Privatentnahme": { soll: "1800 Privatentnahme", gegen: "1200 Bank" },
-            "Darlehen": { soll: "1200 Bank", gegen: "3000 Darlehen" }
+            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen"
         }
     }
 };
@@ -158,29 +147,26 @@ const Validator = (() => {
         return warnings;
     };
 
-    // Diese Funktion validiert das Konto-Mapping im Banksheet.
-    // Falls für die Kategorie kein Mapping existiert, wird eine Warnung in das übergebene Array gepusht.
+    // Konto-Mapping ausschließlich aus den Konfigurationen für einnahmen/ausgaben.
     const validateBankKontoMapping = (category, type, rowIndex, warnings) => {
-        if (CategoryConfig.bank.kontoMapping.hasOwnProperty(category)) {
-            const mapping = CategoryConfig.bank.kontoMapping[category];
-            // Je nach Typ soll das Mapping unterschiedlich verwendet werden:
-            if (type === "Ausgabe") {
-                // Bei Ausgaben verwenden wir das Mapping wie definiert
-                return mapping;
-            } else if (type === "Einnahme") {
-                // Bei Einnahmen vertauschen wir: Bankkonto (soll) wird als Gegenkonto verwendet
-                // und der Erlös (gegen) als Konto soll.
-                return { soll: mapping.gegen, gegen: mapping.soll };
-            } else {
-                const msg = `Zeile ${rowIndex} (Bank): Unbekannter Typ "${type}" – bitte manuell zuordnen!`;
-                warnings.push(msg);
-                return { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
+        let mapping = null;
+
+        if (type === "Einnahme") {
+            if (CategoryConfig.einnahmen.kontoMapping.hasOwnProperty(category)) {
+                mapping = CategoryConfig.einnahmen.kontoMapping[category];
             }
-        } else {
-            const msg = `Zeile ${rowIndex} (Bank): Kein Mapping für Kategorie "${category || "N/A"}" gefunden – bitte manuell zuordnen!`;
+        } else if (type === "Ausgabe") {
+            if (CategoryConfig.ausgaben.kontoMapping.hasOwnProperty(category)) {
+                mapping = CategoryConfig.ausgaben.kontoMapping[category];
+            }
+        }
+
+        if (!mapping) {
+            const msg = `Zeile ${rowIndex} (Bank): Kein Konto-Mapping für Kategorie "${category || "N/A"}" gefunden – bitte manuell zuordnen!`;
             warnings.push(msg);
             return { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
         }
+        return mapping;
     };
 
     return { validateRevenueAndExpenses, validateBankSheet, validateBankKontoMapping };
@@ -351,7 +337,6 @@ const Buchhaltung = (() => {
     };
 
     // Refresh für Bankbewegungen: Setzt Data Validation für Typ, Kategorie, Konto-Soll und Gegenkonto.
-    // Die automatische Zuordnung der Konten erfolgt **nicht** hier – das machen wir später in calculateBWA.
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -382,9 +367,13 @@ const Buchhaltung = (() => {
         sheet.getRange(firstDataRow, 6, lastRow - firstDataRow + 1, 1).setDataValidation(
             Helpers.createDropdownValidation(CategoryConfig.bank.allowed)
         );
-        // Setze Data Validation für "Konto soll" und "Gegenkonto" direkt
-        const allowedKontoSoll = Object.values(CategoryConfig.bank.kontoMapping).map(m => m.soll);
-        const allowedGegenkonto = Object.values(CategoryConfig.bank.kontoMapping).map(m => m.gegen);
+        // Setze Data Validation für "Konto soll" und "Gegenkonto"
+        const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
+            .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
+            .map(m => m.soll);
+        const allowedGegenkonto = Object.values(CategoryConfig.einnahmen.kontoMapping)
+            .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
+            .map(m => m.gegen);
         sheet.getRange(firstDataRow, 7, lastRow - firstDataRow + 1, 1).setDataValidation(
             Helpers.createDropdownValidation(allowedKontoSoll)
         );
@@ -602,7 +591,7 @@ const BWACalculator = (() => {
         for (let i = 1; i < bankData.length; i++) {
             bankWarnings = bankWarnings.concat(Validator.validateBankSheet(bankData[i], i + 1, bankData.length));
         }
- 
+
         for (let i = 2; i < bankData.length; i++) {
             const type = bankData[i][4];     // Spalte E: Typ
             const category = bankData[i][5]; // Spalte F: Kategorie
