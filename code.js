@@ -33,8 +33,6 @@ const CategoryConfig = {
     },
     ausgaben: {
         // Diese Liste steuert das Rechnungs‑Sheet (nur Ausgaben)
-        // Wir haben hier zusätzlich "Darlehen" aufgenommen, um Fälle abzudecken,
-        // in denen Darlehen auch als Ausgabe verbucht werden können.
         allowed: [
             "Wareneinsatz",
             "Betriebskosten",
@@ -375,8 +373,30 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Hilfsfunktion: Setzt das Conditional Formatting in Spalte F (Kategorien) im Banking‑Sheet
-    // basierend auf den Allowed-Listen in den Bereichen.
+    // Setzt das Conditional Formatting für die Typ-Spalte (E) im Banking‑Sheet.
+    const setBankTypeConditionalFormatting = (sheet) => {
+        const lastRow = sheet.getLastRow();
+        if (lastRow < 2) return;
+        const typeRange = sheet.getRange("E2:E" + lastRow);
+        // Regel: Einnahme – grüner Text (#006100) und hellgrüner Hintergrund (#c6efce)
+        const incomeRule = SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=$E2="Einnahme"')
+            .setFontColor("#006100")
+            .setBackground("#c6efce")
+            .setRanges([typeRange])
+            .build();
+        // Regel: Ausgabe – roter Text (#9c0006) und hellroter Hintergrund (#ffc7ce)
+        const expenseRule = SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=$E2="Ausgabe"')
+            .setFontColor("#9c0006")
+            .setBackground("#ffc7ce")
+            .setRanges([typeRange])
+            .build();
+        sheet.setConditionalFormatRules([incomeRule, expenseRule]);
+    };
+
+    // Setzt das Conditional Formatting für die Kategorie-Spalte (F) im Banking‑Sheet.
+    // Dabei: Nur Einnahmen (grün), nur Ausgaben (rot), gemeinsame (orange).
     const setBankCategoryConditionalFormatting = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
@@ -388,47 +408,50 @@ const Buchhaltung = (() => {
         const onlyIncome = incomeCats.filter(cat => commonCats.indexOf(cat) === -1);
         const onlyExpense = expenseCats.filter(cat => commonCats.indexOf(cat) === -1);
 
-        // Formeln mit COUNTIF, die prüfen, ob der Zellenwert in einem der Arrays enthalten ist
+        // Erstelle Formeln (COUNTIF in Array-Literal)
         const onlyIncomeFormula = `=COUNTIF({${onlyIncome.map(c => `"${c}"`).join(",")}}, F2)>0`;
         const onlyExpenseFormula = `=COUNTIF({${onlyExpense.map(c => `"${c}"`).join(",")}}, F2)>0`;
         const commonFormula = `=COUNTIF({${commonCats.map(c => `"${c}"`).join(",")}}, F2)>0`;
 
         const rules = [];
-        // Gemeinsame Kategorien – Orange:
+        // Gemeinsame Kategorien – orange (Text orange, Hintergrund hellorange)
         if (commonCats.length > 0) {
             rules.push(
                 SpreadsheetApp.newConditionalFormatRule()
                     .whenFormulaSatisfied(commonFormula)
-                    .setBackground("#ffe699")  // leichtes Orange
+                    .setFontColor("#974806")
+                    .setBackground("#ffe699")
                     .setRanges([range])
                     .build()
             );
         }
-        // Nur Einnahmen – Grün:
+        // Nur Einnahmen – grün
         if (onlyIncome.length > 0) {
             rules.push(
                 SpreadsheetApp.newConditionalFormatRule()
                     .whenFormulaSatisfied(onlyIncomeFormula)
-                    .setBackground("#c6efce")  // leichtes Grün
+                    .setFontColor("#006100")
+                    .setBackground("#c6efce")
                     .setRanges([range])
                     .build()
             );
         }
-        // Nur Ausgaben – Rot:
+        // Nur Ausgaben – rot
         if (onlyExpense.length > 0) {
             rules.push(
                 SpreadsheetApp.newConditionalFormatRule()
                     .whenFormulaSatisfied(onlyExpenseFormula)
-                    .setBackground("#ffc7ce")  // leichtes Rot
+                    .setFontColor("#9c0006")
+                    .setBackground("#ffc7ce")
                     .setRanges([range])
                     .build()
             );
         }
+
         sheet.setConditionalFormatRules(rules);
     };
 
-
-    // Refresh für das Banking‑Sheet: Aktualisiert Formeln, Validierungen, Nummernformate u.a.
+    // Refresh für das Banking‑Sheet: Aktualisiert Formeln, Validierungen, Nummernformate usw.
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -487,7 +510,8 @@ const Buchhaltung = (() => {
             sheet.appendRow([formattedDate, "Endsaldo", "", sheet.getRange(lastRow, 4).getValue(), "", "", "", "", "", "", "", ""]);
         }
 
-        // Setze das Conditional Formatting für die Kategorie-Spalte (F)
+        // Setze das Conditional Formatting für die Typ-Spalte (E) und die Kategorie-Spalte (F)
+        setBankTypeConditionalFormatting(sheet);
         setBankCategoryConditionalFormatting(sheet);
     };
 
@@ -706,9 +730,8 @@ const BWACalculator = (() => {
         }
 
         const categories = {
-            einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0 },
-            ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0 },
-            bank: { eigenbeleg: 0, privateinlage: 0, privatentnahme: 0, darlehen: 0 }
+            einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0, privateinlage: 0, darlehen: 0, zinsen: 0 },
+            ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0, eigenbeleg: 0, privatentnahme: 0, darlehen: 0, zinsen: 0 }
         };
         let totalEinnahmen = 0,
             totalAusgaben = 0;
