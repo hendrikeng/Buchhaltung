@@ -1,7 +1,3 @@
-// === Hinweis für Entwickler ===
-// Bitte aktualisiere diese Kommentare, wenn du Änderungen am Code vornimmst,
-// damit sie stets den aktuellen Stand widerspiegeln.
-
 // =================== Zentrale Konfiguration ===================
 const CategoryConfig = {
     einnahmen: {
@@ -105,7 +101,7 @@ const CategoryConfig = {
     }
 };
 
-// =================== Modul: Helpers (allgemeine Funktionen) ===================
+// =================== Modul: Helpers ===================
 const Helpers = (() => {
     const createDropdownValidation = (list) =>
         SpreadsheetApp.newDataValidation().requireValueInList(list, true).build();
@@ -204,59 +200,9 @@ const Validator = (() => {
     return { validateRevenueAndExpenses, validateBankSheet, validateBankKontoMapping };
 })();
 
-// =================== Modul: Buchhaltung ===================
-const Buchhaltung = (() => {
-    const setupTrigger = () => {
-        const triggers = ScriptApp.getProjectTriggers();
-        if (!triggers.some((t) => t.getHandlerFunction() === "onOpen"))
-            ScriptApp.newTrigger("onOpen")
-                .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
-                .onOpen()
-                .create();
-    };
-
-    const onOpen = () =>
-        SpreadsheetApp.getUi()
-            .createMenu("📂 Buchhaltung")
-            .addItem("📥 Rechnungen importieren", "importDriveFiles")
-            .addItem("🔄 Aktualisieren (Formeln & Formatierung)", "refreshSheets")
-            .addItem("📊 GuV berechnen", "calculateGuV")
-            .addItem("📈 BWA berechnen", "calculateBWA")
-            .addToUi();
-
-    const importDriveFiles = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sheets = {
-            revenueMain: ss.getSheetByName("Einnahmen"),
-            expenseMain: ss.getSheetByName("Ausgaben"),
-            revenue: ss.getSheetByName("Rechnungen Einnahmen") || ss.insertSheet("Rechnungen Einnahmen"),
-            expense: ss.getSheetByName("Rechnungen Ausgaben") || ss.insertSheet("Rechnungen Ausgaben"),
-            history: ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie")
-        };
-        if (sheets.history.getLastRow() === 0)
-            sheets.history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
-        if (sheets.revenue.getLastRow() === 0)
-            sheets.revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-        if (sheets.expense.getLastRow() === 0)
-            sheets.expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-
-        const file = DriveApp.getFileById(ss.getId());
-        const parentFolder = file.getParents()?.hasNext() ? file.getParents().next() : null;
-        if (!parentFolder) {
-            SpreadsheetApp.getUi().alert("Kein übergeordneter Ordner gefunden.");
-            return;
-        }
-        const revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
-        const expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
-        revenueFolder
-            ? importFilesFromFolder(revenueFolder, sheets.revenue, sheets.revenueMain, "Einnahme", sheets.history)
-            : SpreadsheetApp.getUi().alert("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
-        expenseFolder
-            ? importFilesFromFolder(expenseFolder, sheets.expense, sheets.expenseMain, "Ausgabe", sheets.history)
-            : SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
-        refreshSheets();
-    };
-
+// =================== Modul: ImportModule ===================
+// Dieses Modul kümmert sich ausschließlich um den Import von Dateien aus definierten Ordnern.
+const ImportModule = (() => {
     const importFilesFromFolder = (folder, importSheet, mainSheet, type, historySheet) => {
         const files = folder.getFiles();
         const getExistingFiles = (sheet, colIndex) =>
@@ -316,11 +262,52 @@ const Buchhaltung = (() => {
                 .setValues(newHistoryRows);
     };
 
-    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung und Data Validation.
-    const refreshSheet = (sheet) => {
+    const importDriveFiles = () => {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheets = {
+            revenueMain: ss.getSheetByName("Einnahmen"),
+            expenseMain: ss.getSheetByName("Ausgaben"),
+            revenue: ss.getSheetByName("Rechnungen Einnahmen") || ss.insertSheet("Rechnungen Einnahmen"),
+            expense: ss.getSheetByName("Rechnungen Ausgaben") || ss.insertSheet("Rechnungen Ausgaben"),
+            history: ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie")
+        };
+        if (sheets.history.getLastRow() === 0)
+            sheets.history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+        if (sheets.revenue.getLastRow() === 0)
+            sheets.revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+        if (sheets.expense.getLastRow() === 0)
+            sheets.expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+
+        const file = DriveApp.getFileById(ss.getId());
+        const parentFolder = file.getParents()?.hasNext() ? file.getParents().next() : null;
+        if (!parentFolder) {
+            SpreadsheetApp.getUi().alert("Kein übergeordneter Ordner gefunden.");
+            return;
+        }
+        const revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
+        const expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
+        if (revenueFolder)
+            importFilesFromFolder(revenueFolder, sheets.revenue, sheets.revenueMain, "Einnahme", sheets.history);
+        else
+            SpreadsheetApp.getUi().alert("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
+        if (expenseFolder)
+            importFilesFromFolder(expenseFolder, sheets.expense, sheets.expenseMain, "Ausgabe", sheets.history);
+        else
+            SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
+    };
+
+    return { importDriveFiles };
+})();
+
+// =================== Modul: RefreshModule ===================
+const RefreshModule = (() => {
+
+    // Aktualisiert Einnahmen/Ausgaben mit Formeln, Nummernformaten, Data Validation etc.
+    const refreshDataSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
+        // Setze Formeln
         const formulas = Array.from({ length: numRows }, (_, i) => {
             const row = i + 2;
             return {
@@ -331,12 +318,13 @@ const Buchhaltung = (() => {
                 status: `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))`
             };
         });
-        sheet.getRange(2, 7, numRows, 1).setFormulas(formulas.map((f) => [f.mwst]));
-        sheet.getRange(2, 8, numRows, 1).setFormulas(formulas.map((f) => [f.brutto]));
-        sheet.getRange(2, 10, numRows, 1).setFormulas(formulas.map((f) => [f.rest]));
-        sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map((f) => [f.quartal]));
-        sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map((f) => [f.status]));
+        sheet.getRange(2, 7, numRows, 1).setFormulas(formulas.map(f => [f.mwst]));
+        sheet.getRange(2, 8, numRows, 1).setFormulas(formulas.map(f => [f.brutto]));
+        sheet.getRange(2, 10, numRows, 1).setFormulas(formulas.map(f => [f.rest]));
+        sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map(f => [f.quartal]));
+        sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map(f => [f.status]));
 
+        // Nummernformate
         const dateFormat = "DD.MM.YYYY";
         const currencyFormat = "€#,##0.00;€-#,##0.00";
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat(dateFormat);
@@ -349,11 +337,14 @@ const Buchhaltung = (() => {
         sheet.getRange(`J2:J${lastRow}`).setNumberFormat(currencyFormat);
         sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
 
+        // Falls Zelle in Spalte 9 leer, setze 0
         for (let r = 2; r <= lastRow; r++) {
             const cell = sheet.getRange(r, 9);
-            if (cell.getValue() === "" || cell.getValue() === null) cell.setValue(0);
+            if (cell.getValue() === "" || cell.getValue() === null)
+                cell.setValue(0);
         }
 
+        // Setze Data Validation für Kategorien
         const sheetName = sheet.getName();
         if (sheetName === "Einnahmen") {
             sheet.getRange(2, 3, lastRow - 1, 1).setDataValidation(
@@ -368,7 +359,7 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Direkt in refreshBankSheet setzen wir nun die bedingte Formatierung für Typ (Spalte E) und Kategorie (Spalte F)
+    // Aktualisiert das Banking‑Sheet inklusive Formeln, Nummernformaten, Data Validation und bedingter Formatierung
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -382,8 +373,6 @@ const Buchhaltung = (() => {
             });
             sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(saldoFormulas);
         }
-
-        // Typ-Spalte: Setze DataValidation und Werte basierend auf Betrag (Spalte C)
         for (let row = firstDataRow; row <= lastRow; row++) {
             const amount = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
             const typeCell = sheet.getRange(row, 5);
@@ -444,24 +433,33 @@ const Buchhaltung = (() => {
         }
     };
 
-    const refreshSheets = () => {
+    const refreshActiveSheet = () => {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getActiveSheet();
+        const sheetName = sheet.getName();
+        if (sheetName === "Einnahmen" || sheetName === "Ausgaben") {
+            refreshDataSheet(sheet);
+            SpreadsheetApp.getUi().alert(`Das Blatt "${sheetName}" wurde aktualisiert.`);
+        } else if (sheetName === "Bankbewegungen") {
+            refreshBankSheet(sheet);
+            SpreadsheetApp.getUi().alert(`Das Blatt "${sheetName}" wurde aktualisiert.`);
+        } else {
+            SpreadsheetApp.getUi().alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
+        }
+    };
+
+    const refreshAllSheets = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
         const bankSheet = ss.getSheetByName("Bankbewegungen");
-        if (!revenueSheet || !expenseSheet)
-            SpreadsheetApp.getUi().alert("Eines der Blätter 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
-        else {
-            refreshSheet(revenueSheet);
-            refreshSheet(expenseSheet);
-        }
-        if (!bankSheet)
-            SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Bankbewegungen'");
-        else refreshBankSheet(bankSheet);
+        if (revenueSheet) refreshDataSheet(revenueSheet);
+        if (expenseSheet) refreshDataSheet(expenseSheet);
+        if (bankSheet) refreshBankSheet(bankSheet);
         SpreadsheetApp.getUi().alert("Alle relevanten Sheets wurden erfolgreich aktualisiert!");
     };
 
-    return { setupTrigger, onOpen, importDriveFiles, refreshSheets, refreshSheet };
+    return { refreshActiveSheet, refreshAllSheets };
 })();
 
 // =================== Modul: GuV-Berechnung ===================
@@ -628,26 +626,22 @@ const BWACalculator = (() => {
         revenueSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
             revenueWarnings = revenueWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
-
         let expenseWarnings = [];
         expenseSheet.getDataRange().getValues().slice(1).forEach((row, index) => {
             expenseWarnings = expenseWarnings.concat(Validator.validateRevenueAndExpenses(row, index + 2));
         });
-
         let bankWarnings = [];
         const bankData = bankSheet.getDataRange().getValues();
         for (let i = 1; i < bankData.length; i++) {
             bankWarnings = bankWarnings.concat(Validator.validateBankSheet(bankData[i], i + 1, bankData.length));
         }
-
         for (let i = 2; i < bankData.length; i++) {
-            const type = bankData[i][4];     // Spalte E: Typ
+            const type = bankData[i][4]; // Spalte E: Typ
             const category = bankData[i][5]; // Spalte F: Kategorie
             const mapping = Validator.validateBankKontoMapping(category, type, i + 1, bankWarnings);
             bankSheet.getRange(i + 1, 7).setValue(mapping.soll);
             bankSheet.getRange(i + 1, 8).setValue(mapping.gegen);
         }
-
         const msgArr = [];
         if (revenueWarnings.length > 0) msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
         if (expenseWarnings.length > 0) msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
@@ -657,7 +651,6 @@ const BWACalculator = (() => {
             SpreadsheetApp.getUi().alert(msg);
             return;
         }
-
         const categories = {
             einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0, privateinlage: 0, darlehen: 0, zinsen: 0 },
             ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0, eigenbeleg: 0, privatentnahme: 0, darlehen: 0, zinsen: 0 }
@@ -742,9 +735,40 @@ const BWACalculator = (() => {
 })();
 
 // =================== Globale Funktionen ===================
-const setupTrigger = () => Buchhaltung.setupTrigger();
-const onOpen = () => Buchhaltung.onOpen();
-const importDriveFiles = () => Buchhaltung.importDriveFiles();
-const refreshSheets = () => Buchhaltung.refreshSheets();
-const calculateGuV = () => GuVCalculator.calculateGuV();
-const calculateBWA = () => BWACalculator.calculateBWA();
+// Menü-Erstellung und Trigger-Setup (ohne extra "Buchhaltung"-Modul)
+const onOpen = () => {
+    SpreadsheetApp.getUi()
+        .createMenu("📂 Buchhaltung")
+        .addItem("📥 Dateien importieren", "importDriveFiles")
+        .addItem("🔄 Refresh Active Sheet", "refreshSheet")
+        .addItem("📊 GuV berechnen", "calculateGuV")
+        .addItem("📈 BWA berechnen", "calculateBWA")
+        .addToUi();
+};
+
+const setupTrigger = () => {
+    const triggers = ScriptApp.getProjectTriggers();
+    if (!triggers.some((t) => t.getHandlerFunction() === "onOpen"))
+        SpreadsheetApp.newTrigger("onOpen")
+            .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+            .onOpen()
+            .create();
+};
+
+// Aktualisiert nur das aktuell aktive Blatt.
+const refreshSheet = () => RefreshModule.refreshActiveSheet();
+// Vor der GuV-Berechnung alle Blätter aktualisieren, dann GuV berechnen.
+const calculateGuV = () => {
+    RefreshModule.refreshAllSheets();
+    GuVCalculator.calculateGuV();
+};
+// Vor der BWA-Berechnung alle Blätter aktualisieren, dann BWA berechnen.
+const calculateBWA = () => {
+    RefreshModule.refreshAllSheets();
+    BWACalculator.calculateBWA();
+};
+// Import von Dateien (über das ImportModule)
+const importDriveFiles = () => {
+    ImportModule.importDriveFiles();
+    RefreshModule.refreshAllSheets();
+};
