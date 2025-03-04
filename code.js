@@ -456,7 +456,6 @@ const RefreshModule = (() => {
         if (revenueSheet) refreshDataSheet(revenueSheet);
         if (expenseSheet) refreshDataSheet(expenseSheet);
         if (bankSheet) refreshBankSheet(bankSheet);
-        SpreadsheetApp.getUi().alert("Alle relevanten Sheets wurden erfolgreich aktualisiert!");
     };
 
     return { refreshActiveSheet, refreshAllSheets };
