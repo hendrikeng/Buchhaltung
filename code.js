@@ -5,26 +5,47 @@
 // =================== Zentrale Konfiguration ===================
 const CategoryConfig = {
     einnahmen: {
-        allowed: ["Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge"],
+        // Diese Liste steuert das Rechnungs‑Sheet (nur Einnahmen)
+        allowed: [
+            "Umsatzerlöse",
+            "Provisionserlöse",
+            "Sonstige betriebliche Erträge",
+            "Privateinlage",
+            "Darlehen",
+            "Zinsen"
+        ],
         kontoMapping: {
             "Umsatzerlöse": { soll: "1200 Bank", gegen: "4400 Umsatzerlöse" },
             "Provisionserlöse": { soll: "1200 Bank", gegen: "4420 Provisionserlöse" },
-            "Sonstige betriebliche Erträge": { soll: "1200 Bank", gegen: "4490 Sonstige betriebliche Erträge" }
+            "Sonstige betriebliche Erträge": { soll: "1200 Bank", gegen: "4490 Sonstige betriebliche Erträge" },
+            "Privateinlage": { soll: "1200 Bank", gegen: "1800 Privateinlage" },
+            "Darlehen": { soll: "1200 Bank", gegen: "3000 Darlehen" },
+            "Zinsen": { soll: "1200 Bank", gegen: "2650 Zinserträge" }
         },
         bwaMapping: {
             "Umsatzerlöse": "umsatzerloese",
             "Provisionserlöse": "provisionserloese",
-            "Sonstige betriebliche Erträge": "sonstigeErtraege"
+            "Sonstige betriebliche Erträge": "sonstigeErtraege",
+            "Privateinlage": "privateinlage",
+            "Darlehen": "darlehen",
+            "Zinsen": "zinsen"
         }
     },
     ausgaben: {
+        // Diese Liste steuert das Rechnungs‑Sheet (nur Ausgaben)
+        // Wir haben hier zusätzlich "Darlehen" aufgenommen, um Fälle abzudecken,
+        // in denen Darlehen auch als Ausgabe verbucht werden können.
         allowed: [
             "Wareneinsatz",
             "Betriebskosten",
             "Marketing & Werbung",
             "Reisekosten",
             "Personalkosten",
-            "Sonstige betriebliche Aufwendungen"
+            "Sonstige betriebliche Aufwendungen",
+            "Eigenbeleg",
+            "Privatentnahme",
+            "Darlehen",
+            "Zinsen"
         ],
         kontoMapping: {
             "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
@@ -32,7 +53,11 @@ const CategoryConfig = {
             "Marketing & Werbung": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
             "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
             "Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
-            "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" }
+            "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" },
+            "Eigenbeleg": { soll: "1890 Eigenbeleg", gegen: "1200 Bank" },
+            "Privatentnahme": { soll: "1800 Privatentnahme", gegen: "1200 Bank" },
+            "Darlehen": { soll: "3000 Darlehen", gegen: "1200 Bank" },
+            "Zinsen": { soll: "2100 Zinsaufwand", gegen: "1200 Bank" }
         },
         bwaMapping: {
             "Wareneinsatz": "wareneinsatz",
@@ -40,10 +65,15 @@ const CategoryConfig = {
             "Marketing & Werbung": "marketing",
             "Reisekosten": "reisen",
             "Personalkosten": "personalkosten",
-            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen"
+            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
+            "Eigenbeleg": "eigenbeleg",
+            "Privatentnahme": "privatentnahme",
+            "Darlehen": "darlehen",
+            "Zinsen": "zinsen"
         }
     },
     bank: {
+        // Dieses Objekt wird für das Banking‑Sheet genutzt (Dropdowns, BWA)
         allowed: [
             "Umsatzerlöse",
             "Provisionserlöse",
@@ -53,7 +83,12 @@ const CategoryConfig = {
             "Marketing & Werbung",
             "Reisekosten",
             "Personalkosten",
-            "Sonstige betriebliche Aufwendungen"
+            "Sonstige betriebliche Aufwendungen",
+            "Privateinlage",
+            "Darlehen",
+            "Eigenbeleg",
+            "Privatentnahme",
+            "Zinsen"
         ],
         typeAllowed: ["Einnahme", "Ausgabe"],
         bwaMapping: {
@@ -65,7 +100,12 @@ const CategoryConfig = {
             "Marketing & Werbung": "marketing",
             "Reisekosten": "reisen",
             "Personalkosten": "personalkosten",
-            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen"
+            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
+            "Privateinlage": "privateinlage",
+            "Darlehen": "darlehen",
+            "Eigenbeleg": "eigenbeleg",
+            "Privatentnahme": "privatentnahme",
+            "Zinsen": "zinsen"
         }
     }
 };
@@ -147,10 +187,9 @@ const Validator = (() => {
         return warnings;
     };
 
-    // Konto-Mapping ausschließlich aus den Konfigurationen für einnahmen/ausgaben.
+    // Konto-Mapping ausschließlich anhand des gesetzten Typs (Einnahme/Ausgabe)
     const validateBankKontoMapping = (category, type, rowIndex, warnings) => {
         let mapping = null;
-
         if (type === "Einnahme") {
             if (CategoryConfig.einnahmen.kontoMapping.hasOwnProperty(category)) {
                 mapping = CategoryConfig.einnahmen.kontoMapping[category];
@@ -177,7 +216,7 @@ const Buchhaltung = (() => {
     const setupTrigger = () => {
         const triggers = ScriptApp.getProjectTriggers();
         if (!triggers.some((t) => t.getHandlerFunction() === "onOpen"))
-            ScriptApp.newTrigger("onOpen")
+            SpreadsheetApp.newTrigger("onOpen")
                 .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
                 .onOpen()
                 .create();
@@ -336,7 +375,60 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Refresh für Bankbewegungen: Setzt Data Validation für Typ, Kategorie, Konto-Soll und Gegenkonto.
+    // Hilfsfunktion: Setzt das Conditional Formatting in Spalte F (Kategorien) im Banking‑Sheet
+    // basierend auf den Allowed-Listen in den Bereichen.
+    const setBankCategoryConditionalFormatting = (sheet) => {
+        const lastRow = sheet.getLastRow();
+        if (lastRow < 2) return;
+        const range = sheet.getRange("F2:F" + lastRow);
+        // Errechne anhand der Konfiguration:
+        const incomeCats = CategoryConfig.einnahmen.allowed;
+        const expenseCats = CategoryConfig.ausgaben.allowed;
+        const commonCats = incomeCats.filter(cat => expenseCats.indexOf(cat) !== -1);
+        const onlyIncome = incomeCats.filter(cat => commonCats.indexOf(cat) === -1);
+        const onlyExpense = expenseCats.filter(cat => commonCats.indexOf(cat) === -1);
+
+        // Formeln mit COUNTIF, die prüfen, ob der Zellenwert in einem der Arrays enthalten ist
+        const onlyIncomeFormula = `=COUNTIF({${onlyIncome.map(c => `"${c}"`).join(",")}}, F2)>0`;
+        const onlyExpenseFormula = `=COUNTIF({${onlyExpense.map(c => `"${c}"`).join(",")}}, F2)>0`;
+        const commonFormula = `=COUNTIF({${commonCats.map(c => `"${c}"`).join(",")}}, F2)>0`;
+
+        const rules = [];
+        // Gemeinsame Kategorien – Orange:
+        if (commonCats.length > 0) {
+            rules.push(
+                SpreadsheetApp.newConditionalFormatRule()
+                    .whenFormulaSatisfied(commonFormula)
+                    .setBackground("#ffe699")  // leichtes Orange
+                    .setRanges([range])
+                    .build()
+            );
+        }
+        // Nur Einnahmen – Grün:
+        if (onlyIncome.length > 0) {
+            rules.push(
+                SpreadsheetApp.newConditionalFormatRule()
+                    .whenFormulaSatisfied(onlyIncomeFormula)
+                    .setBackground("#c6efce")  // leichtes Grün
+                    .setRanges([range])
+                    .build()
+            );
+        }
+        // Nur Ausgaben – Rot:
+        if (onlyExpense.length > 0) {
+            rules.push(
+                SpreadsheetApp.newConditionalFormatRule()
+                    .whenFormulaSatisfied(onlyExpenseFormula)
+                    .setBackground("#ffc7ce")  // leichtes Rot
+                    .setRanges([range])
+                    .build()
+            );
+        }
+        sheet.setConditionalFormatRules(rules);
+    };
+
+
+    // Refresh für das Banking‑Sheet: Aktualisiert Formeln, Validierungen, Nummernformate u.a.
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -367,7 +459,7 @@ const Buchhaltung = (() => {
         sheet.getRange(firstDataRow, 6, lastRow - firstDataRow + 1, 1).setDataValidation(
             Helpers.createDropdownValidation(CategoryConfig.bank.allowed)
         );
-        // Setze Data Validation für "Konto soll" und "Gegenkonto"
+        // Setze Data Validation für "Konto soll" und "Gegenkonto" basierend auf den Mappings der Bereiche
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.soll);
@@ -394,6 +486,9 @@ const Buchhaltung = (() => {
         } else {
             sheet.appendRow([formattedDate, "Endsaldo", "", sheet.getRange(lastRow, 4).getValue(), "", "", "", "", "", "", "", ""]);
         }
+
+        // Setze das Conditional Formatting für die Kategorie-Spalte (F)
+        setBankCategoryConditionalFormatting(sheet);
     };
 
     const refreshSheets = () => {
@@ -544,7 +639,7 @@ const GuVCalculator = (() => {
         }
         const yearTotal = aggregateGuV(guvData, 1, 12);
         guvSheet.appendRow(formatGuVRow("Gesamtjahr", yearTotal));
-        guvSheet.getRange(2, 2, guvSheet.getLastRow() - 1, 9).setNumberFormat("#,##0.00€");
+        guvSheet.getRange(2, 2, guvSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
         guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
         SpreadsheetApp.getUi().alert("GuV wurde aktualisiert!");
     };
