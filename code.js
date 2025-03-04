@@ -5,7 +5,6 @@
 // =================== Zentrale Konfiguration ===================
 const CategoryConfig = {
     einnahmen: {
-        // Diese Liste steuert das Rechnungs‑Sheet (nur Einnahmen)
         allowed: [
             "Umsatzerlöse",
             "Provisionserlöse",
@@ -32,7 +31,6 @@ const CategoryConfig = {
         }
     },
     ausgaben: {
-        // Diese Liste steuert das Rechnungs‑Sheet (nur Ausgaben)
         allowed: [
             "Wareneinsatz",
             "Betriebskosten",
@@ -71,7 +69,6 @@ const CategoryConfig = {
         }
     },
     bank: {
-        // Dieses Objekt wird für das Banking‑Sheet genutzt (Dropdowns, BWA)
         allowed: [
             "Umsatzerlöse",
             "Provisionserlöse",
@@ -185,7 +182,6 @@ const Validator = (() => {
         return warnings;
     };
 
-    // Konto-Mapping ausschließlich anhand des gesetzten Typs (Einnahme/Ausgabe)
     const validateBankKontoMapping = (category, type, rowIndex, warnings) => {
         let mapping = null;
         if (type === "Einnahme") {
@@ -197,7 +193,6 @@ const Validator = (() => {
                 mapping = CategoryConfig.ausgaben.kontoMapping[category];
             }
         }
-
         if (!mapping) {
             const msg = `Zeile ${rowIndex} (Bank): Kein Konto-Mapping für Kategorie "${category || "N/A"}" gefunden – bitte manuell zuordnen!`;
             warnings.push(msg);
@@ -214,7 +209,7 @@ const Buchhaltung = (() => {
     const setupTrigger = () => {
         const triggers = ScriptApp.getProjectTriggers();
         if (!triggers.some((t) => t.getHandlerFunction() === "onOpen"))
-            SpreadsheetApp.newTrigger("onOpen")
+            ScriptApp.newTrigger("onOpen")
                 .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
                 .onOpen()
                 .create();
@@ -321,7 +316,7 @@ const Buchhaltung = (() => {
                 .setValues(newHistoryRows);
     };
 
-    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung und Data Validation für Kategorie.
+    // Refresh für Einnahmen/Ausgaben: Setzt Formeln, Formatierung und Data Validation.
     const refreshSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
@@ -373,85 +368,7 @@ const Buchhaltung = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Setzt das Conditional Formatting für die Typ-Spalte (E) im Banking‑Sheet.
-    const setBankTypeConditionalFormatting = (sheet) => {
-        const lastRow = sheet.getLastRow();
-        if (lastRow < 2) return;
-        const typeRange = sheet.getRange("E2:E" + lastRow);
-        // Regel: Einnahme – grüner Text (#006100) und hellgrüner Hintergrund (#c6efce)
-        const incomeRule = SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$E2="Einnahme"')
-            .setFontColor("#006100")
-            .setBackground("#c6efce")
-            .setRanges([typeRange])
-            .build();
-        // Regel: Ausgabe – roter Text (#9c0006) und hellroter Hintergrund (#ffc7ce)
-        const expenseRule = SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$E2="Ausgabe"')
-            .setFontColor("#9c0006")
-            .setBackground("#ffc7ce")
-            .setRanges([typeRange])
-            .build();
-        sheet.setConditionalFormatRules([incomeRule, expenseRule]);
-    };
-
-    // Setzt das Conditional Formatting für die Kategorie-Spalte (F) im Banking‑Sheet.
-    // Dabei: Nur Einnahmen (grün), nur Ausgaben (rot), gemeinsame (orange).
-    const setBankCategoryConditionalFormatting = (sheet) => {
-        const lastRow = sheet.getLastRow();
-        if (lastRow < 2) return;
-        const range = sheet.getRange("F2:F" + lastRow);
-        // Errechne anhand der Konfiguration:
-        const incomeCats = CategoryConfig.einnahmen.allowed;
-        const expenseCats = CategoryConfig.ausgaben.allowed;
-        const commonCats = incomeCats.filter(cat => expenseCats.indexOf(cat) !== -1);
-        const onlyIncome = incomeCats.filter(cat => commonCats.indexOf(cat) === -1);
-        const onlyExpense = expenseCats.filter(cat => commonCats.indexOf(cat) === -1);
-
-        // Erstelle Formeln (COUNTIF in Array-Literal)
-        const onlyIncomeFormula = `=COUNTIF({${onlyIncome.map(c => `"${c}"`).join(",")}}, F2)>0`;
-        const onlyExpenseFormula = `=COUNTIF({${onlyExpense.map(c => `"${c}"`).join(",")}}, F2)>0`;
-        const commonFormula = `=COUNTIF({${commonCats.map(c => `"${c}"`).join(",")}}, F2)>0`;
-
-        const rules = [];
-        // Gemeinsame Kategorien – orange (Text orange, Hintergrund hellorange)
-        if (commonCats.length > 0) {
-            rules.push(
-                SpreadsheetApp.newConditionalFormatRule()
-                    .whenFormulaSatisfied(commonFormula)
-                    .setFontColor("#974806")
-                    .setBackground("#ffe699")
-                    .setRanges([range])
-                    .build()
-            );
-        }
-        // Nur Einnahmen – grün
-        if (onlyIncome.length > 0) {
-            rules.push(
-                SpreadsheetApp.newConditionalFormatRule()
-                    .whenFormulaSatisfied(onlyIncomeFormula)
-                    .setFontColor("#006100")
-                    .setBackground("#c6efce")
-                    .setRanges([range])
-                    .build()
-            );
-        }
-        // Nur Ausgaben – rot
-        if (onlyExpense.length > 0) {
-            rules.push(
-                SpreadsheetApp.newConditionalFormatRule()
-                    .whenFormulaSatisfied(onlyExpenseFormula)
-                    .setFontColor("#9c0006")
-                    .setBackground("#ffc7ce")
-                    .setRanges([range])
-                    .build()
-            );
-        }
-
-        sheet.setConditionalFormatRules(rules);
-    };
-
-    // Refresh für das Banking‑Sheet: Aktualisiert Formeln, Validierungen, Nummernformate usw.
+    // Direkt in refreshBankSheet setzen wir nun die bedingte Formatierung für Typ (Spalte E) und Kategorie (Spalte F)
     const refreshBankSheet = (sheet) => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -465,6 +382,8 @@ const Buchhaltung = (() => {
             });
             sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(saldoFormulas);
         }
+
+        // Typ-Spalte: Setze DataValidation und Werte basierend auf Betrag (Spalte C)
         for (let row = firstDataRow; row <= lastRow; row++) {
             const amount = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
             const typeCell = sheet.getRange(row, 5);
@@ -482,7 +401,6 @@ const Buchhaltung = (() => {
         sheet.getRange(firstDataRow, 6, lastRow - firstDataRow + 1, 1).setDataValidation(
             Helpers.createDropdownValidation(CategoryConfig.bank.allowed)
         );
-        // Setze Data Validation für "Konto soll" und "Gegenkonto" basierend auf den Mappings der Bereiche
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.soll);
@@ -495,6 +413,21 @@ const Buchhaltung = (() => {
         sheet.getRange(firstDataRow, 8, lastRow - firstDataRow + 1, 1).setDataValidation(
             Helpers.createDropdownValidation(allowedGegenkonto)
         );
+
+        // Setze die bedingte Formatierung für Spalte E (Typ)
+        const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
+            .whenTextEqualTo("Einnahme")
+            .setBackground("#C6EFCE")
+            .setFontColor("#006100")
+            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
+            .build();
+        const ruleAusgabe = SpreadsheetApp.newConditionalFormatRule()
+            .whenTextEqualTo("Ausgabe")
+            .setBackground("#FFC7CE")
+            .setFontColor("#9C0006")
+            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
+            .build();
+        sheet.setConditionalFormatRules([ruleEinnahme, ruleAusgabe]);
 
         sheet.getRange("A2:A" + lastRow).setNumberFormat("DD.MM.YYYY");
         sheet.getRange("C2:C" + lastRow).setNumberFormat("€#,##0.00;€-#,##0.00");
@@ -509,10 +442,6 @@ const Buchhaltung = (() => {
         } else {
             sheet.appendRow([formattedDate, "Endsaldo", "", sheet.getRange(lastRow, 4).getValue(), "", "", "", "", "", "", "", ""]);
         }
-
-        // Setze das Conditional Formatting für die Typ-Spalte (E) und die Kategorie-Spalte (F)
-        setBankTypeConditionalFormatting(sheet);
-        setBankCategoryConditionalFormatting(sheet);
     };
 
     const refreshSheets = () => {
@@ -761,7 +690,6 @@ const BWACalculator = (() => {
         });
         if (bankSheet) {
             const bankData = bankSheet.getDataRange().getValues();
-            // Überspringe Zeile 1 und Endsaldo
             for (let i = 1; i < bankData.length - 1; i++) {
                 const row = bankData[i];
                 const saldo = parseFloat(row[3]) || 0;
