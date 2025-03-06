@@ -270,6 +270,7 @@ const ImportModule = (() => {
         const existingImport = getExistingFiles(importSheet, 0);
         const newMainRows = [], newImportRows = [], newHistoryRows = [];
         const timestamp = new Date();
+
         while (files.hasNext()) {
             const file = files.next();
             const invoiceName = file.getName().replace(/\.[^/.]+$/, "").replace(/^[^ ]* /, "");
@@ -277,21 +278,31 @@ const ImportModule = (() => {
             const invoiceDate = Helpers.extractDateFromFilename(fileName);
             const fileUrl = file.getUrl();
             let wasImported = false;
+
             if (!existingMain.has(fileName)) {
-                const rowIndex = mainSheet.getLastRow() + newMainRows.length + 1;
                 newMainRows.push([
-                    invoiceDate, invoiceName, "", "", "", "",
-                    `=E${rowIndex}*F${rowIndex}`, `=E${rowIndex}+G${rowIndex}`,
-                    "", `=E${rowIndex}-(I${rowIndex}-G${rowIndex})`,
-                    `=IF(A${rowIndex}=""; ""; ROUNDUP(MONTH(A${rowIndex})/3;0))`,
-                    `=IF(OR(I${rowIndex}=""; I${rowIndex}=0); "Offen"; IF(I${rowIndex}>=H${rowIndex}; "Bezahlt"; "Teilbezahlt"))`,
-                    "", "", "", timestamp, fileName, fileUrl
+                    invoiceDate,            // Spalte 1: Rechnungsdatum
+                    invoiceName,            // Spalte 2: Rechnungsname
+                    "", "", "", "",         // Spalte 3-6: Platzhalter B. Kategorie, Kunde, Nettobetrag, MwSt)
+                    "",                     // Spalte 7: MWSt (wird später per Refresh gesetzt)
+                    "",                     // Spalte 8: Brutto (wird später per Refresh gesetzt)
+                    "",                     // Spalte 9: (leer, sofern benötigt)
+                    "",                     // Spalte 10: Restbetrag (wird später per Refresh gesetzt)
+                    "",                     // Spalte 11: Quartal (wird später per Refresh gesetzt)
+                    "",                     // Spalte 12: Zahlungsstatus (wird später per Refresh gesetzt)
+                    "", "", "",             // Spalte 13-15: weitere Platzhalter
+                    timestamp,              // Spalte 16: Timestamp
+                    fileName,               // Spalte 17: Dateiname
+                    fileUrl                 // Spalte 18: URL
                 ]);
-                existingMain.add(fileName); wasImported = true;
+                existingMain.add(fileName);
+                wasImported = true;
             }
             if (!existingImport.has(fileName)) {
                 newImportRows.push([fileName, fileUrl, fileName]);
-                existingImport.add(fileName); wasImported = true;
+                existingImport.add(fileName);
+                wasImported = true;
+                // TODO: OCR hier
             }
             wasImported && newHistoryRows.push([timestamp, type, fileName, fileUrl]);
         }
@@ -343,36 +354,34 @@ const RefreshModule = (() => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
-        // Erzeuge Formeln für alle Zeilen
-        const formulas = Array.from({ length: numRows }, (_, i) => {
-            const row = i + 2;
-            return {
-                mwst: `=E${row}*F${row}`,
-                brutto: `=E${row}+G${row}`,
-                rest: `=(H${row}-I${row})/(1+VALUE(F${row}))`,
-                quartal: `=IF(A${row}=""; ""; ROUNDUP(MONTH(A${row})/3;0))`,
-                status: `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))`
-            };
+
+        // Setze Formeln in den angegebenen Spalten
+        Object.entries({
+            7: row => `=E${row}*F${row}`,                           // MwSt
+            8: row => `=E${row}+G${row}`,                           // Brutto
+            10: row => `=(H${row}-I${row})/(1+VALUE(F${row}))`,       // Restbetrag
+            11: row => `=IF(A${row}=""; ""; ROUNDUP(MONTH(A${row})/3;0))`, // Quartal
+            12: row => `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))` // Zahlungsstatus
+        }).forEach(([col, formulaFn]) => {
+            const formulas = Array.from({ length: numRows }, (_, i) => [formulaFn(i + 2)]);
+            sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
         });
-        // Setze Formeln in die entsprechenden Spalten
-        sheet.getRange(2, 7, numRows, 1).setFormulas(formulas.map(f => [f.mwst]));
-        sheet.getRange(2, 8, numRows, 1).setFormulas(formulas.map(f => [f.brutto]));
-        sheet.getRange(2, 10, numRows, 1).setFormulas(formulas.map(f => [f.rest]));
-        sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map(f => [f.quartal]));
-        sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map(f => [f.status]));
-        // Setze 0 in Spalte 9, falls leer
-        for (let r = 2; r <= lastRow; r++) {
-            const cell = sheet.getRange(r, 9);
-            if (cell.getValue() === "" || cell.getValue() === null) cell.setValue(0);
-        }
-        // Setze Data Validation für Dropdowns
+
+        // Setze 0 in Spalte 9, falls leer (alle Zellen auf einmal abfragen und zurückschreiben)
+        const col9Range = sheet.getRange(2, 9, numRows, 1);
+        const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
+        col9Range.setValues(col9Values.map(val => [val]));
+
+        // Data Validation für Dropdowns mit Short-Circuit If
         const name = sheet.getName();
         if (name === "Einnahmen") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.category);
         if (name === "Ausgaben") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
         if (name === "Eigenbelege") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
         Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
+
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
+
 
     // Aktualisiert das Bank-Sheet (inkl. bedingter Formatierung und Endsaldo)
     const refreshBankSheet = sheet => {
