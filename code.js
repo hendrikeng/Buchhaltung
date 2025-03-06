@@ -158,48 +158,29 @@ const Helpers = (() => {
 // =================== Modul: Validator ===================
 // Verantwortlich für die Validierung von Daten und Ausgabe von Warnmeldungen
 const Validator = (() => {
-    // Prüft, ob ein Wert leer ist
     const isEmpty = v => v == null || v.toString().trim() === "";
-    // Prüft, ob ein Wert keine gültige Zahl ist
     const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
 
-    // Setzt die Dropdown-Validierung auf einen bestimmten Range
-    // Parameter: sheet, Startzeile, Startspalte, Anzahl der Zeilen, Anzahl der Spalten, Liste der erlaubten Werte
+    // Setzt die Dropdown-Validierung auf einen bestimmten Bereich
     const validateDropdown = (sheet, row, col, numRows, numCols, list) =>
-        sheet
-            .getRange(row, col, numRows, numCols)
-            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).build());
+        sheet.getRange(row, col, numRows, numCols).setDataValidation(
+            SpreadsheetApp.newDataValidation().requireValueInList(list, true).build()
+        );
 
-    // Validiert eine Zeile aus Revenue oder Ausgaben mithilfe von Destructuring
+    // Validiert eine Zeile aus Revenue oder Ausgaben (unverändert)
     const validateRevenueAndExpenses = (row, rowIndex) => {
-        const [
-            invoiceDate,
-            invoiceNumber,
-            category,
-            customer,
-            net,
-            vat,
-            , , , , , // Platzhalter für Spalten, die hier nicht benötigt werden
-            statusRaw,
-            zahlungsartRaw,
-            zahlungsdatumRaw
-        ] = row;
         const warnings = [];
-
-        isEmpty(invoiceDate) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
-        isEmpty(invoiceNumber) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
-        isEmpty(category) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
-        isEmpty(customer) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
-        isInvalidNumber(net) && warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
-
-        const vatStr = vat == null ? "" : vat.toString().trim();
-        (isEmpty(vatStr) || isNaN(parseFloat(vatStr.replace("%", "").replace(",", ".")))) &&
+        isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
+        isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
+        isEmpty(row[2]) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
+        isEmpty(row[3]) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
+        isInvalidNumber(row[4]) && warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
+        const mwstStr = row[5] == null ? "" : row[5].toString().trim();
+        (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")))) &&
         warnings.push(`Zeile ${rowIndex}: Mehrwertsteuer fehlt oder ungültig.`);
-
-        const status = statusRaw ? statusRaw.toString().trim().toLowerCase() : "";
-        const zahlungsart = zahlungsartRaw ? zahlungsartRaw.toString().trim() : "";
-        const zahlungsdatum = zahlungsdatumRaw ? zahlungsdatumRaw.toString().trim() : "";
-
+        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
+        const zahlungsart = row[12] ? row[12].toString().trim() : "";
+        const zahlungsdatum = row[13] ? row[13].toString().trim() : "";
         if (status === "offen") {
             !isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart darf nicht gesetzt sein, wenn "offen".`);
             !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`);
@@ -210,31 +191,25 @@ const Validator = (() => {
         return warnings;
     };
 
-    // Validiert das Bank-Sheet, führt das Konto-Mapping durch und schreibt die Änderungen zurück.
-    // Zur besseren Strukturierung werden Regeln für Header/Endzeile und für normale Zeilen getrennt.
+    // Validiert das Bank-Sheet (Mapping-Logik entfernt)
     const validateBanking = bankSheet => {
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
-
-        // Allgemeine Prüfregel: check-Funktion und Fehlermeldung
-        const validateRow = (row, idx, rules) =>
+        const validateRow = (row, idx, rules) => {
             rules.forEach(({ check, message }) => {
-                check(row) && warnings.push(`Zeile ${idx}: ${message}`);
+                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
             });
-
-        // Regeln für Header und Endzeile
+        };
         const headerFooterRules = [
             { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
             { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
             { check: row => !isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim())), message: "Betrag darf nicht gesetzt sein." },
             { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
-            { check: row => !isEmpty(row[4]), message: "Typ darf nicht gesetzt sein." },
-            { check: row => !isEmpty(row[5]), message: "Kategorie darf nicht gesetzt sein." },
-            { check: row => !isEmpty(row[6]), message: "Konto (Soll) darf nicht gesetzt sein." },
-            { check: row => !isEmpty(row[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein." }
+            { check: row => isEmpty(row[4]), message: "Typ fehlt." },
+            { check: row => isEmpty(row[5]), message: "Kategorie fehlt." },
+            { check: row => isEmpty(row[6]), message: "Konto (Soll) fehlt." },
+            { check: row => isEmpty(row[7]), message: "Gegenkonto (Haben) fehlt." }
         ];
-
-        // Regeln für normale Datenzeilen
         const dataRowRules = [
             { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
             { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
@@ -243,34 +218,18 @@ const Validator = (() => {
             { check: row => isEmpty(row[4]), message: "Typ fehlt." },
             { check: row => isEmpty(row[5]), message: "Kategorie fehlt." }
         ];
-
         data.forEach((row, i) => {
             const idx = i + 1;
             if (i === 1 || i === data.length - 1) {
                 validateRow(row, idx, headerFooterRules);
             } else if (i > 1 && i < data.length - 1) {
                 validateRow(row, idx, dataRowRules);
-
-                // Konto-Mapping: Entpacke Typ und Kategorie
-                const [, , , , type, cat] = row;
-                let mapping = type === "Einnahme"
-                    ? CategoryConfig.einnahmen.kontoMapping[cat]
-                    : type === "Ausgabe"
-                        ? CategoryConfig.ausgaben.kontoMapping[cat]
-                        : null;
-                if (!mapping)
-                    warnings.push(`Zeile ${idx}: Kein Konto-Mapping für Kategorie "${cat || "N/A"}" gefunden – bitte manuell zuordnen!`);
-                mapping = mapping || { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
-                row[6] = mapping.soll;
-                row[7] = mapping.gegen;
             }
         });
-        // Schreibe das modifizierte Array (inklusive Mapping) in einem Aufruf zurück
-        bankSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
         return warnings;
     };
 
-    // Aggregiert Warnungen aus Revenue, Ausgaben und optional Bank, zeigt diese als Alert an und gibt false zurück, wenn Fehler vorhanden sind.
+    // Aggregiert Warnungen aus allen relevanten Sheets und zeigt einen Alert, wenn Fehler vorhanden sind
     const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
         const revData = revenueSheet.getDataRange().getValues().slice(1);
         const expData = expenseSheet.getDataRange().getValues().slice(1);
@@ -278,11 +237,9 @@ const Validator = (() => {
         const expenseWarnings = expData.reduce((acc, row, i) => acc.concat(validateRevenueAndExpenses(row, i + 2)), []);
         const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
         const msgArr = [];
-
         revenueWarnings.length && msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
         expenseWarnings.length && msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
         bankWarnings.length && msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
-
         if (msgArr.length) {
             SpreadsheetApp.getUi().alert(msgArr.join("\n\n"));
             return false;
@@ -290,14 +247,8 @@ const Validator = (() => {
         return true;
     };
 
-    return {
-        validateDropdown,
-        validateRevenueAndExpenses,
-        validateBanking,
-        validateAllSheets
-    };
+    return { validateDropdown, validateRevenueAndExpenses, validateBanking, validateAllSheets };
 })();
-
 
 // =================== Modul: ImportModule ===================
 // Importiert Dateien aus definierten Ordnern in die entsprechenden Sheets
@@ -440,18 +391,16 @@ const RefreshModule = (() => {
         const numDataRows = lastRow - firstDataRow + 1;
         const transRows = lastRow - firstDataRow - 1;
 
-        // Setze Formeln für die Transaktionszeilen (Spalte D)
+        // 1. Setze Formeln für die Transaktionszeilen (Spalte D)
         if (transRows > 0) {
-            sheet
-                .getRange(firstDataRow, 4, transRows, 1)
-                .setFormulas(
-                    Array.from({ length: transRows }, (_, i) => [
-                        `=D${firstDataRow + i - 1}+C${firstDataRow + i}`
-                    ])
-                );
+            sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
+                Array.from({ length: transRows }, (_, i) => [
+                    `=D${firstDataRow + i - 1}+C${firstDataRow + i}`
+                ])
+            );
         }
 
-        // Batchweise setzen des Transaktionstyps basierend auf Betrag (Spalte C → Spalte E)
+        // 2. Batchweise setze den Transaktionstyp basierend auf dem Betrag (Spalte C -> Spalte E)
         const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
         const typeValues = amounts.map(([val]) => {
             const amount = parseFloat(val) || 0;
@@ -459,7 +408,7 @@ const RefreshModule = (() => {
         });
         sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
 
-        // Data Validation für Typ und Kategorie
+        // 3. Setze Data Validations für Typ, Kategorie, Konto (Soll) und Gegenkonto (Haben)
         Validator.validateDropdown(
             sheet,
             firstDataRow,
@@ -476,8 +425,6 @@ const RefreshModule = (() => {
             1,
             CategoryConfig.bank.category
         );
-
-        // Erzeuge erlaubte Listen für das Konto-Mapping
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.soll);
@@ -501,7 +448,7 @@ const RefreshModule = (() => {
             allowedGegenkonto
         );
 
-        // Bedingte Formatierung für Einnahme/Ausgabe (Spalte E)
+        // 4. Setze bedingte Formatierung für Einnahme/Ausgabe (Spalte E)
         const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo("Einnahme")
             .setBackground("#C6EFCE")
@@ -516,7 +463,7 @@ const RefreshModule = (() => {
             .build();
         sheet.setConditionalFormatRules([ruleEinnahme, ruleAusgabe]);
 
-        // Zahlenformate setzen: Spalte A (Datum) und Spalten C, D (Beträge)
+        // 5. Zahlenformate setzen: Spalte A (Datum) und Spalten C, D (Beträge)
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
         ["C", "D"].forEach(col =>
             sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat(
@@ -524,7 +471,34 @@ const RefreshModule = (() => {
             )
         );
 
-        // Aktualisiere die Endsaldo-Zeile oder füge sie hinzu
+        // 6. Konto‑Mapping: Setze Konto (Soll) und Gegenkonto (Haben) basierend auf Typ (Spalte E) und Kategorie (Spalte F)
+        //    Wir nehmen an, dass:
+        //      - Spalte E (Index 4) den Transaktionstyp ("Einnahme" oder "Ausgabe") enthält,
+        //      - Spalte F (Index 5) die Kategorie enthält,
+        //      - Spalte G (Index 6) und H (Index 7) das Konto bzw. Gegenkonto sind.
+        const dataRange = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn());
+        const data = dataRange.getValues();
+        data.forEach((row, i) => {
+            const globalRow = i + firstDataRow;
+            // Überspringe ggf. die Endsaldo-Zeile (falls in Spalte B "endsaldo" steht)
+            const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
+            if (globalRow === lastRow && label === "endsaldo") return;
+            const type = row[4];     // Spalte E
+            const category = row[5]; // Spalte F
+            let mapping;
+            if (type === "Einnahme") {
+                mapping = CategoryConfig.einnahmen.kontoMapping[category];
+            } else if (type === "Ausgabe") {
+                mapping = CategoryConfig.ausgaben.kontoMapping[category];
+            }
+            // Fallback, wenn kein Mapping gefunden wird:
+            if (!mapping) mapping = { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
+            row[6] = mapping.soll;   // Spalte G
+            row[7] = mapping.gegen;  // Spalte H
+        });
+        dataRange.setValues(data);
+
+        // 7. Aktualisiere die Endsaldo-Zeile oder füge sie hinzu
         const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
         const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
         if (lastRowText === "endsaldo") {
@@ -548,6 +522,7 @@ const RefreshModule = (() => {
         }
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
+
 
 
     // Aktualisiert das aktuell aktive Blatt basierend auf dessen Namen
@@ -652,8 +627,6 @@ const GuVCalculator = (() => {
 // =================== Modul: BWACalculator ===================
 // Berechnet die betriebswirtschaftliche Auswertung (BWA)
 const BWACalculator = (() => {
-    // Ermittelt anhand der Kategorie das passende BWA-Mapping;
-    // Bei unbekannten Kategorien wird ein Fallback-Wert verwendet und eine Warnung gesammelt.
     const getBwaCategory = (category, isIncome, rowIndex, fehlendeKategorien, type = "operativ") => {
         const mapping = type === "bank"
             ? CategoryConfig.bank.bwaMapping
@@ -668,22 +641,22 @@ const BWACalculator = (() => {
         return mapping[category];
     };
 
-    // Hauptfunktion zur Berechnung der BWA und Ausgabe ins "BWA"-Sheet
     const calculateBWA = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet(),
-            revenueSheet = ss.getSheetByName("Einnahmen"),
-            expenseSheet = ss.getSheetByName("Ausgaben"),
-            bankSheet = ss.getSheetByName("Bankbewegungen"),
-            bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
-        // Validierung aller beteiligten Datenblätter
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const revenueSheet = ss.getSheetByName("Einnahmen");
+        const expenseSheet = ss.getSheetByName("Ausgaben");
+        const bankSheet = ss.getSheetByName("Bankbewegungen");
+        const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
+
         if (!Validator.validateAllSheets(revenueSheet, expenseSheet, bankSheet)) return;
-        bankSheet.autoResizeColumns(1, sheet.getLastColumn());
+
         const categories = {
             einnahmen: { umsatzerloese: 0, provisionserloese: 0, sonstigeErtraege: 0, privateinlage: 0, darlehen: 0, zinsen: 0 },
             ausgaben: { wareneinsatz: 0, betriebskosten: 0, marketing: 0, reisen: 0, personalkosten: 0, sonstigeAufwendungen: 0, eigenbeleg: 0, privatentnahme: 0, darlehen: 0, zinsen: 0 }
         };
         let totalEinnahmen = 0, totalAusgaben = 0, offeneForderungen = 0, offeneVerbindlichkeiten = 0, totalLiquiditaet = 0;
         const fehlendeKategorien = [];
+
         // Verarbeite Einnahmen-Daten
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         revenueData.forEach((row, index) => {
@@ -711,6 +684,7 @@ const BWACalculator = (() => {
                 totalLiquiditaet = parseFloat(bankData[i][3]) || 0;
             }
         }
+
         // Schreibe die BWA-Ergebnisse ins BWA-Sheet
         bwaSheet.clearContents();
         bwaSheet.appendRow(["Position", "Betrag (€)"]);
@@ -741,6 +715,7 @@ const BWACalculator = (() => {
         bwaSheet.getRange("A1:B1").setFontWeight("bold");
         bwaSheet.getRange(2, 2, bwaSheet.getLastRow() - 1, 1).setNumberFormat("€#,##0.00;€-#,##0.00");
         bwaSheet.autoResizeColumns(1, bwaSheet.getLastColumn());
+
         fehlendeKategorien.length
             ? SpreadsheetApp.getUi().alert("Folgende Kategorien konnten nicht zugeordnet werden:\n" + fehlendeKategorien.join("\n"))
             : SpreadsheetApp.getUi().alert("BWA wurde erfolgreich berechnet und aktualisiert!");
@@ -748,6 +723,7 @@ const BWACalculator = (() => {
 
     return { calculateBWA };
 })();
+
 
 // =================== Globale Funktionen ===================
 // Erzeugt das Menü und setzt Trigger
