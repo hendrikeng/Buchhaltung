@@ -110,42 +110,47 @@ const CategoryConfig = {
 // =================== Modul: Helpers ===================
 // Gemeinsame Hilfsfunktionen
 const Helpers = (() => {
-
     // Konvertiert String oder Datum in ein Date-Objekt
     const parseDate = value => {
-        const d = typeof value === "string" ? new Date(value) : value instanceof Date ? value : null;
-        return d && !isNaN(d.getTime()) ? d : null;
+        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+        if (typeof value === "string") {
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        }
+        return null;
     };
 
-    // Wandelt einen String in einen Float um und entfernt dabei unerwünschte Zeichen
-    const parseCurrency = value =>
-        parseFloat(value.toString().replace(/[^\d,.-]/g, "").replace(",", ".")) || 0;
+    // Wandelt einen String (oder Zahl) in einen Float um und entfernt dabei unerwünschte Zeichen
+    const parseCurrency = value => {
+        if (typeof value === "number") return value;
+        const str = value.toString().replace(/[^\d,.-]/g, "").replace(",", ".");
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : num;
+    };
 
     // Extrahiert einen Mehrwertsteuersatz aus String oder Zahl
     const parseMwstRate = value => {
-        let rate = typeof value === "number" ? (value < 1 ? value * 100 : value)
-            : parseFloat(value.toString().replace("%", "").replace(",", "."));
+        if (typeof value === "number") return value < 1 ? value * 100 : value;
+        const rate = parseFloat(value.toString().replace("%", "").replace(",", "."));
         return isNaN(rate) ? 19 : rate;
     };
 
     // Sucht in einem Ordner nach einem Unterordner mit dem angegebenen Namen
     const getFolderByName = (parent, name) => {
         const folderIter = parent.getFoldersByName(name);
-        return folderIter.hasNext() && folderIter.next();
+        return folderIter.hasNext() ? folderIter.next() : null;
     };
 
-    // Extrahiert das Datum aus einem Dateinamen
-    function extractDateFromFilename(filename) {
+    // Extrahiert das Datum aus einem Dateinamen im Format "RE-YYYY-MM-DD" und gibt es als "TT.MM.JJJJ" zurück
+    const extractDateFromFilename = filename => {
         const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
-        // Extrahiere das Datum im Format "YYYY-MM-DD" nach "RE-"
         const match = nameWithoutExtension.match(/RE-(\d{4}-\d{2}-\d{2})/);
-        if (match && match[1]) {
-            const dateParts = match[1].split("-");
-            return dateParts[2] + "." + dateParts[1] + "." + dateParts[0];
+        if (match?.[1]) {
+            const [year, month, day] = match[1].split("-");
+            return `${day}.${month}.${year}`;
         }
-
         return "";
-    }
+    };
 
     return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename };
 })();
@@ -153,91 +158,119 @@ const Helpers = (() => {
 // =================== Modul: Validator ===================
 // Verantwortlich für die Validierung von Daten und Ausgabe von Warnmeldungen
 const Validator = (() => {
-
     // Prüft, ob ein Wert leer ist
     const isEmpty = v => v == null || v.toString().trim() === "";
+    // Prüft, ob ein Wert keine gültige Zahl ist
+    const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
 
     // Setzt die Dropdown-Validierung auf einen bestimmten Range
     // Parameter: sheet, Startzeile, Startspalte, Anzahl der Zeilen, Anzahl der Spalten, Liste der erlaubten Werte
-    const validateDropdown = (sheet, row, col, numRows, numCols, list) => {
-        sheet.getRange(row, col, numRows, numCols).setDataValidation(
-            SpreadsheetApp.newDataValidation().requireValueInList(list, true).build()
-        );
-    };
+    const validateDropdown = (sheet, row, col, numRows, numCols, list) =>
+        sheet
+            .getRange(row, col, numRows, numCols)
+            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).build());
 
-    // Validiert eine Zeile aus Revenue oder Ausgaben
+    // Validiert eine Zeile aus Revenue oder Ausgaben mithilfe von Destructuring
     const validateRevenueAndExpenses = (row, rowIndex) => {
+        const [
+            invoiceDate,
+            invoiceNumber,
+            category,
+            customer,
+            net,
+            vat,
+            , , , , , // Platzhalter für Spalten, die hier nicht benötigt werden
+            statusRaw,
+            zahlungsartRaw,
+            zahlungsdatumRaw
+        ] = row;
         const warnings = [];
-        isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
-        isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
-        isEmpty(row[2]) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
-        isEmpty(row[3]) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
-        (isEmpty(row[4]) || isNaN(parseFloat(row[4].toString().trim()))) &&
-        warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
-        const mwstStr = row[5] == null ? "" : row[5].toString().trim();
-        (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")))) &&
+
+        isEmpty(invoiceDate) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
+        isEmpty(invoiceNumber) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
+        isEmpty(category) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
+        isEmpty(customer) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
+        isInvalidNumber(net) && warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
+
+        const vatStr = vat == null ? "" : vat.toString().trim();
+        (isEmpty(vatStr) || isNaN(parseFloat(vatStr.replace("%", "").replace(",", ".")))) &&
         warnings.push(`Zeile ${rowIndex}: Mehrwertsteuer fehlt oder ungültig.`);
-        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
-        const zahlungsart = row[12] ? row[12].toString().trim() : "";
-        status === "offen"
-            ? !isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart darf nicht gesetzt sein, wenn "offen".`)
-            : isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
-        const zahlungsdatum = row[13] ? row[13].toString().trim() : "";
-        status === "offen"
-            ? !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`)
-            : isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
+
+        const status = statusRaw ? statusRaw.toString().trim().toLowerCase() : "";
+        const zahlungsart = zahlungsartRaw ? zahlungsartRaw.toString().trim() : "";
+        const zahlungsdatum = zahlungsdatumRaw ? zahlungsdatumRaw.toString().trim() : "";
+
+        if (status === "offen") {
+            !isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart darf nicht gesetzt sein, wenn "offen".`);
+            !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`);
+        } else {
+            isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
+            isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
+        }
         return warnings;
     };
 
-    // Validiert das Bank-Sheet, führt das Konto-Mapping durch und schreibt die Änderungen zurück
+    // Validiert das Bank-Sheet, führt das Konto-Mapping durch und schreibt die Änderungen zurück.
+    // Zur besseren Strukturierung werden Regeln für Header/Endzeile und für normale Zeilen getrennt.
     const validateBanking = bankSheet => {
         const data = bankSheet.getDataRange().getValues();
-        const warnings = data.reduce((acc, row, i) => {
+        const warnings = [];
+
+        // Allgemeine Prüfregel: check-Funktion und Fehlermeldung
+        const validateRow = (row, idx, rules) =>
+            rules.forEach(({ check, message }) => {
+                check(row) && warnings.push(`Zeile ${idx}: ${message}`);
+            });
+
+        // Regeln für Header und Endzeile
+        const headerFooterRules = [
+            { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
+            { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
+            { check: row => !isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim())), message: "Betrag darf nicht gesetzt sein." },
+            { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
+            { check: row => !isEmpty(row[4]), message: "Typ darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[5]), message: "Kategorie darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[6]), message: "Konto (Soll) darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein." }
+        ];
+
+        // Regeln für normale Datenzeilen
+        const dataRowRules = [
+            { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
+            { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
+            { check: row => isEmpty(row[2]) || isInvalidNumber(row[2]), message: "Betrag fehlt oder ungültig." },
+            { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
+            { check: row => isEmpty(row[4]), message: "Typ fehlt." },
+            { check: row => isEmpty(row[5]), message: "Kategorie fehlt." }
+        ];
+
+        data.forEach((row, i) => {
             const idx = i + 1;
-            // Für Header und Endzeile
             if (i === 1 || i === data.length - 1) {
-                isEmpty(row[0]) && acc.push(`Zeile ${idx}: Buchungsdatum fehlt.`);
-                isEmpty(row[1]) && acc.push(`Zeile ${idx}: Buchungstext fehlt.`);
-                (!isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim()))) &&
-                acc.push(`Zeile ${idx}: Betrag darf nicht gesetzt sein.`);
-                (isEmpty(row[3]) || isNaN(parseFloat(row[3].toString().trim()))) &&
-                acc.push(`Zeile ${idx}: Saldo fehlt oder ungültig.`);
-                !isEmpty(row[4]) && acc.push(`Zeile ${idx}: Typ darf nicht gesetzt sein.`);
-                !isEmpty(row[5]) && acc.push(`Zeile ${idx}: Kategorie darf nicht gesetzt sein.`);
-                !isEmpty(row[6]) && acc.push(`Zeile ${idx}: Konto (Soll) darf nicht gesetzt sein.`);
-                !isEmpty(row[7]) && acc.push(`Zeile ${idx}: Gegenkonto (Haben) darf nicht gesetzt sein.`);
-                // für alle Zeilen außer der ersten und letzten
+                validateRow(row, idx, headerFooterRules);
             } else if (i > 1 && i < data.length - 1) {
-                isEmpty(row[0]) && acc.push(`Zeile ${idx}: Buchungsdatum fehlt.`);
-                isEmpty(row[1]) && acc.push(`Zeile ${idx}: Buchungstext fehlt.`);
-                (isEmpty(row[2]) || isNaN(parseFloat(row[2].toString().trim()))) &&
-                acc.push(`Zeile ${idx}: Betrag fehlt oder ungültig.`);
-                (isEmpty(row[3]) || isNaN(parseFloat(row[3].toString().trim()))) &&
-                acc.push(`Zeile ${idx}: Saldo fehlt oder ungültig.`);
-                isEmpty(row[4]) && acc.push(`Zeile ${idx}: Typ fehlt.`);
-                isEmpty(row[5]) && acc.push(`Zeile ${idx}: Kategorie fehlt.`);
-            }
-            // Führe das Konto-Mapping für alle Zeilen außer der ersten und letzten durch
-            if (i > 1 && i < data.length - 1) {
-                const [ , , , , type, cat ] = row;
+                validateRow(row, idx, dataRowRules);
+
+                // Konto-Mapping: Entpacke Typ und Kategorie
+                const [, , , , type, cat] = row;
                 let mapping = type === "Einnahme"
                     ? CategoryConfig.einnahmen.kontoMapping[cat]
                     : type === "Ausgabe"
                         ? CategoryConfig.ausgaben.kontoMapping[cat]
                         : null;
-                !mapping && acc.push(`Zeile ${idx}: Kein Konto-Mapping für Kategorie "${cat || "N/A"}" gefunden – bitte manuell zuordnen!`);
+                if (!mapping)
+                    warnings.push(`Zeile ${idx}: Kein Konto-Mapping für Kategorie "${cat || "N/A"}" gefunden – bitte manuell zuordnen!`);
                 mapping = mapping || { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
                 row[6] = mapping.soll;
                 row[7] = mapping.gegen;
             }
-            return acc;
-        }, []);
-        // Schreibe das modifizierte Array (mit Mapping) einmalig zurück ins Sheet
+        });
+        // Schreibe das modifizierte Array (inklusive Mapping) in einem Aufruf zurück
         bankSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
         return warnings;
     };
 
-    // Aggregiert Warnungen aus Revenue, Ausgaben und optional Bank und gibt einen Alert aus, falls nötig
+    // Aggregiert Warnungen aus Revenue, Ausgaben und optional Bank, zeigt diese als Alert an und gibt false zurück, wenn Fehler vorhanden sind.
     const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
         const revData = revenueSheet.getDataRange().getValues().slice(1);
         const expData = expenseSheet.getDataRange().getValues().slice(1);
@@ -245,9 +278,11 @@ const Validator = (() => {
         const expenseWarnings = expData.reduce((acc, row, i) => acc.concat(validateRevenueAndExpenses(row, i + 2)), []);
         const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
         const msgArr = [];
+
         revenueWarnings.length && msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
         expenseWarnings.length && msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
         bankWarnings.length && msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+
         if (msgArr.length) {
             SpreadsheetApp.getUi().alert(msgArr.join("\n\n"));
             return false;
@@ -255,8 +290,14 @@ const Validator = (() => {
         return true;
     };
 
-    return { validateDropdown, validateRevenueAndExpenses, validateBanking, validateAllSheets };
+    return {
+        validateDropdown,
+        validateRevenueAndExpenses,
+        validateBanking,
+        validateAllSheets
+    };
 })();
+
 
 // =================== Modul: ImportModule ===================
 // Importiert Dateien aus definierten Ordnern in die entsprechenden Sheets
@@ -268,32 +309,35 @@ const ImportModule = (() => {
             new Set(sheet.getDataRange().getValues().slice(1).map(row => row[colIndex]));
         const existingMain = getExistingFiles(mainSheet, 16);
         const existingImport = getExistingFiles(importSheet, 0);
-        const newMainRows = [], newImportRows = [], newHistoryRows = [];
+        const newMainRows = [];
+        const newImportRows = [];
+        const newHistoryRows = [];
         const timestamp = new Date();
 
         while (files.hasNext()) {
             const file = files.next();
-            const invoiceName = file.getName().replace(/\.[^/.]+$/, "").replace(/^[^ ]* /, "");
-            const fileName = file.getName().replace(/\.[^/.]+$/, "");
+            const baseName = file.getName().replace(/\.[^/.]+$/, "");
+            const invoiceName = baseName.replace(/^[^ ]* /, "");
+            const fileName = baseName;
             const invoiceDate = Helpers.extractDateFromFilename(fileName);
             const fileUrl = file.getUrl();
             let wasImported = false;
 
             if (!existingMain.has(fileName)) {
                 newMainRows.push([
-                    invoiceDate,            // Spalte 1: Rechnungsdatum
-                    invoiceName,            // Spalte 2: Rechnungsname
-                    "", "", "", "",         // Spalte 3-6: Platzhalter B. Kategorie, Kunde, Nettobetrag, MwSt)
-                    "",                     // Spalte 7: MWSt (wird später per Refresh gesetzt)
-                    "",                     // Spalte 8: Brutto (wird später per Refresh gesetzt)
-                    "",                     // Spalte 9: (leer, sofern benötigt)
-                    "",                     // Spalte 10: Restbetrag (wird später per Refresh gesetzt)
-                    "",                     // Spalte 11: Quartal (wird später per Refresh gesetzt)
-                    "",                     // Spalte 12: Zahlungsstatus (wird später per Refresh gesetzt)
-                    "", "", "",             // Spalte 13-15: weitere Platzhalter
-                    timestamp,              // Spalte 16: Timestamp
-                    fileName,               // Spalte 17: Dateiname
-                    fileUrl                 // Spalte 18: URL
+                    invoiceDate,   // Spalte 1: Rechnungsdatum
+                    invoiceName,   // Spalte 2: Rechnungsname
+                    "", "", "", "", // Spalte 3-6: Platzhalter (Kategorie, Kunde, Nettobetrag, MwSt)
+                    "",            // Spalte 7: MWSt (wird später per Refresh gesetzt)
+                    "",            // Spalte 8: Brutto (wird später per Refresh gesetzt)
+                    "",            // Spalte 9: (leer, sofern benötigt)
+                    "",            // Spalte 10: Restbetrag (wird später per Refresh gesetzt)
+                    "",            // Spalte 11: Quartal (wird später per Refresh gesetzt)
+                    "",            // Spalte 12: Zahlungsstatus (wird später per Refresh gesetzt)
+                    "", "", "",    // Spalte 13-15: weitere Platzhalter
+                    timestamp,     // Spalte 16: Timestamp
+                    fileName,      // Spalte 17: Dateiname
+                    fileUrl        // Spalte 18: URL
                 ]);
                 existingMain.add(fileName);
                 wasImported = true;
@@ -302,44 +346,49 @@ const ImportModule = (() => {
                 newImportRows.push([fileName, fileUrl, fileName]);
                 existingImport.add(fileName);
                 wasImported = true;
-                // TODO: OCR hier
             }
             wasImported && newHistoryRows.push([timestamp, type, fileName, fileUrl]);
         }
-        newImportRows.length && importSheet.getRange(importSheet.getLastRow() + 1, 1, newImportRows.length, newImportRows[0].length).setValues(newImportRows);
-        newMainRows.length && mainSheet.getRange(mainSheet.getLastRow() + 1, 1, newMainRows.length, newMainRows[0].length).setValues(newMainRows);
-        newHistoryRows.length && historySheet.getRange(historySheet.getLastRow() + 1, 1, newHistoryRows.length, newHistoryRows[0].length).setValues(newHistoryRows);
+        newImportRows.length &&
+        importSheet.getRange(importSheet.getLastRow() + 1, 1, newImportRows.length, newImportRows[0].length)
+            .setValues(newImportRows);
+        newMainRows.length &&
+        mainSheet.getRange(mainSheet.getLastRow() + 1, 1, newMainRows.length, newMainRows[0].length)
+            .setValues(newMainRows);
+        newHistoryRows.length &&
+        historySheet.getRange(historySheet.getLastRow() + 1, 1, newHistoryRows.length, newHistoryRows[0].length)
+            .setValues(newHistoryRows);
     };
 
     const importDriveFiles = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sheets = {
-            revenueMain: ss.getSheetByName("Einnahmen"),
-            expenseMain: ss.getSheetByName("Ausgaben"),
-            revenue: ss.getSheetByName("Rechnungen Einnahmen") || ss.insertSheet("Rechnungen Einnahmen"),
-            expense: ss.getSheetByName("Rechnungen Ausgaben") || ss.insertSheet("Rechnungen Ausgaben"),
-            history: ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie")
-        };
+        const revenueMain = ss.getSheetByName("Einnahmen");
+        const expenseMain = ss.getSheetByName("Ausgaben");
+        const revenue = ss.getSheetByName("Rechnungen Einnahmen") || ss.insertSheet("Rechnungen Einnahmen");
+        const expense = ss.getSheetByName("Rechnungen Ausgaben") || ss.insertSheet("Rechnungen Ausgaben");
+        const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
+
         // Initialisiere Header, falls die Sheets leer sind
-        if (sheets.history.getLastRow() === 0)
-            sheets.history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
-        if (sheets.revenue.getLastRow() === 0)
-            sheets.revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-        if (sheets.expense.getLastRow() === 0)
-            sheets.expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+        revenue.getLastRow() === 0 && revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+        expense.getLastRow() === 0 && expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+        history.getLastRow() === 0 && history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+
         const file = DriveApp.getFileById(ss.getId());
-        const parentFolder = file.getParents()?.hasNext() && file.getParents().next();
+        const parents = file.getParents();
+        const parentFolder = parents.hasNext() ? parents.next() : null;
         if (!parentFolder) {
             SpreadsheetApp.getUi().alert("Kein übergeordneter Ordner gefunden.");
             return;
         }
+
         const revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
         const expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
+
         revenueFolder
-            ? importFilesFromFolder(revenueFolder, sheets.revenue, sheets.revenueMain, "Einnahme", sheets.history)
+            ? importFilesFromFolder(revenueFolder, revenue, revenueMain, "Einnahme", history)
             : SpreadsheetApp.getUi().alert("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
         expenseFolder
-            ? importFilesFromFolder(expenseFolder, sheets.expense, sheets.expenseMain, "Ausgabe", sheets.history)
+            ? importFilesFromFolder(expenseFolder, expense, expenseMain, "Ausgabe", history)
             : SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
     };
 
