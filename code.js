@@ -170,26 +170,52 @@ const Validator = (() => {
     // Validiert eine Zeile aus Revenue oder Ausgaben (unverändert)
     const validateRevenueAndExpenses = (row, rowIndex) => {
         const warnings = [];
-        isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
-        isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
-        isEmpty(row[2]) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
-        isEmpty(row[3]) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
-        isInvalidNumber(row[4]) && warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
-        const mwstStr = row[5] == null ? "" : row[5].toString().trim();
-        (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")))) &&
-        warnings.push(`Zeile ${rowIndex}: Mehrwertsteuer fehlt oder ungültig.`);
+
+        // Hilfsfunktion, die eine Reihe von Regeln auf eine Zeile anwendet
+        const validateRow = (row, idx, rules) => {
+            rules.forEach(({ check, message }) => {
+                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+            });
+        };
+
+        // Basisregeln für alle Zeilen (angenommene Spaltenreihenfolge)
+        const baseRules = [
+            { check: row => isEmpty(row[0]), message: "Rechnungsdatum fehlt." },
+            { check: row => isEmpty(row[1]), message: "Rechnungsnummer fehlt." },
+            { check: row => isEmpty(row[2]), message: "Kategorie fehlt." },
+            { check: row => isEmpty(row[3]), message: "Kunde fehlt." },
+            { check: row => isInvalidNumber(row[4]), message: "Nettobetrag fehlt oder ungültig." },
+            {
+                check: r => {
+                    const mwstStr = row[5] == null ? "" : row[5].toString().trim();
+                    return isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")));
+                },
+                message: "Mehrwertsteuer fehlt oder ungültig."
+            }
+        ];
+
+        // Statusabhängige Regeln für Zahlungsangaben:
+        // Wenn der Status "offen" ist, dürfen Zahlungsart und Zahlungsdatum nicht gesetzt sein.
+        // Andernfalls müssen beide Felder gesetzt sein.
         const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
-        const zahlungsart = row[12] ? row[12].toString().trim() : "";
-        const zahlungsdatum = row[13] ? row[13].toString().trim() : "";
-        if (status === "offen") {
-            !isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart darf nicht gesetzt sein, wenn "offen".`);
-            !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`);
-        } else {
-            isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
-            isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
-        }
+        const paymentRules = status === "offen"
+            ? [
+                { check: row => !isEmpty(row[12]), message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.' },
+                { check: row => !isEmpty(row[13]), message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.' }
+            ]
+            : [
+                { check: row => isEmpty(row[12]), message: 'Zahlungsart muss bei bezahlter oder teilbezahlter Zahlung gesetzt sein.' },
+                { check: row => isEmpty(row[13]), message: 'Zahlungsdatum muss bei bezahlter oder teilbezahlter Zahlung gesetzt sein.' }
+            ];
+
+        // Alle Regeln zusammenführen
+        const rules = baseRules.concat(paymentRules);
+
+        // Regeln abarbeiten
+        validateRow(row, rowIndex, rules);
         return warnings;
     };
+
 
     // Validiert das Bank-Sheet (Mapping-Logik entfernt)
     const validateBanking = bankSheet => {
@@ -205,10 +231,10 @@ const Validator = (() => {
             { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
             { check: row => !isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim())), message: "Betrag darf nicht gesetzt sein." },
             { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
-            { check: row => isEmpty(row[4]), message: "Typ fehlt." },
-            { check: row => isEmpty(row[5]), message: "Kategorie fehlt." },
-            { check: row => isEmpty(row[6]), message: "Konto (Soll) fehlt." },
-            { check: row => isEmpty(row[7]), message: "Gegenkonto (Haben) fehlt." }
+            { check: row => !isEmpty(row[4]), message: "Typ darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[5]), message: "Kategorie darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[6]), message: "Konto (Soll) darf nicht gesetzt sein." },
+            { check: row => !isEmpty(row[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein." }
         ];
         const dataRowRules = [
             { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
@@ -216,7 +242,9 @@ const Validator = (() => {
             { check: row => isEmpty(row[2]) || isInvalidNumber(row[2]), message: "Betrag fehlt oder ungültig." },
             { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
             { check: row => isEmpty(row[4]), message: "Typ fehlt." },
-            { check: row => isEmpty(row[5]), message: "Kategorie fehlt." }
+            { check: row => isEmpty(row[5]), message: "Kategorie fehlt." },
+            { check: row => isEmpty(row[6]), message: "Konto (Soll) fehlt." },
+            { check: row => isEmpty(row[7]), message: "Gegenkonto (Haben) fehlt." }
         ];
         data.forEach((row, i) => {
             const idx = i + 1;
