@@ -2,7 +2,7 @@
 // Konfiguration der erlaubten Kategorien, Konto- und BWA-Mappings
 const CategoryConfig = {
     einnahmen: {
-        allowed: [
+        category: [
             "Umsatzerlöse",
             "Provisionserlöse",
             "Sonstige betriebliche Erträge",
@@ -28,7 +28,7 @@ const CategoryConfig = {
         }
     },
     ausgaben: {
-        allowed: [
+        category: [
             "Wareneinsatz",
             "Betriebskosten",
             "Marketing & Werbung",
@@ -66,7 +66,7 @@ const CategoryConfig = {
         }
     },
     bank: {
-        allowed: [
+        category: [
             "Umsatzerlöse",
             "Provisionserlöse",
             "Sonstige betriebliche Erträge",
@@ -84,26 +84,25 @@ const CategoryConfig = {
             "Gewinnübertrag",
             "Kapitalrückführung"
         ],
-        typeAllowed: ["Einnahme", "Ausgabe"],
+        type: ["Einnahme", "Ausgabe"],
         bwaMapping: {
             "Gewinnübertrag": "gewinnuebertrag",
             "Kapitalrückführung": "kapitalrueckfuehrung"
         }
     },
     gesellschafterkonto: {
-        gesellschafter: ["Christopher Giebel", "Hendrik Werner"],
-        art: ["Privateinlage", "Privatentnahme", "Darlehen"],
+        category: ["Privateinlage", "Privatentnahme", "Darlehen"],
+        shareholder: ["Christopher Giebel", "Hendrik Werner"],
     },
     eigenbelege: {
-        grund: ["Kleidung", "Trinkgeld", "Private Vorauslage", "Bürokosten", "Reisekosten", "Bewirtung", "Sonstiges"],
+        category: ["Kleidung", "Trinkgeld", "Private Vorauslage", "Bürokosten", "Reisekosten", "Bewirtung", "Sonstiges"],
         status: ["Offen", "Erstattet", "Gebucht"]
     },
     holdingTransfers: {
-        art: ["Gewinnübertrag", "Kapitalrückführung"],
+        category: ["Gewinnübertrag", "Kapitalrückführung"],
     },
     common: {
-        mwSt: ["0%", "7%", "19%"],
-        zahlungsart: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
+        paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
     },
 
 };
@@ -339,7 +338,7 @@ const ImportModule = (() => {
 // =================== Modul: RefreshModule ===================
 // Aktualisiert Datenblätter (Formeln, Formate, Validierungen) und das Bank-Sheet separat
 const RefreshModule = (() => {
-    // Aktualisiert Einnahmen/Ausgaben-Blätter
+    // Aktualisiert Einnahmen/Ausgaben/Eigenbelege-Blätter
     const refreshDataSheet = sheet => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
@@ -368,14 +367,10 @@ const RefreshModule = (() => {
         }
         // Setze Data Validation für Dropdowns
         const name = sheet.getName();
-        if (name === "Einnahmen") {
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.allowed);
-            Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.zahlungsart);
-        }
-        else if (name === "Ausgaben") {
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.allowed);
-            Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.zahlungsart);
-        }
+        if (name === "Einnahmen") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.category);
+        if (name === "Ausgaben") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
+        if (name === "Eigenbelege") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
+        Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
@@ -396,8 +391,8 @@ const RefreshModule = (() => {
             amount > 0 ? typeCell.setValue("Einnahme") : amount < 0 ? typeCell.setValue("Ausgabe") : typeCell.clearContent();
         }
         // Data Validation für Typ und Kategorie
-        Validator.validateDropdown(sheet, firstDataRow, 5, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.typeAllowed);
-        Validator.validateDropdown(sheet, firstDataRow, 6, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.allowed);
+        Validator.validateDropdown(sheet, firstDataRow, 5, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.type);
+        Validator.validateDropdown(sheet, firstDataRow, 6, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.category);
         // Erzeuge erlaubte Listen für Konto-Mapping
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
@@ -439,7 +434,7 @@ const RefreshModule = (() => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheet = ss.getActiveSheet();
         const name = sheet.getName();
-        if (["Einnahmen", "Ausgaben"].includes(name)) {
+        if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
             refreshDataSheet(sheet);
             SpreadsheetApp.getUi().alert(`Das Blatt "${name}" wurde aktualisiert.`);
         } else if (name === "Bankbewegungen") {
@@ -453,7 +448,7 @@ const RefreshModule = (() => {
     // Aktualisiert alle relevanten Blätter
     const refreshAllSheets = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
-        ["Einnahmen", "Ausgaben", "Bankbewegungen"].forEach(name => {
+        ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"].forEach(name => {
             const sheet = ss.getSheetByName(name);
             if (sheet) name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
         });
