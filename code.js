@@ -80,26 +80,32 @@ const CategoryConfig = {
             "Darlehen",
             "Eigenbeleg",
             "Privatentnahme",
-            "Zinsen"
+            "Zinsen",
+            "Gewinnübertrag",
+            "Kapitalrückführung"
         ],
         typeAllowed: ["Einnahme", "Ausgabe"],
         bwaMapping: {
-            "Umsatzerlöse": "umsatzerloese",
-            "Provisionserlöse": "provisionserloese",
-            "Sonstige betriebliche Erträge": "sonstigeErtraege",
-            "Wareneinsatz": "wareneinsatz",
-            "Betriebskosten": "betriebskosten",
-            "Marketing & Werbung": "marketing",
-            "Reisekosten": "reisen",
-            "Personalkosten": "personalkosten",
-            "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
-            "Privateinlage": "privateinlage",
-            "Darlehen": "darlehen",
-            "Eigenbeleg": "eigenbeleg",
-            "Privatentnahme": "privatentnahme",
-            "Zinsen": "zinsen"
+            "Gewinnübertrag": "gewinnuebertrag",
+            "Kapitalrückführung": "kapitalrueckfuehrung"
         }
-    }
+    },
+    gesellschafterkonto: {
+        gesellschafter: ["Christopher Giebel", "Hendrik Werner"],
+        art: ["Privateinlage", "Privatentnahme", "Darlehen"],
+    },
+    eigenbelege: {
+        grund: ["Kleidung", "Trinkgeld", "Private Vorauslage", "Bürokosten", "Reisekosten", "Bewirtung", "Sonstiges"],
+        status: ["Offen", "Erstattet", "Gebucht"]
+    },
+    holdingTransfers: {
+        art: ["Gewinnübertrag", "Kapitalrückführung"],
+    },
+    common: {
+        mwSt: ["0%", "7%", "19%"],
+        zahlungsart: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
+    },
+
 };
 
 // =================== Modul: Helpers ===================
@@ -129,7 +135,20 @@ const Helpers = (() => {
         return folderIter.hasNext() && folderIter.next();
     };
 
-    return { parseDate, parseCurrency, parseMwstRate, getFolderByName };
+    // Extrahiert das Datum aus einem Dateinamen
+    function extractDateFromFilename(filename) {
+        const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+        // Extrahiere das Datum im Format "YYYY-MM-DD" nach "RE-"
+        const match = nameWithoutExtension.match(/RE-(\d{4}-\d{2}-\d{2})/);
+        if (match && match[1]) {
+            const dateParts = match[1].split("-");
+            return dateParts[2] + "." + dateParts[1] + "." + dateParts[0];
+        }
+
+        return "";
+    }
+
+    return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename };
 })();
 
 // =================== Modul: Validator ===================
@@ -150,20 +169,24 @@ const Validator = (() => {
     // Validiert eine Zeile aus Revenue oder Ausgaben
     const validateRevenueAndExpenses = (row, rowIndex) => {
         const warnings = [];
-        isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsdatum fehlt.`);
-        isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex} (E/A): Rechnungsnummer fehlt.`);
-        isEmpty(row[2]) && warnings.push(`Zeile ${rowIndex} (E/A): Kategorie fehlt.`);
-        isEmpty(row[3]) && warnings.push(`Zeile ${rowIndex} (E/A): Kunde fehlt.`);
+        isEmpty(row[0]) && warnings.push(`Zeile ${rowIndex}: Rechnungsdatum fehlt.`);
+        isEmpty(row[1]) && warnings.push(`Zeile ${rowIndex}: Rechnungsnummer fehlt.`);
+        isEmpty(row[2]) && warnings.push(`Zeile ${rowIndex}: Kategorie fehlt.`);
+        isEmpty(row[3]) && warnings.push(`Zeile ${rowIndex}: Kunde fehlt.`);
         (isEmpty(row[4]) || isNaN(parseFloat(row[4].toString().trim()))) &&
-        warnings.push(`Zeile ${rowIndex} (E/A): Nettobetrag fehlt oder ungültig.`);
+        warnings.push(`Zeile ${rowIndex}: Nettobetrag fehlt oder ungültig.`);
         const mwstStr = row[5] == null ? "" : row[5].toString().trim();
         (isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")))) &&
-        warnings.push(`Zeile ${rowIndex} (E/A): Mehrwertsteuer fehlt oder ungültig.`);
+        warnings.push(`Zeile ${rowIndex}: Mehrwertsteuer fehlt oder ungültig.`);
         const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
-        const zahlungsdatum = row[12] ? row[12].toString().trim() : "";
+        const zahlungsart = row[12] ? row[12].toString().trim() : "";
         status === "offen"
-            ? !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`)
-            : isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex} (E/A): Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
+            ? !isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart darf nicht gesetzt sein, wenn "offen".`)
+            : isEmpty(zahlungsart) && warnings.push(`Zeile ${rowIndex}: Zahlungsart muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
+        const zahlungsdatum = row[13] ? row[13].toString().trim() : "";
+        status === "offen"
+            ? !isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum darf nicht gesetzt sein, wenn "offen".`)
+            : isEmpty(zahlungsdatum) && warnings.push(`Zeile ${rowIndex}: Zahlungsdatum muss gesetzt sein, wenn bezahlt/teilbezahlt.`);
         return warnings;
     };
 
@@ -174,26 +197,26 @@ const Validator = (() => {
             const idx = i + 1;
             // Für Header und Endzeile
             if (i === 1 || i === data.length - 1) {
-                isEmpty(row[0]) && acc.push(`Zeile ${idx} (Bank): Buchungsdatum fehlt.`);
-                isEmpty(row[1]) && acc.push(`Zeile ${idx} (Bank): Buchungstext fehlt.`);
+                isEmpty(row[0]) && acc.push(`Zeile ${idx}: Buchungsdatum fehlt.`);
+                isEmpty(row[1]) && acc.push(`Zeile ${idx}: Buchungstext fehlt.`);
                 (!isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim()))) &&
-                acc.push(`Zeile ${idx} (Bank): Betrag darf nicht gesetzt sein.`);
+                acc.push(`Zeile ${idx}: Betrag darf nicht gesetzt sein.`);
                 (isEmpty(row[3]) || isNaN(parseFloat(row[3].toString().trim()))) &&
-                acc.push(`Zeile ${idx} (Bank): Saldo fehlt oder ungültig.`);
-                !isEmpty(row[4]) && acc.push(`Zeile ${idx} (Bank): Typ darf nicht gesetzt sein.`);
-                !isEmpty(row[5]) && acc.push(`Zeile ${idx} (Bank): Kategorie darf nicht gesetzt sein.`);
-                !isEmpty(row[6]) && acc.push(`Zeile ${idx} (Bank): Konto (Soll) darf nicht gesetzt sein.`);
-                !isEmpty(row[7]) && acc.push(`Zeile ${idx} (Bank): Gegenkonto (Haben) darf nicht gesetzt sein.`);
+                acc.push(`Zeile ${idx}: Saldo fehlt oder ungültig.`);
+                !isEmpty(row[4]) && acc.push(`Zeile ${idx}: Typ darf nicht gesetzt sein.`);
+                !isEmpty(row[5]) && acc.push(`Zeile ${idx}: Kategorie darf nicht gesetzt sein.`);
+                !isEmpty(row[6]) && acc.push(`Zeile ${idx}: Konto (Soll) darf nicht gesetzt sein.`);
+                !isEmpty(row[7]) && acc.push(`Zeile ${idx}: Gegenkonto (Haben) darf nicht gesetzt sein.`);
                 // für alle Zeilen außer der ersten und letzten
             } else if (i > 1 && i < data.length - 1) {
-                isEmpty(row[0]) && acc.push(`Zeile ${idx} (Bank): Buchungsdatum fehlt.`);
-                isEmpty(row[1]) && acc.push(`Zeile ${idx} (Bank): Buchungstext fehlt.`);
+                isEmpty(row[0]) && acc.push(`Zeile ${idx}: Buchungsdatum fehlt.`);
+                isEmpty(row[1]) && acc.push(`Zeile ${idx}: Buchungstext fehlt.`);
                 (isEmpty(row[2]) || isNaN(parseFloat(row[2].toString().trim()))) &&
-                acc.push(`Zeile ${idx} (Bank): Betrag fehlt oder ungültig.`);
+                acc.push(`Zeile ${idx}: Betrag fehlt oder ungültig.`);
                 (isEmpty(row[3]) || isNaN(parseFloat(row[3].toString().trim()))) &&
-                acc.push(`Zeile ${idx} (Bank): Saldo fehlt oder ungültig.`);
-                isEmpty(row[4]) && acc.push(`Zeile ${idx} (Bank): Typ fehlt.`);
-                isEmpty(row[5]) && acc.push(`Zeile ${idx} (Bank): Kategorie fehlt.`);
+                acc.push(`Zeile ${idx}: Saldo fehlt oder ungültig.`);
+                isEmpty(row[4]) && acc.push(`Zeile ${idx}: Typ fehlt.`);
+                isEmpty(row[5]) && acc.push(`Zeile ${idx}: Kategorie fehlt.`);
             }
             // Führe das Konto-Mapping für alle Zeilen außer der ersten und letzten durch
             if (i > 1 && i < data.length - 1) {
@@ -203,7 +226,7 @@ const Validator = (() => {
                     : type === "Ausgabe"
                         ? CategoryConfig.ausgaben.kontoMapping[cat]
                         : null;
-                !mapping && acc.push(`Zeile ${idx} (Bank): Kein Konto-Mapping für Kategorie "${cat || "N/A"}" gefunden – bitte manuell zuordnen!`);
+                !mapping && acc.push(`Zeile ${idx}: Kein Konto-Mapping für Kategorie "${cat || "N/A"}" gefunden – bitte manuell zuordnen!`);
                 mapping = mapping || { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
                 row[6] = mapping.soll;
                 row[7] = mapping.gegen;
@@ -247,21 +270,24 @@ const ImportModule = (() => {
         const existingMain = getExistingFiles(mainSheet, 1);
         const existingImport = getExistingFiles(importSheet, 0);
         const newMainRows = [], newImportRows = [], newHistoryRows = [];
-        const timestamp = new Date();
+        const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy HH:mm:ss");
         while (files.hasNext()) {
             const file = files.next();
+
+            const invoiceName = file.getName().replace(/\.[^/.]+$/, "").replace(/^[^ ]* /, "");
             const fileName = file.getName().replace(/\.[^/.]+$/, "");
+            const invoiceDate = Helpers.extractDateFromFilename(fileName);
             const fileUrl = file.getUrl();
             let wasImported = false;
             if (!existingMain.has(fileName)) {
                 const rowIndex = mainSheet.getLastRow() + newMainRows.length + 1;
                 newMainRows.push([
-                    timestamp, fileName, "", "", "", "",
+                    invoiceDate, invoiceName, "", "", "", "",
                     `=E${rowIndex}*F${rowIndex}`, `=E${rowIndex}+G${rowIndex}`,
                     "", `=E${rowIndex}-(I${rowIndex}-G${rowIndex})`,
                     `=IF(A${rowIndex}=""; ""; ROUNDUP(MONTH(A${rowIndex})/3;0))`,
                     `=IF(OR(I${rowIndex}=""; I${rowIndex}=0); "Offen"; IF(I${rowIndex}>=H${rowIndex}; "Bezahlt"; "Teilbezahlt"))`,
-                    "", fileName, fileUrl, timestamp
+                    "", "", "", timestamp, fileUrl, fileName
                 ]);
                 existingMain.add(fileName); wasImported = true;
             }
