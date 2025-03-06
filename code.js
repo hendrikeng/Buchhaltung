@@ -267,13 +267,12 @@ const ImportModule = (() => {
         // Bestimme bereits importierte Dateien
         const getExistingFiles = (sheet, colIndex) =>
             new Set(sheet.getDataRange().getValues().slice(1).map(row => row[colIndex]));
-        const existingMain = getExistingFiles(mainSheet, 1);
+        const existingMain = getExistingFiles(mainSheet, 16);
         const existingImport = getExistingFiles(importSheet, 0);
         const newMainRows = [], newImportRows = [], newHistoryRows = [];
-        const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy HH:mm:ss");
+        const timestamp = new Date();
         while (files.hasNext()) {
             const file = files.next();
-
             const invoiceName = file.getName().replace(/\.[^/.]+$/, "").replace(/^[^ ]* /, "");
             const fileName = file.getName().replace(/\.[^/.]+$/, "");
             const invoiceDate = Helpers.extractDateFromFilename(fileName);
@@ -287,7 +286,7 @@ const ImportModule = (() => {
                     "", `=E${rowIndex}-(I${rowIndex}-G${rowIndex})`,
                     `=IF(A${rowIndex}=""; ""; ROUNDUP(MONTH(A${rowIndex})/3;0))`,
                     `=IF(OR(I${rowIndex}=""; I${rowIndex}=0); "Offen"; IF(I${rowIndex}>=H${rowIndex}; "Bezahlt"; "Teilbezahlt"))`,
-                    "", "", "", timestamp, fileUrl, fileName
+                    "", "", "", timestamp, fileName, fileUrl
                 ]);
                 existingMain.add(fileName); wasImported = true;
             }
@@ -362,22 +361,21 @@ const RefreshModule = (() => {
         sheet.getRange(2, 10, numRows, 1).setFormulas(formulas.map(f => [f.rest]));
         sheet.getRange(2, 11, numRows, 1).setFormulas(formulas.map(f => [f.quartal]));
         sheet.getRange(2, 12, numRows, 1).setFormulas(formulas.map(f => [f.status]));
-        // Setze Datums- und Währungsformate
-        const dateCols = ["A", "M", "P"], currencyCols = ["E", "G", "H", "I", "J"];
-        dateCols.forEach(col => sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("DD.MM.YYYY"));
-        currencyCols.forEach(col => sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00"));
-        sheet.getRange(`F2:F${lastRow}`).setNumberFormat("0.00%");
         // Setze 0 in Spalte 9, falls leer
         for (let r = 2; r <= lastRow; r++) {
             const cell = sheet.getRange(r, 9);
             if (cell.getValue() === "" || cell.getValue() === null) cell.setValue(0);
         }
-        // Setze Data Validation für Kategorien
+        // Setze Data Validation für Dropdowns
         const name = sheet.getName();
-        if (name === "Einnahmen")
+        if (name === "Einnahmen") {
             Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.allowed);
-        else if (name === "Ausgaben")
+            Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.zahlungsart);
+        }
+        else if (name === "Ausgaben") {
             Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.allowed);
+            Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.zahlungsart);
+        }
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
@@ -674,7 +672,7 @@ const onEdit = (e) => {
     if (range.getColumn() === mapping[name]) return;
 
     // Timestamp im deutschen Format erstellen
-    const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy HH:mm:ss");
+    const ts = new Date();
     // Timestamp in die entsprechende Spalte in der gleichen Zeile schreiben
     sheet.getRange(range.getRow(), mapping[name]).setValue(ts);
 };
