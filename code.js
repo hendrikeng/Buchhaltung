@@ -647,6 +647,39 @@ const onOpen = () => {
         .addToUi();
 };
 
+const onEdit = (e) => {
+    const { range } = e;
+    const sheet = range.getSheet();
+    const name = sheet.getName();
+
+    // Mapping: Sheetname -> Zielspalte für den Timestamp
+    const mapping = {
+        "Einnahmen": 16,         // Spalte P
+        "Ausgaben": 16,          // Spalte P
+        "Eigenbelege": 16,       // Spalte P
+        "Bankbewegungen": 11,    // Spalte K
+        "Gesellschafterkonto": 12, // Spalte L
+        "Holding Transfers": 6   // Spalte F
+    };
+
+    // Trigger nur in den angegebenen Sheets ausführen
+    if (!(name in mapping)) return;
+
+    // Ermittle die Anzahl der Spalten in der Headerzeile (Zeile 1)
+    const headerLen = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length;
+    // Bearbeite nur Zellen in den Spalten, die in der Headerzeile existieren
+    if (range.getColumn() > headerLen) return;
+
+    // Überspringe, falls in der Zielspalte (Timestamp-Spalte) editiert wurde
+    if (range.getColumn() === mapping[name]) return;
+
+    // Timestamp im deutschen Format erstellen
+    const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy HH:mm:ss");
+    // Timestamp in die entsprechende Spalte in der gleichen Zeile schreiben
+    sheet.getRange(range.getRow(), mapping[name]).setValue(ts);
+};
+
+
 const setupTrigger = () => {
     const triggers = ScriptApp.getProjectTriggers();
     if (!triggers.some(t => t.getHandlerFunction() === "onOpen"))
