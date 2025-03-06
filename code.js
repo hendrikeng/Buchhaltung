@@ -436,31 +436,72 @@ const RefreshModule = (() => {
     const refreshBankSheet = sheet => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
-        const firstDataRow = 3, transRows = lastRow - firstDataRow - 1;
+        const firstDataRow = 3;
+        const numDataRows = lastRow - firstDataRow + 1;
+        const transRows = lastRow - firstDataRow - 1;
+
+        // Setze Formeln für die Transaktionszeilen (Spalte D)
         if (transRows > 0) {
-            sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
-                Array.from({ length: transRows }, (_, i) => [`=D${firstDataRow + i - 1}+C${firstDataRow + i}`])
-            );
+            sheet
+                .getRange(firstDataRow, 4, transRows, 1)
+                .setFormulas(
+                    Array.from({ length: transRows }, (_, i) => [
+                        `=D${firstDataRow + i - 1}+C${firstDataRow + i}`
+                    ])
+                );
         }
-        // Setze Transaktionstyp basierend auf Betrag
-        for (let row = firstDataRow; row <= lastRow; row++) {
-            const amount = parseFloat(sheet.getRange(row, 3).getValue()) || 0;
-            const typeCell = sheet.getRange(row, 5);
-            amount > 0 ? typeCell.setValue("Einnahme") : amount < 0 ? typeCell.setValue("Ausgabe") : typeCell.clearContent();
-        }
+
+        // Batchweise setzen des Transaktionstyps basierend auf Betrag (Spalte C → Spalte E)
+        const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
+        const typeValues = amounts.map(([val]) => {
+            const amount = parseFloat(val) || 0;
+            return amount > 0 ? ["Einnahme"] : amount < 0 ? ["Ausgabe"] : [""];
+        });
+        sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
+
         // Data Validation für Typ und Kategorie
-        Validator.validateDropdown(sheet, firstDataRow, 5, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.type);
-        Validator.validateDropdown(sheet, firstDataRow, 6, lastRow - firstDataRow + 1, 1, CategoryConfig.bank.category);
-        // Erzeuge erlaubte Listen für Konto-Mapping
+        Validator.validateDropdown(
+            sheet,
+            firstDataRow,
+            5,
+            numDataRows,
+            1,
+            CategoryConfig.bank.type
+        );
+        Validator.validateDropdown(
+            sheet,
+            firstDataRow,
+            6,
+            numDataRows,
+            1,
+            CategoryConfig.bank.category
+        );
+
+        // Erzeuge erlaubte Listen für das Konto-Mapping
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.soll);
         const allowedGegenkonto = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.gegen);
-        Validator.validateDropdown(sheet, firstDataRow, 7, lastRow - firstDataRow + 1, 1, allowedKontoSoll);
-        Validator.validateDropdown(sheet, firstDataRow, 8, lastRow - firstDataRow + 1, 1, allowedGegenkonto);
-        // Bedingte Formatierung für Einnahme/Ausgabe
+        Validator.validateDropdown(
+            sheet,
+            firstDataRow,
+            7,
+            numDataRows,
+            1,
+            allowedKontoSoll
+        );
+        Validator.validateDropdown(
+            sheet,
+            firstDataRow,
+            8,
+            numDataRows,
+            1,
+            allowedGegenkonto
+        );
+
+        // Bedingte Formatierung für Einnahme/Ausgabe (Spalte E)
         const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo("Einnahme")
             .setBackground("#C6EFCE")
@@ -474,18 +515,40 @@ const RefreshModule = (() => {
             .setRanges([sheet.getRange(`E2:E${lastRow}`)])
             .build();
         sheet.setConditionalFormatRules([ruleEinnahme, ruleAusgabe]);
-        // Setze Zahlenformate für Spalten A, C und D
-        sheet.getRange("A2:A" + lastRow).setNumberFormat("DD.MM.YYYY");
-        ["C", "D"].forEach(col => sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00"));
-        // Aktualisiere Endsaldo-Zeile oder füge diese hinzu
+
+        // Zahlenformate setzen: Spalte A (Datum) und Spalten C, D (Beträge)
+        sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
+        ["C", "D"].forEach(col =>
+            sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat(
+                "€#,##0.00;€-#,##0.00"
+            )
+        );
+
+        // Aktualisiere die Endsaldo-Zeile oder füge sie hinzu
         const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
         const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
-        lastRowText === "endsaldo"
-            ? (sheet.getRange(lastRow, 1).setValue(formattedDate),
-                sheet.getRange(lastRow, 4).setFormula(`=D${lastRow - 1}`))
-            : sheet.appendRow([formattedDate, "Endsaldo", "", sheet.getRange(lastRow, 4).getValue(), "", "", "", "", "", "", "", ""]);
+        if (lastRowText === "endsaldo") {
+            sheet.getRange(lastRow, 1).setValue(formattedDate);
+            sheet.getRange(lastRow, 4).setFormula(`=D${lastRow - 1}`);
+        } else {
+            sheet.appendRow([
+                formattedDate,
+                "Endsaldo",
+                "",
+                sheet.getRange(lastRow, 4).getValue(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+            ]);
+        }
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
+
 
     // Aktualisiert das aktuell aktive Blatt basierend auf dessen Namen
     const refreshActiveSheet = () => {
