@@ -382,7 +382,6 @@ const RefreshModule = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-
     // Aktualisiert das Bank-Sheet (inkl. bedingter Formatierung und Endsaldo)
     const refreshBankSheet = sheet => {
         const lastRow = sheet.getLastRow();
@@ -391,7 +390,7 @@ const RefreshModule = (() => {
         const numDataRows = lastRow - firstDataRow + 1;
         const transRows = lastRow - firstDataRow - 1;
 
-        // 1. Setze Formeln für die Transaktionszeilen (Spalte D)
+        // 1. Formeln für Transaktionszeilen (Spalte D) setzen
         if (transRows > 0) {
             sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
                 Array.from({ length: transRows }, (_, i) => [
@@ -400,55 +399,27 @@ const RefreshModule = (() => {
             );
         }
 
-        // 2. Batchweise setze den Transaktionstyp basierend auf dem Betrag (Spalte C -> Spalte E)
+        // 2. Batchweise Transaktionstyp (Spalte E) anhand von Spalte C (Betrag) setzen
         const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
         const typeValues = amounts.map(([val]) => {
-            const amount = parseFloat(val) || 0;
-            return amount > 0 ? ["Einnahme"] : amount < 0 ? ["Ausgabe"] : [""];
+            const amt = parseFloat(val) || 0;
+            return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
         });
         sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
 
-        // 3. Setze Data Validations für Typ, Kategorie, Konto (Soll) und Gegenkonto (Haben)
-        Validator.validateDropdown(
-            sheet,
-            firstDataRow,
-            5,
-            numDataRows,
-            1,
-            CategoryConfig.bank.type
-        );
-        Validator.validateDropdown(
-            sheet,
-            firstDataRow,
-            6,
-            numDataRows,
-            1,
-            CategoryConfig.bank.category
-        );
+        // 3. Data Validations setzen
+        Validator.validateDropdown(sheet, firstDataRow, 5, numDataRows, 1, CategoryConfig.bank.type);
+        Validator.validateDropdown(sheet, firstDataRow, 6, numDataRows, 1, CategoryConfig.bank.category);
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.soll);
         const allowedGegenkonto = Object.values(CategoryConfig.einnahmen.kontoMapping)
             .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
             .map(m => m.gegen);
-        Validator.validateDropdown(
-            sheet,
-            firstDataRow,
-            7,
-            numDataRows,
-            1,
-            allowedKontoSoll
-        );
-        Validator.validateDropdown(
-            sheet,
-            firstDataRow,
-            8,
-            numDataRows,
-            1,
-            allowedGegenkonto
-        );
+        Validator.validateDropdown(sheet, firstDataRow, 7, numDataRows, 1, allowedKontoSoll);
+        Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
 
-        // 4. Setze bedingte Formatierung für Einnahme/Ausgabe (Spalte E)
+        // 4. Bedingte Formatierung für Spalte E (Transaktionstyp)
         const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo("Einnahme")
             .setBackground("#C6EFCE")
@@ -463,42 +434,34 @@ const RefreshModule = (() => {
             .build();
         sheet.setConditionalFormatRules([ruleEinnahme, ruleAusgabe]);
 
-        // 5. Zahlenformate setzen: Spalte A (Datum) und Spalten C, D (Beträge)
+        // 5. Zahlenformate: Spalte A (Datum) und Spalten C, D (Währungsformat)
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
         ["C", "D"].forEach(col =>
-            sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat(
-                "€#,##0.00;€-#,##0.00"
-            )
+            sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00")
         );
 
-        // 6. Konto‑Mapping: Setze Konto (Soll) und Gegenkonto (Haben) basierend auf Typ (Spalte E) und Kategorie (Spalte F)
-        //    Wir nehmen an, dass:
-        //      - Spalte E (Index 4) den Transaktionstyp ("Einnahme" oder "Ausgabe") enthält,
-        //      - Spalte F (Index 5) die Kategorie enthält,
-        //      - Spalte G (Index 6) und H (Index 7) das Konto bzw. Gegenkonto sind.
+        // 6. Konto‑Mapping: Werte in Spalten G (Soll) und H (Gegenkonto) anhand von Spalte E (Typ) und F (Kategorie) setzen
         const dataRange = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn());
         const data = dataRange.getValues();
         data.forEach((row, i) => {
             const globalRow = i + firstDataRow;
-            // Überspringe ggf. die Endsaldo-Zeile (falls in Spalte B "endsaldo" steht)
+            // Überspringe Endsaldo-Zeile (falls in Spalte B "endsaldo" steht)
             const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
             if (globalRow === lastRow && label === "endsaldo") return;
             const type = row[4];     // Spalte E
             const category = row[5]; // Spalte F
-            let mapping;
-            if (type === "Einnahme") {
-                mapping = CategoryConfig.einnahmen.kontoMapping[category];
-            } else if (type === "Ausgabe") {
-                mapping = CategoryConfig.ausgaben.kontoMapping[category];
-            }
-            // Fallback, wenn kein Mapping gefunden wird:
+            let mapping = type === "Einnahme"
+                ? CategoryConfig.einnahmen.kontoMapping[category]
+                : type === "Ausgabe"
+                    ? CategoryConfig.ausgaben.kontoMapping[category]
+                    : null;
             if (!mapping) mapping = { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
-            row[6] = mapping.soll;   // Spalte G
-            row[7] = mapping.gegen;  // Spalte H
+            row[6] = mapping.soll;  // Spalte G
+            row[7] = mapping.gegen; // Spalte H
         });
         dataRange.setValues(data);
 
-        // 7. Aktualisiere die Endsaldo-Zeile oder füge sie hinzu
+        // 7. Endsaldo-Zeile aktualisieren oder hinzufügen
         const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
         const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
         if (lastRowText === "endsaldo") {
@@ -523,21 +486,28 @@ const RefreshModule = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
+    // TODO: refresh refreshGesellschafterkontoSheet
+    const refreshGesellschafterkontoSheet = sheet => {
+    };
 
+    // TODO: refresh refreshHoldingTransfersSheet
+    const refreshHoldingTransfersSheet = sheet => {
+    };
 
     // Aktualisiert das aktuell aktive Blatt basierend auf dessen Namen
     const refreshActiveSheet = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheet = ss.getActiveSheet();
         const name = sheet.getName();
+        const ui = SpreadsheetApp.getUi();
         if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
             refreshDataSheet(sheet);
-            SpreadsheetApp.getUi().alert(`Das Blatt "${name}" wurde aktualisiert.`);
+            ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
         } else if (name === "Bankbewegungen") {
             refreshBankSheet(sheet);
-            SpreadsheetApp.getUi().alert(`Das Blatt "${name}" wurde aktualisiert.`);
+            ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
         } else {
-            SpreadsheetApp.getUi().alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
+            ui.alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
         }
     };
 
@@ -546,7 +516,9 @@ const RefreshModule = (() => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"].forEach(name => {
             const sheet = ss.getSheetByName(name);
-            if (sheet) name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+            if (sheet) {
+                name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+            }
         });
     };
 
