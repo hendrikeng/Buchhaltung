@@ -591,11 +591,11 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    // Verarbeitet eine einzelne Zeile (Einnahmen oder Ausgaben)
-    // - row[13]: Zahlungsdatum (für die Monatszuordnung)
-    // - row[4]: Nettobetrag
-    // - row[9]: Restbetrag (wird abgezogen)
-    // - row[5]: MwSt (als String, z.B. "19%")
+    // Verarbeitet eine einzelne Zeile (aus Einnahmen, Ausgaben oder Eigenbelegen)
+    // Wir erwarten folgende Spalten (Index):
+    // 4: Nettobetrag, 5: MwSt (%), 9: Restbetrag, 13: Zahlungsdatum
+    // MwSt wird via Helpers.parseMwstRate in eine Zahl (z.B. 19) umgewandelt.
+    // Eigenbelege werden als Ausgaben behandelt.
     const processUStVARow = (row, ustvaData, isIncome) => {
         const paymentDate = Helpers.parseDate(row[13]);
         if (!paymentDate || paymentDate > new Date()) return;
@@ -623,9 +623,9 @@ const UStVACalculator = (() => {
         }
     };
 
-    // Formatiert eine Ausgabereihe für UStVA:
-    // - Ermittelt den USt-Zahlungsbetrag als Differenz (z.B. USt 19% minus VSt 19%)
-    // - Berechnet das Gesamtergebnis (steuerpflichtige + steuerfreie Umsätze minus Ausgaben)
+    // Formatiert eine Zeile für die UStVA-Ausgabe.
+    // Die Ausgabe enthält getrennt steuerpflichtige und steuerfreie Werte sowie
+    // die errechnete USt-Zahlung (Differenz aus USt und VSt) und das Gesamtergebnis.
     const formatUStVARow = (label, data) => {
         const ustZahlung = data.ust_19 - data.vst_19;
         const ergebnis =
@@ -646,7 +646,7 @@ const UStVACalculator = (() => {
         ];
     };
 
-    // Aggregiert UStVA-Daten über einen Zeitraum (z. B. für ein Quartal oder Gesamtjahr)
+    // Aggregiert UStVA-Daten über einen Zeitraum (z. B. für ein Quartal oder das Gesamtjahr)
     const aggregateUStVA = (ustvaData, start, end) => {
         const sum = createEmptyUStVA();
         for (let m = start; m <= end; m++) {
@@ -657,27 +657,35 @@ const UStVACalculator = (() => {
         return sum;
     };
 
-    // Hauptfunktion: Berechnet die UStVA und schreibt alle Ergebnisse in einem Batch in das Sheet "UStVA"
+    // Hauptfunktion: Berechnet die UStVA und schreibt alle Ergebnisse in einem Batch in das Sheet "UStVA".
     const calculateUStVA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
+        const eigenbelegeSheet = ss.getSheetByName("Eigenbelege"); // neu: Eigenbelege berücksichtigen
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
         }
+        // Validierung aller relevanten Datenblätter (optional: eigenbelegeSheet kann hier übergeben werden, falls benötigt)
         if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) return;
 
-        // Lade die Daten (ohne Header)
+        // Lade Daten (ohne Header)
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
+        const eigenbelegeData = eigenbelegeSheet ? eigenbelegeSheet.getDataRange().getValues().slice(1) : [];
+
+        // Initialisiere ein UStVA-Datenobjekt für jeden Monat (1 bis 12)
         const ustvaData = {};
         for (let m = 1; m <= 12; m++) {
             ustvaData[m] = createEmptyUStVA();
         }
 
+        // Verarbeite Einnahmen (als Einnahmen) und Ausgaben (als Ausgaben)
         revenueData.forEach(row => processUStVARow(row, ustvaData, true));
         expenseData.forEach(row => processUStVARow(row, ustvaData, false));
+        // Eigenbelege werden als Ausgaben betrachtet
+        eigenbelegeData.forEach(row => processUStVARow(row, ustvaData, false));
 
         // Bereite alle Ausgabezeilen in einem Array vor (Batch-Schreibvorgang)
         const outputRows = [];
@@ -721,11 +729,14 @@ const UStVACalculator = (() => {
         ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
         ustvaSheet.getRange(2, 2, ustvaSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
         ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+
+        ss.setActiveSheet(ustvaSheet);
         SpreadsheetApp.getUi().alert("UStVA wurde aktualisiert!");
     };
 
     return { calculateUStVA };
 })();
+
 
 // =================== Modul: BWACalculator ===================
 // Berechnet die betriebswirtschaftliche Auswertung (BWA)
