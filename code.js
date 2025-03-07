@@ -1,7 +1,16 @@
 // =================== Zentrale Konfiguration ===================
 const CategoryConfig = {
     einnahmen: {
-        category: ["Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge", "Privateinlage", "Darlehen", "Zinsen"],
+        // Kategorien im Einnahmen‑Sheet – hier definieren wir den steuerlichen Typ.
+        // Die Eigenschaft taxType gibt an, ob der Posten steuerpflichtig oder steuerfrei (Inland) ist.
+        categories: {
+            "Umsatzerlöse": { taxType: "steuerpflichtig" },
+            "Provisionserlöse": { taxType: "steuerpflichtig" },
+            "Sonstige betriebliche Erträge": { taxType: "steuerpflichtig" },
+            "Privateinlage": { taxType: "steuerfrei_inland" },
+            "Darlehen": { taxType: "steuerfrei_inland" },
+            "Zinsen": { taxType: "steuerfrei_inland" }
+        },
         kontoMapping: {
             "Umsatzerlöse": { soll: "1200 Bank", gegen: "4400 Umsatzerlöse" },
             "Provisionserlöse": { soll: "1200 Bank", gegen: "4420 Provisionserlöse" },
@@ -20,7 +29,24 @@ const CategoryConfig = {
         }
     },
     ausgaben: {
-        category: ["Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen", "Eigenbeleg", "Privatentnahme", "Darlehen", "Zinsen"],
+        // Kategorien im Ausgaben‑Sheet – hier nur betriebliche Ausgaben, die über das Firmenkonto gezahlt werden.
+        categories: {
+            "Wareneinsatz": { taxType: "steuerpflichtig" },
+            "Betriebskosten": { taxType: "steuerpflichtig" },
+            "Marketing & Werbung": { taxType: "steuerpflichtig" },
+            "Reisekosten": { taxType: "steuerpflichtig" },
+            "Personalkosten": { taxType: "steuerpflichtig" },
+            "Sonstige betriebliche Aufwendungen": { taxType: "steuerpflichtig" },
+            // Beispiele für steuerfreie Ausgaben (im Inland und Ausland)
+            "Miete": { taxType: "steuerfrei_inland" },
+            "Versicherungen": { taxType: "steuerfrei_inland" },
+            "Porto": { taxType: "steuerfrei_inland" },
+            "Google Ads": { taxType: "steuerfrei_ausland" },
+            "AWS": { taxType: "steuerfrei_ausland" },
+            "Facebook Ads": { taxType: "steuerfrei_ausland" },
+            // Bewirtung, wenn über Firmenkonto gezahlt (im Ausgaben‑Sheet)
+            "Bewirtung": { taxType: "steuerpflichtig" }
+        },
         kontoMapping: {
             "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
             "Betriebskosten": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
@@ -28,10 +54,13 @@ const CategoryConfig = {
             "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
             "Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
             "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" },
-            "Eigenbeleg": { soll: "1890 Eigenbeleg", gegen: "1200 Bank" },
-            "Privatentnahme": { soll: "1800 Privatentnahme", gegen: "1200 Bank" },
-            "Darlehen": { soll: "3000 Darlehen", gegen: "1200 Bank" },
-            "Zinsen": { soll: "2100 Zinsaufwand", gegen: "1200 Bank" }
+            "Miete": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
+            "Versicherungen": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
+            "Porto": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
+            "Google Ads": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
+            "AWS": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
+            "Facebook Ads": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
+            "Bewirtung": { soll: "4900 Bewirtung", gegen: "1200 Bank" }  // Beispielwerte
         },
         bwaMapping: {
             "Wareneinsatz": "wareneinsatz",
@@ -40,17 +69,22 @@ const CategoryConfig = {
             "Reisekosten": "reisen",
             "Personalkosten": "personalkosten",
             "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
-            "Eigenbeleg": "eigenbeleg",
-            "Privatentnahme": "privatentnahme",
-            "Darlehen": "darlehen",
-            "Zinsen": "zinsen"
+            "Miete": "betriebskosten",
+            "Versicherungen": "betriebskosten",
+            "Porto": "betriebskosten",
+            "Google Ads": "marketing",
+            "AWS": "marketing",
+            "Facebook Ads": "marketing",
+            "Bewirtung": "bewirtung"
         }
     },
     bank: {
+        // Bank-Bewegungen – hier kommen alle Transaktionen, die über das Firmenkonto laufen.
         category: [
             "Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge", "Wareneinsatz", "Betriebskosten",
-            "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen", "Privateinlage",
-            "Darlehen", "Eigenbeleg", "Privatentnahme", "Zinsen", "Gewinnübertrag", "Kapitalrückführung"
+            "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen",
+            "Privateinlage", "Darlehen", "Eigenbeleg", "Privatentnahme", "Zinsen",
+            "Gewinnübertrag", "Kapitalrückführung"
         ],
         type: ["Einnahme", "Ausgabe"],
         bwaMapping: {
@@ -63,7 +97,20 @@ const CategoryConfig = {
         shareholder: ["Christopher Giebel", "Hendrik Werner"]
     },
     eigenbelege: {
+        // Eigenbelege‑Sheet: Hier werden ausschließlich private Belege erfasst.
+        // Kategorien ohne den Begriff "Eigenbeleg", da das Sheet schon eigenständig ist.
         category: ["Kleidung", "Trinkgeld", "Private Vorauslage", "Bürokosten", "Reisekosten", "Bewirtung", "Sonstiges"],
+        // Mapping für Eigenbelege: Hier legen wir fest, ob der Posten steuerpflichtig ist.
+        mapping: {
+            "Kleidung": { taxType: "steuerpflichtig" },
+            "Trinkgeld": { taxType: "steuerfrei" },
+            "Private Vorauslage": { taxType: "steuerfrei" },
+            "Bürokosten": { taxType: "steuerpflichtig" },
+            "Reisekosten": { taxType: "steuerpflichtig" },
+            // Bewirtung wird hier mit Sonderregel behandelt (70% abzugsfähig, 30% nicht)
+            "Bewirtung": { taxType: "eigenbeleg", besonderheit: "bewirtung" },
+            "Sonstiges": { taxType: "steuerpflichtig" }
+        },
         status: ["Offen", "Erstattet", "Gebucht"]
     },
     holdingTransfers: {
@@ -94,7 +141,7 @@ const Helpers = (() => {
         return isNaN(num) ? 0 : num;
     };
 
-    // Extrahiert den MwSt-Wert als Zahl aus einem String (z. B. "19%")
+    // Extrahiert den MwSt-Wert als Zahl aus einem String (z. B. "19%")
     const parseMwstRate = value => {
         if (typeof value === "number") return value < 1 ? value * 100 : value;
         const rate = parseFloat(value.toString().replace("%", "").replace(",", ".").trim());
@@ -147,7 +194,7 @@ const Validator = (() => {
             SpreadsheetApp.newDataValidation().requireValueInList(list, true).build()
         );
 
-    // Regelbasierte Validierung für Revenue/Ausgaben-Zeilen
+    // Regelbasierte Validierung für Revenue-/Ausgaben-Zeilen
     const validateRevenueAndExpenses = (row, rowIndex) => {
         const warnings = [];
         const validateRow = (row, idx, rules) => {
@@ -201,7 +248,7 @@ const Validator = (() => {
         return warnings;
     };
 
-    // Regelbasierte Validierung für das Bank-Sheet (Mapping-Logik entfernt)
+    // Regelbasierte Validierung für das Bank-Sheet (ohne Mapping)
     const validateBanking = bankSheet => {
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
@@ -359,7 +406,7 @@ const ImportModule = (() => {
 
 // =================== Modul: RefreshModule ===================
 const RefreshModule = (() => {
-    // Aktualisiert Datenblätter (Einnahmen, Ausgaben, Eigenbelege)
+    // Aktualisiert Datenblätter: Einnahmen, Ausgaben, Eigenbelege
     const refreshDataSheet = sheet => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
@@ -377,24 +424,38 @@ const RefreshModule = (() => {
             sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
         });
 
-        // Spalte 9: Falls leer, 0 setzen (Batch)
+        // Batch: Falls leer, 0 in Spalte 9 setzen
         const col9Range = sheet.getRange(2, 9, numRows, 1);
         const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
         col9Range.setValues(col9Values.map(val => [val]));
 
-        // Dropdown-Validierung für die Kategorien und Zahlungsarten
+        // Dropdown-Validierung für Kategorien und Zahlungsarten
         const name = sheet.getName();
         if (name === "Einnahmen")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.category);
+            Validator.validateDropdown(
+                sheet,
+                2,
+                3,
+                lastRow - 1,
+                1,
+                CategoryConfig.einnahmen.categories ? Object.keys(CategoryConfig.einnahmen.categories) : CategoryConfig.einnahmen.category
+            );
         if (name === "Ausgaben")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
+            Validator.validateDropdown(
+                sheet,
+                2,
+                3,
+                lastRow - 1,
+                1,
+                CategoryConfig.ausgaben.categories ? Object.keys(CategoryConfig.ausgaben.categories) : Object.keys(CategoryConfig.ausgaben.categories)
+            );
         if (name === "Eigenbelege")
             Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
         Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Aktualisiert das Bank-Sheet (inkl. Formeln, Formatierung, Mapping, Endsaldo)
+    // Aktualisiert das Bank-Sheet (Formeln, Formatierung, Mapping, Endsaldo)
     const refreshBankSheet = sheet => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -431,13 +492,11 @@ const RefreshModule = (() => {
         Validator.validateDropdown(sheet, firstDataRow, 7, numDataRows, 1, allowedKontoSoll);
         Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
 
-        // Bedingte Formatierung für Spalte E setzen
         Helpers.setConditionalFormattingForColumn(sheet, "E", [
             { value: "Einnahme", background: "#C6EFCE", fontColor: "#006100" },
             { value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006" }
         ]);
 
-        // Zahlenformatierung: Datum in Spalte A und Währung in Spalten C und D
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
         ["C", "D"].forEach(col =>
             sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00")
@@ -463,7 +522,7 @@ const RefreshModule = (() => {
         });
         dataRange.setValues(data);
 
-        // Endsaldo-Zeile: Aktualisieren oder hinzufügen
+        // Endsaldo-Zeile aktualisieren oder hinzufügen
         const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
         const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
         if (lastRowText === "endsaldo") {
@@ -519,7 +578,7 @@ const RefreshModule = (() => {
 
 // =================== Modul: UStVA-Berechnung ===================
 const UStVACalculator = (() => {
-    // Erzeugt ein leeres UStVA-Datenobjekt mit neuen Feldern
+    // Neues UStVA-Datenobjekt mit allen Feldern (inkl. neuer Spalten)
     const createEmptyUStVA = () => ({
         // Einnahmen
         steuerpflichtige_einnahmen: 0,
@@ -532,6 +591,7 @@ const UStVACalculator = (() => {
         // Eigenbelege
         eigenbelege_steuerpflichtig: 0,
         eigenbelege_steuerfrei: 0,
+        // Nicht abzugsfähige VSt (z. B. bei Bewirtung)
         nicht_abzugsfaehige_vst: 0,
         // Steuern
         ust_7: 0,
@@ -540,10 +600,21 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    // Verarbeitet eine Zeile (Einnahmen, Ausgaben oder Eigenbelege)
-    // Erwartete Spalten (Index):
-    // 4: Nettobetrag, 5: MwSt (%), 9: Restbetrag, 13: Zahlungsdatum, 2: Kategorie
-    const processUStVARow = (row, ustvaData, isIncome) => {
+    /**
+     * Verarbeitet eine Zeile aus Einnahmen, Ausgaben oder Eigenbelegen.
+     * Erwartete Spalten (Index):
+     *  - 4: Nettobetrag
+     *  - 5: MwSt (%) als String (z. B. "19%")
+     *  - 9: Restbetrag
+     *  - 13: Zahlungsdatum
+     *  - 2: Kategorie
+     *
+     * @param {Array} row - Datenzeile
+     * @param {Object} ustvaData - Aggregiertes UStVA-Datenobjekt (monatlich)
+     * @param {Boolean} isIncome - true für Einnahmen, false für Ausgaben
+     * @param {Boolean} [isEigenbelegSheet=false] - true, wenn die Zeile aus dem Sheet "Eigenbelege" stammt
+     */
+    const processUStVARow = (row, ustvaData, isIncome, isEigenbelegSheet = false) => {
         const paymentDate = Helpers.parseDate(row[13]); // Zahlungsdatum (Spalte N)
         if (!paymentDate || paymentDate > new Date()) return;
         const month = paymentDate.getMonth() + 1;
@@ -556,44 +627,40 @@ const UStVACalculator = (() => {
         const category = row[2] ? row[2].toString().trim() : "";
 
         if (isIncome) {
-            // Automatische Zuordnung bei Einnahmen
-            if (["Privateinlage", "Darlehen", "Zinsen"].includes(category)) {
-                // Steuerfreie Inland-Einnahmen (z.B. private Einlagen, Darlehen, Zinsen)
+            // Einnahmen: Nutze das Mapping aus CategoryConfig.einnahmen.categories
+            const taxInfo = CategoryConfig.einnahmen.categories[category] || { taxType: "steuerpflichtig" };
+            if (taxInfo.taxType === "steuerfrei_inland") {
                 ustvaData[month].steuerfreie_inland_einnahmen += gezahlt;
-            } else if (roundedRate === 0) {
-                // Steuerfreie Ausland-Einnahmen (z.B. Export, innergemeinschaftliche Lieferung)
+            } else if (taxInfo.taxType === "steuerfrei_ausland" || roundedRate === 0) {
                 ustvaData[month].steuerfreie_ausland_einnahmen += gezahlt;
             } else {
-                // Steuerpflichtige Einnahmen
                 ustvaData[month].steuerpflichtige_einnahmen += gezahlt;
                 ustvaData[month][`ust_${roundedRate}`] += tax;
             }
         } else {
-            // Für Ausgaben/Eigenbelege:
-            // Bei Eigenbelegen (Kategorie "Eigenbeleg") behandeln wir separat
-            if (row[2] && row[2].toString().trim() === "Eigenbeleg") {
-                if (roundedRate > 0) {
-                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
-                    ustvaData[month][`vst_${roundedRate}`] += tax;
-                } else {
+            // Für Ausgaben und Eigenbelege
+            if (isEigenbelegSheet) {
+                // Verarbeitung im Eigenbelege‑Sheet: Nutze CategoryConfig.eigenbelege.mapping
+                const eigenMapping = CategoryConfig.eigenbelege.mapping[category] || { taxType: "steuerpflichtig" };
+                if (eigenMapping.taxType === "steuerfrei") {
                     ustvaData[month].eigenbelege_steuerfrei += gezahlt;
-                }
-                // Sonderfall: Bewirtung (kann als Eigenbeleg oder normale Ausgabe behandelt werden)
-                if (row[2] && row[2].toString().trim() === "Bewirtung") {
-                    // 70% abzugsfähig, 30% nicht
+                } else if (eigenMapping.taxType === "eigenbeleg" && eigenMapping.besonderheit === "bewirtung") {
+                    // Sonderfall Bewirtung: 70 % abzugsfähige VSt, 30 % nicht
+                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
                     ustvaData[month][`vst_${roundedRate}`] += tax * 0.7;
                     ustvaData[month].nicht_abzugsfaehige_vst += tax * 0.3;
+                } else {
+                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
+                    ustvaData[month][`vst_${roundedRate}`] += tax;
                 }
             } else {
-                // Für sonstige Ausgaben:
-                if (["Miete", "Versicherungen", "Porto"].includes(category)) {
-                    // Steuerfreie Inland-Ausgaben
+                // Verarbeitung im regulären Ausgaben‑Sheet: Nutze CategoryConfig.ausgaben.categories
+                const taxInfo = CategoryConfig.ausgaben.categories[category] || { taxType: "steuerpflichtig" };
+                if (taxInfo.taxType === "steuerfrei_inland") {
                     ustvaData[month].steuerfreie_inland_ausgaben += gezahlt;
-                } else if (["Google Ads", "AWS", "Facebook Ads"].includes(category)) {
-                    // Steuerfreie Ausland-Ausgaben (z.B. Reverse Charge)
+                } else if (taxInfo.taxType === "steuerfrei_ausland") {
                     ustvaData[month].steuerfreie_ausland_ausgaben += gezahlt;
                 } else {
-                    // Steuerpflichtige Ausgaben
                     ustvaData[month].steuerpflichtige_ausgaben += gezahlt;
                     ustvaData[month][`vst_${roundedRate}`] += tax;
                 }
@@ -601,12 +668,20 @@ const UStVACalculator = (() => {
         }
     };
 
-    // Formatiert eine Zeile für die UStVA-Ausgabe mit den neuen Spalten
+    /**
+     * Formatiert eine Zeile für die UStVA-Ausgabe.
+     * USt-Zahlung = (USt 7% + USt 19%) - ((VSt 7% + VSt 19%) - Nicht abzugsfähige VSt)
+     *
+     * @param {String} label - Bezeichner (Monat, Quartal, Gesamtjahr)
+     * @param {Object} data - Aggregierte UStVA-Daten
+     * @returns {Array} - Array mit formatierten Werten
+     */
     const formatUStVARow = (label, data) => {
-        const ustZahlung = (data.ust_7 + data.ust_19) - (data.vst_7 + data.vst_19);
+        const ustZahlung = (data.ust_7 + data.ust_19) - ((data.vst_7 + data.vst_19) - data.nicht_abzugsfaehige_vst);
         const ergebnis =
             (data.steuerpflichtige_einnahmen + data.steuerfreie_inland_einnahmen + data.steuerfreie_ausland_einnahmen) -
-            (data.steuerpflichtige_ausgaben + data.steuerfreie_inland_ausgaben + data.steuerfreie_ausland_ausgaben + data.eigenbelege_steuerpflichtig + data.eigenbelege_steuerfrei);
+            (data.steuerpflichtige_ausgaben + data.steuerfreie_inland_ausgaben + data.steuerfreie_ausland_ausgaben +
+                data.eigenbelege_steuerpflichtig + data.eigenbelege_steuerfrei);
         return [
             label,
             data.steuerpflichtige_einnahmen,
@@ -638,7 +713,6 @@ const UStVACalculator = (() => {
         return sum;
     };
 
-    // Hauptfunktion: Berechnet die UStVA und schreibt alle Ergebnisse in einem Batch in das Sheet "UStVA"
     const calculateUStVA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -650,21 +724,22 @@ const UStVACalculator = (() => {
         }
         if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) return;
 
-        // Daten laden (ohne Header) – möglichst einmal pro Blatt
+        // Daten laden (ohne Header) – jeweils einmal pro Blatt
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
+        // Alle Zeilen aus dem Eigenbelege‑Sheet werden als Eigenbelege verarbeitet
         const eigenbelegeData = eigenbelegeSheet ? eigenbelegeSheet.getDataRange().getValues().slice(1) : [];
         const ustvaData = {};
         for (let m = 1; m <= 12; m++) {
             ustvaData[m] = createEmptyUStVA();
         }
 
-        // Daten verarbeiten – Eigenbelege werden als Ausgaben behandelt
+        // Verarbeitung: Einnahmen, reguläre Ausgaben, und Eigenbelege (mit isEigenbelegSheet=true)
         revenueData.forEach(row => processUStVARow(row, ustvaData, true));
         expenseData.forEach(row => processUStVARow(row, ustvaData, false));
-        eigenbelegeData.forEach(row => processUStVARow(row, ustvaData, false));
+        eigenbelegeData.forEach(row => processUStVARow(row, ustvaData, false, true));
 
-        // Batch-Schreibvorgang: Alle Ausgabezeilen in einem Array sammeln
+        // Batch: Ausgabezeilen sammeln
         const outputRows = [];
         outputRows.push([
             "Zeitraum",
@@ -676,7 +751,7 @@ const UStVACalculator = (() => {
             "Steuerfreie Ausland-Ausgaben",
             "Eigenbelege steuerpflichtig",
             "Eigenbelege steuerfrei",
-            "Nicht abzugsfähige VSt",
+            "Nicht abzugsfähige VSt (Bewirtung)",
             "USt 7%",
             "USt 19%",
             "VSt 7%",
@@ -698,7 +773,6 @@ const UStVACalculator = (() => {
 
         const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
         ustvaSheet.clearContents();
-        // Batch: Alle Zeilen schreiben
         ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
         ustvaSheet.getRange(2, 2, ustvaSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
         ustvaSheet.autoResizeColumns(1, outputRows[0].length);
