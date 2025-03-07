@@ -86,7 +86,7 @@ const Helpers = (() => {
         return null;
     };
 
-    // Konvertiert einen Wert in eine Zahl, entfernt unerwünschte Zeichen
+    // Konvertiert einen Wert in einen Float und entfernt unerwünschte Zeichen
     const parseCurrency = value => {
         if (typeof value === "number") return value;
         const str = value.toString().replace(/[^\d,.-]/g, "").replace(",", ".");
@@ -97,11 +97,11 @@ const Helpers = (() => {
     // Extrahiert den MwSt-Wert als Zahl aus einem String (z. B. "19%")
     const parseMwstRate = value => {
         if (typeof value === "number") return value < 1 ? value * 100 : value;
-        const rate = parseFloat(value.toString().replace("%", "").replace(",", "."));
+        const rate = parseFloat(value.toString().replace("%", "").replace(",", ".").trim());
         return isNaN(rate) ? 19 : rate;
     };
 
-    // Sucht einen Unterordner in einem Ordner
+    // Sucht in einem Ordner nach einem Unterordner mit dem angegebenen Namen
     const getFolderByName = (parent, name) => {
         const folderIter = parent.getFoldersByName(name);
         return folderIter.hasNext() ? folderIter.next() : null;
@@ -285,19 +285,19 @@ const ImportModule = (() => {
 
             if (!existingMain.has(fileName)) {
                 newMainRows.push([
-                    invoiceDate,   // Spalte 1: Rechnungsdatum
-                    invoiceName,   // Spalte 2: Rechnungsname
-                    "", "", "", "", // Spalte 3-6: Platzhalter (Kategorie, Kunde, Nettobetrag, MwSt)
-                    "",            // Spalte 7: MWSt (wird später per Refresh gesetzt)
-                    "",            // Spalte 8: Brutto (wird später per Refresh gesetzt)
-                    "",            // Spalte 9: (leer, sofern benötigt)
-                    "",            // Spalte 10: Restbetrag (wird später per Refresh gesetzt)
-                    "",            // Spalte 11: Quartal (wird später per Refresh gesetzt)
-                    "",            // Spalte 12: Zahlungsstatus (wird später per Refresh gesetzt)
-                    "", "", "",    // Spalte 13-15: weitere Platzhalter
-                    timestamp,     // Spalte 16: Timestamp
-                    fileName,      // Spalte 17: Dateiname
-                    fileUrl        // Spalte 18: URL
+                    invoiceDate,
+                    invoiceName,
+                    "", "", "", "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "", "", "",
+                    timestamp,
+                    fileName,
+                    fileUrl
                 ]);
                 existingMain.add(fileName);
                 wasImported = true;
@@ -365,11 +365,11 @@ const RefreshModule = (() => {
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
 
-        // Setze Formeln in bestimmten Spalten (Batch-Verfahren)
+        // Batch: Formeln in Spalten 7,8,10,11,12 setzen
         Object.entries({
             7: row => `=E${row}*F${row}`,                           // MwSt
             8: row => `=E${row}+G${row}`,                           // Brutto
-            10: row => `=(H${row}-I${row})/(1+VALUE(F${row}))`,       // Restbetrag
+            10: row => `=(H${row}-I${row})/(1+VALUE(F${row}))`,      // Restbetrag
             11: row => `=IF(A${row}=""; ""; ROUNDUP(MONTH(A${row})/3;0))`, // Quartal
             12: row => `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))` // Zahlungsstatus
         }).forEach(([col, formulaFn]) => {
@@ -377,21 +377,24 @@ const RefreshModule = (() => {
             sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
         });
 
-        // Setze 0 in Spalte 9, falls leer
+        // Spalte 9: Falls leer, 0 setzen (Batch)
         const col9Range = sheet.getRange(2, 9, numRows, 1);
         const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
         col9Range.setValues(col9Values.map(val => [val]));
 
-        // Dropdown-Validierung
+        // Dropdown-Validierung für die Kategorien und Zahlungsarten
         const name = sheet.getName();
-        if (name === "Einnahmen") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.category);
-        if (name === "Ausgaben") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
-        if (name === "Eigenbelege") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
+        if (name === "Einnahmen")
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.einnahmen.category);
+        if (name === "Ausgaben")
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
+        if (name === "Eigenbelege")
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
         Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // Aktualisiert das Bank-Sheet (inkl. Formeln, Formatierung, Mapping und Endsaldo)
+    // Aktualisiert das Bank-Sheet (inkl. Formeln, Formatierung, Mapping, Endsaldo)
     const refreshBankSheet = sheet => {
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return;
@@ -399,6 +402,7 @@ const RefreshModule = (() => {
         const numDataRows = lastRow - firstDataRow + 1;
         const transRows = lastRow - firstDataRow - 1;
 
+        // Batch: Formeln in Spalte D setzen
         if (transRows > 0) {
             sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
                 Array.from({ length: transRows }, (_, i) => [
@@ -407,6 +411,7 @@ const RefreshModule = (() => {
             );
         }
 
+        // Batch: Transaktionstyp in Spalte E anhand von Spalte C (Betrag) setzen
         const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
         const typeValues = amounts.map(([val]) => {
             const amt = parseFloat(val) || 0;
@@ -414,6 +419,7 @@ const RefreshModule = (() => {
         });
         sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
 
+        // Dropdown-Validierung in Bank-Sheet
         Validator.validateDropdown(sheet, firstDataRow, 5, numDataRows, 1, CategoryConfig.bank.type);
         Validator.validateDropdown(sheet, firstDataRow, 6, numDataRows, 1, CategoryConfig.bank.category);
         const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
@@ -425,16 +431,19 @@ const RefreshModule = (() => {
         Validator.validateDropdown(sheet, firstDataRow, 7, numDataRows, 1, allowedKontoSoll);
         Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
 
+        // Bedingte Formatierung für Spalte E setzen
         Helpers.setConditionalFormattingForColumn(sheet, "E", [
             { value: "Einnahme", background: "#C6EFCE", fontColor: "#006100" },
             { value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006" }
         ]);
 
+        // Zahlenformatierung: Datum in Spalte A und Währung in Spalten C und D
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
         ["C", "D"].forEach(col =>
             sheet.getRange(`${col}2:${col}${lastRow}`).setNumberFormat("€#,##0.00;€-#,##0.00")
         );
 
+        // Konto-Mapping: Mapping in Spalten G und H anhand von Typ (Spalte E) und Kategorie (Spalte F)
         const dataRange = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn());
         const data = dataRange.getValues();
         data.forEach((row, i) => {
@@ -449,11 +458,12 @@ const RefreshModule = (() => {
                     ? CategoryConfig.ausgaben.kontoMapping[category]
                     : null;
             if (!mapping) mapping = { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
-            row[6] = mapping.soll;  // Spalte G
-            row[7] = mapping.gegen; // Spalte H
+            row[6] = mapping.soll;
+            row[7] = mapping.gegen;
         });
         dataRange.setValues(data);
 
+        // Endsaldo-Zeile: Aktualisieren oder hinzufügen
         const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
         const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
         if (lastRowText === "endsaldo") {
@@ -478,15 +488,6 @@ const RefreshModule = (() => {
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
-    // TODO: refresh refreshGesellschafterkontoSheet
-    const refreshGesellschafterkontoSheet = sheet => {
-    };
-
-    // TODO: refresh refreshHoldingTransfersSheet
-    const refreshHoldingTransfersSheet = sheet => {
-    };
-
-    // Aktualisiert das aktuell aktive Blatt basierend auf dessen Namen
     const refreshActiveSheet = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheet = ss.getActiveSheet();
@@ -518,54 +519,105 @@ const RefreshModule = (() => {
 
 // =================== Modul: UStVA-Berechnung ===================
 const UStVACalculator = (() => {
+    // Erzeugt ein leeres UStVA-Datenobjekt mit neuen Feldern
     const createEmptyUStVA = () => ({
-        einnahmen: 0,
-        steuerfreie_einnahmen: 0,
-        ausgaben: 0,
-        steuerfreie_ausgaben: 0,
+        // Einnahmen
+        steuerpflichtige_einnahmen: 0,
+        steuerfreie_inland_einnahmen: 0,
+        steuerfreie_ausland_einnahmen: 0,
+        // Ausgaben
+        steuerpflichtige_ausgaben: 0,
+        steuerfreie_inland_ausgaben: 0,
+        steuerfreie_ausland_ausgaben: 0,
+        // Eigenbelege
+        eigenbelege_steuerpflichtig: 0,
+        eigenbelege_steuerfrei: 0,
+        nicht_abzugsfaehige_vst: 0,
+        // Steuern
         ust_7: 0,
         ust_19: 0,
         vst_7: 0,
         vst_19: 0
     });
 
+    // Verarbeitet eine Zeile (Einnahmen, Ausgaben oder Eigenbelege)
+    // Erwartete Spalten (Index):
+    // 4: Nettobetrag, 5: MwSt (%), 9: Restbetrag, 13: Zahlungsdatum, 2: Kategorie
     const processUStVARow = (row, ustvaData, isIncome) => {
-        const paymentDate = Helpers.parseDate(row[13]); // Zahlungsdatum in Spalte N
+        const paymentDate = Helpers.parseDate(row[13]); // Zahlungsdatum (Spalte N)
         if (!paymentDate || paymentDate > new Date()) return;
         const month = paymentDate.getMonth() + 1;
-        const netto = Helpers.parseCurrency(row[4]);       // Nettobetrag (Spalte E)
-        const restNetto = Helpers.parseCurrency(row[9]) || 0; // Restbetrag (Spalte J)
+        const netto = Helpers.parseCurrency(row[4]);
+        const restNetto = Helpers.parseCurrency(row[9]) || 0;
         const gezahlt = Math.max(0, netto - restNetto);
-        const mwstRate = Helpers.parseMwstRate(row[5]);      // MwSt (Spalte F)
+        const mwstRate = Helpers.parseMwstRate(row[5]);
         const roundedRate = Math.round(mwstRate);
         const tax = gezahlt * (mwstRate / 100);
+        const category = row[2] ? row[2].toString().trim() : "";
 
         if (isIncome) {
-            if (roundedRate === 0) {
-                ustvaData[month].steuerfreie_einnahmen += gezahlt;
+            // Automatische Zuordnung bei Einnahmen
+            if (["Privateinlage", "Darlehen", "Zinsen"].includes(category)) {
+                // Steuerfreie Inland-Einnahmen (z.B. private Einlagen, Darlehen, Zinsen)
+                ustvaData[month].steuerfreie_inland_einnahmen += gezahlt;
+            } else if (roundedRate === 0) {
+                // Steuerfreie Ausland-Einnahmen (z.B. Export, innergemeinschaftliche Lieferung)
+                ustvaData[month].steuerfreie_ausland_einnahmen += gezahlt;
             } else {
-                ustvaData[month].einnahmen += gezahlt;
+                // Steuerpflichtige Einnahmen
+                ustvaData[month].steuerpflichtige_einnahmen += gezahlt;
                 ustvaData[month][`ust_${roundedRate}`] += tax;
             }
         } else {
-            if (roundedRate === 0) {
-                ustvaData[month].steuerfreie_ausgaben += gezahlt;
+            // Für Ausgaben/Eigenbelege:
+            // Bei Eigenbelegen (Kategorie "Eigenbeleg") behandeln wir separat
+            if (row[2] && row[2].toString().trim() === "Eigenbeleg") {
+                if (roundedRate > 0) {
+                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
+                    ustvaData[month][`vst_${roundedRate}`] += tax;
+                } else {
+                    ustvaData[month].eigenbelege_steuerfrei += gezahlt;
+                }
+                // Sonderfall: Bewirtung (kann als Eigenbeleg oder normale Ausgabe behandelt werden)
+                if (row[2] && row[2].toString().trim() === "Bewirtung") {
+                    // 70% abzugsfähig, 30% nicht
+                    ustvaData[month][`vst_${roundedRate}`] += tax * 0.7;
+                    ustvaData[month].nicht_abzugsfaehige_vst += tax * 0.3;
+                }
             } else {
-                ustvaData[month].ausgaben += gezahlt;
-                ustvaData[month][`vst_${roundedRate}`] += tax;
+                // Für sonstige Ausgaben:
+                if (["Miete", "Versicherungen", "Porto"].includes(category)) {
+                    // Steuerfreie Inland-Ausgaben
+                    ustvaData[month].steuerfreie_inland_ausgaben += gezahlt;
+                } else if (["Google Ads", "AWS", "Facebook Ads"].includes(category)) {
+                    // Steuerfreie Ausland-Ausgaben (z.B. Reverse Charge)
+                    ustvaData[month].steuerfreie_ausland_ausgaben += gezahlt;
+                } else {
+                    // Steuerpflichtige Ausgaben
+                    ustvaData[month].steuerpflichtige_ausgaben += gezahlt;
+                    ustvaData[month][`vst_${roundedRate}`] += tax;
+                }
             }
         }
     };
 
+    // Formatiert eine Zeile für die UStVA-Ausgabe mit den neuen Spalten
     const formatUStVARow = (label, data) => {
-        const ustZahlung = data.ust_19 - data.vst_19;
-        const ergebnis = (data.einnahmen + data.steuerfreie_einnahmen) - (data.ausgaben + data.steuerfreie_ausgaben);
+        const ustZahlung = (data.ust_7 + data.ust_19) - (data.vst_7 + data.vst_19);
+        const ergebnis =
+            (data.steuerpflichtige_einnahmen + data.steuerfreie_inland_einnahmen + data.steuerfreie_ausland_einnahmen) -
+            (data.steuerpflichtige_ausgaben + data.steuerfreie_inland_ausgaben + data.steuerfreie_ausland_ausgaben + data.eigenbelege_steuerpflichtig + data.eigenbelege_steuerfrei);
         return [
             label,
-            data.einnahmen,
-            data.steuerfreie_einnahmen,
-            data.ausgaben,
-            data.steuerfreie_ausgaben,
+            data.steuerpflichtige_einnahmen,
+            data.steuerfreie_inland_einnahmen,
+            data.steuerfreie_ausland_einnahmen,
+            data.steuerpflichtige_ausgaben,
+            data.steuerfreie_inland_ausgaben,
+            data.steuerfreie_ausland_ausgaben,
+            data.eigenbelege_steuerpflichtig,
+            data.eigenbelege_steuerfrei,
+            data.nicht_abzugsfaehige_vst,
             data.ust_7,
             data.ust_19,
             data.vst_7,
@@ -575,6 +627,7 @@ const UStVACalculator = (() => {
         ];
     };
 
+    // Aggregiert UStVA-Daten über einen Zeitraum (z. B. Quartal oder Gesamtjahr)
     const aggregateUStVA = (ustvaData, start, end) => {
         const sum = createEmptyUStVA();
         for (let m = start; m <= end; m++) {
@@ -585,6 +638,7 @@ const UStVACalculator = (() => {
         return sum;
     };
 
+    // Hauptfunktion: Berechnet die UStVA und schreibt alle Ergebnisse in einem Batch in das Sheet "UStVA"
     const calculateUStVA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
@@ -605,7 +659,7 @@ const UStVACalculator = (() => {
             ustvaData[m] = createEmptyUStVA();
         }
 
-        // Daten verarbeiten – Eigenbelege als Ausgaben
+        // Daten verarbeiten – Eigenbelege werden als Ausgaben behandelt
         revenueData.forEach(row => processUStVARow(row, ustvaData, true));
         expenseData.forEach(row => processUStVARow(row, ustvaData, false));
         eigenbelegeData.forEach(row => processUStVARow(row, ustvaData, false));
@@ -614,10 +668,15 @@ const UStVACalculator = (() => {
         const outputRows = [];
         outputRows.push([
             "Zeitraum",
-            "Einnahmen (steuerpflichtig)",
-            "Steuerfreie Einnahmen",
-            "Ausgaben (steuerpflichtig)",
-            "Steuerfreie Ausgaben",
+            "Steuerpflichtige Einnahmen",
+            "Steuerfreie Inland-Einnahmen",
+            "Steuerfreie Ausland-Einnahmen",
+            "Steuerpflichtige Ausgaben",
+            "Steuerfreie Inland-Ausgaben",
+            "Steuerfreie Ausland-Ausgaben",
+            "Eigenbelege steuerpflichtig",
+            "Eigenbelege steuerfrei",
+            "Nicht abzugsfähige VSt",
             "USt 7%",
             "USt 19%",
             "VSt 7%",
@@ -625,7 +684,10 @@ const UStVACalculator = (() => {
             "USt-Zahlung",
             "Ergebnis"
         ]);
-        const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+        const monthNames = [
+            "Januar", "Februar", "März", "April", "Mai", "Juni",
+            "Juli", "August", "September", "Oktober", "November", "Dezember"
+        ];
         for (let m = 1; m <= 12; m++) {
             outputRows.push(formatUStVARow(monthNames[m - 1], ustvaData[m]));
             if (m % 3 === 0) {
@@ -636,7 +698,7 @@ const UStVACalculator = (() => {
 
         const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
         ustvaSheet.clearContents();
-        // Alle Zeilen in einem Batch schreiben
+        // Batch: Alle Zeilen schreiben
         ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
         ustvaSheet.getRange(2, 2, ustvaSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
         ustvaSheet.autoResizeColumns(1, outputRows[0].length);
@@ -651,7 +713,7 @@ const UStVACalculator = (() => {
 // BWACalculator bleibt unverändert, da du diesen neu machen möchtest.
 const BWACalculator = (() => {
     // ... Dein BWACalculator-Code, unverändert.
-    // return { calculateBWA };
+    return { };
 })();
 
 // =================== Globale Funktionen ===================
