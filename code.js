@@ -210,23 +210,41 @@ const Validator = (() => {
         ];
 
         // Statusabhängige Regeln für Zahlungsangaben:
-        // Wenn der Status "offen" ist, dürfen Zahlungsart und Zahlungsdatum nicht gesetzt sein.
-        // Andernfalls müssen beide Felder gesetzt sein.
+        // - Bei "offen" dürfen Zahlungsart und Zahlungsdatum nicht gesetzt sein.
+        // - Ansonsten müssen sie gesetzt sein und das Zahlungsdatum muss
+        //   weder in der Zukunft noch vor dem Rechnungsdatum liegen.
         const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
-        const paymentRules = status === "offen"
-            ? [
+        let paymentRules = [];
+        if (status === "offen") {
+            paymentRules = [
                 { check: row => !isEmpty(row[12]), message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.' },
                 { check: row => !isEmpty(row[13]), message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.' }
-            ]
-            : [
-                { check: row => isEmpty(row[12]), message: 'Zahlungsart muss bei bezahlter oder teilbezahlter Zahlung gesetzt sein.' },
-                { check: row => isEmpty(row[13]), message: 'Zahlungsdatum muss bei bezahlter oder teilbezahlter Zahlung gesetzt sein.' }
             ];
+        } else {
+            paymentRules = [
+                { check: row => isEmpty(row[12]), message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.' },
+                { check: row => isEmpty(row[13]), message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.' },
+                {
+                    check: row => {
+                        if (isEmpty(row[13]) || isEmpty(row[0])) return false; // Keine Prüfung, wenn eines fehlt
+                        const paymentDate = Helpers.parseDate(row[13]);
+                        return paymentDate ? paymentDate > new Date() : false;
+                    },
+                    message: "Zahlungsdatum darf nicht in der Zukunft liegen."
+                },
+                {
+                    check: row => {
+                        if (isEmpty(row[13]) || isEmpty(row[0])) return false;
+                        const paymentDate = Helpers.parseDate(row[13]);
+                        const invoiceDate = Helpers.parseDate(row[0]);
+                        return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
+                    },
+                    message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
+                }
+            ];
+        }
 
-        // Alle Regeln zusammenführen
         const rules = baseRules.concat(paymentRules);
-
-        // Regeln abarbeiten
         validateRow(row, rowIndex, rules);
         return warnings;
     };
@@ -242,7 +260,7 @@ const Validator = (() => {
             });
         };
         const headerFooterRules = [
-            { check: row => isEmpty(row[0]), message: "Buchungsdatum fehlt." },
+            { check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt." },
             { check: row => isEmpty(row[1]), message: "Buchungstext fehlt." },
             { check: row => !isEmpty(row[2]) || !isNaN(parseFloat(row[2].toString().trim())), message: "Betrag darf nicht gesetzt sein." },
             { check: row => isEmpty(row[3]) || isInvalidNumber(row[3]), message: "Saldo fehlt oder ungültig." },
