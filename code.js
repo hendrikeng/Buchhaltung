@@ -576,75 +576,155 @@ const RefreshModule = (() => {
     return { refreshActiveSheet, refreshAllSheets };
 })();
 
-// =================== Modul: GuV-Berechnung ===================
-// Berechnet die Gewinn- und Verlustrechnung (GuV)
-const GuVCalculator = (() => {
-    // Erzeugt ein leeres GuV-Objekt mit Standardwerten
-    const createEmptyGuV = () => ({ einnahmen: 0, ausgaben: 0, ust_0: 0, ust_7: 0, ust_19: 0, vst_0: 0, vst_7: 0, vst_19: 0 });
+// =================== Modul: UStVA-Berechnung ===================
+// Berechnet die Umsatzsteuer-Voranmeldung (UStVA)
+const UStVACalculator = (() => {
+    // Erzeugt ein leeres UStVA-Datenobjekt mit Standardwerten
+    const createEmptyUStVA = () => ({
+        einnahmen: 0,               // steuerpflichtige Einnahmen
+        steuerfreie_einnahmen: 0,   // steuerfreie Einnahmen
+        ausgaben: 0,                // steuerpflichtige Ausgaben
+        steuerfreie_ausgaben: 0,    // steuerfreie Ausgaben
+        ust_7: 0,
+        ust_19: 0,
+        vst_7: 0,
+        vst_19: 0
+    });
 
-    // Verarbeitet eine einzelne Zeile und aktualisiert die GuV-Daten
-    const processGuVRow = (row, guvData, isIncome) => {
-        const paymentDate = Helpers.parseDate(row[12]);
+    // Verarbeitet eine einzelne Zeile (Einnahmen oder Ausgaben)
+    // - row[13]: Zahlungsdatum (für die Monatszuordnung)
+    // - row[4]: Nettobetrag
+    // - row[9]: Restbetrag (wird abgezogen)
+    // - row[5]: MwSt (als String, z.B. "19%")
+    const processUStVARow = (row, ustvaData, isIncome) => {
+        const paymentDate = Helpers.parseDate(row[13]);
         if (!paymentDate || paymentDate > new Date()) return;
-        const month = paymentDate.getMonth() + 1,
-            netto = Helpers.parseCurrency(row[4]),
-            restNetto = Helpers.parseCurrency(row[9]) || 0,
-            gezahltNetto = Math.max(0, netto - restNetto),
-            mwstRate = Helpers.parseMwstRate(row[5]),
-            tax = gezahltNetto * (mwstRate / 100);
-        isIncome
-            ? (guvData[month].einnahmen += gezahltNetto, guvData[month][`ust_${Math.round(mwstRate)}`] += tax)
-            : (guvData[month].ausgaben += gezahltNetto, guvData[month][`vst_${Math.round(mwstRate)}`] += tax);
+        const month = paymentDate.getMonth() + 1;
+        const netto = Helpers.parseCurrency(row[4]);
+        const restNetto = Helpers.parseCurrency(row[9]) || 0;
+        const gezahltNetto = Math.max(0, netto - restNetto);
+        const mwstRate = Helpers.parseMwstRate(row[5]);
+        const tax = gezahltNetto * (mwstRate / 100);
+
+        if (isIncome) {
+            if (Math.round(mwstRate) === 0) {
+                ustvaData[month].steuerfreie_einnahmen += gezahltNetto;
+            } else {
+                ustvaData[month].einnahmen += gezahltNetto;
+                ustvaData[month][`ust_${Math.round(mwstRate)}`] += tax;
+            }
+        } else {
+            if (Math.round(mwstRate) === 0) {
+                ustvaData[month].steuerfreie_ausgaben += gezahltNetto;
+            } else {
+                ustvaData[month].ausgaben += gezahltNetto;
+                ustvaData[month][`vst_${Math.round(mwstRate)}`] += tax;
+            }
+        }
     };
 
-    // Formatiert eine Zeile der GuV-Ausgabe
-    const formatGuVRow = (label, data) => {
-        const ustZahlung = data.ust_19 - data.vst_19,
-            ergebnis = data.einnahmen - data.ausgaben;
-        return [label, data.einnahmen, data.ausgaben, data.ust_0, data.ust_7, data.ust_19, data.vst_0, data.vst_7, data.vst_19, ustZahlung, ergebnis];
+    // Formatiert eine Ausgabereihe für UStVA:
+    // - Ermittelt den USt-Zahlungsbetrag als Differenz (z.B. USt 19% minus VSt 19%)
+    // - Berechnet das Gesamtergebnis (steuerpflichtige + steuerfreie Umsätze minus Ausgaben)
+    const formatUStVARow = (label, data) => {
+        const ustZahlung = data.ust_19 - data.vst_19;
+        const ergebnis =
+            (data.einnahmen + data.steuerfreie_einnahmen) -
+            (data.ausgaben + data.steuerfreie_ausgaben);
+        return [
+            label,
+            data.einnahmen,
+            data.steuerfreie_einnahmen,
+            data.ausgaben,
+            data.steuerfreie_ausgaben,
+            data.ust_7,
+            data.ust_19,
+            data.vst_7,
+            data.vst_19,
+            ustZahlung,
+            ergebnis
+        ];
     };
 
-    // Aggregiert GuV-Daten über einen Zeitraum
-    const aggregateGuV = (guvData, start, end) => {
-        const sum = createEmptyGuV();
+    // Aggregiert UStVA-Daten über einen Zeitraum (z. B. für ein Quartal oder Gesamtjahr)
+    const aggregateUStVA = (ustvaData, start, end) => {
+        const sum = createEmptyUStVA();
         for (let m = start; m <= end; m++) {
-            for (const key in sum) sum[key] += guvData[m][key] || 0;
+            for (const key in sum) {
+                sum[key] += ustvaData[m][key] || 0;
+            }
         }
         return sum;
     };
 
-    // Hauptfunktion zur Berechnung der GuV und Ausgabe ins "GuV"-Sheet
-    const calculateGuV = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet(),
-            revenueSheet = ss.getSheetByName("Einnahmen"),
-            expenseSheet = ss.getSheetByName("Ausgaben");
+    // Hauptfunktion: Berechnet die UStVA und schreibt alle Ergebnisse in einem Batch in das Sheet "UStVA"
+    const calculateUStVA = () => {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const revenueSheet = ss.getSheetByName("Einnahmen");
+        const expenseSheet = ss.getSheetByName("Ausgaben");
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
         }
-        // Validierung der Daten in Revenue und Ausgaben
         if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) return;
-        const revenueData = revenueSheet.getDataRange().getValues().slice(1),
-            expenseData = expenseSheet.getDataRange().getValues().slice(1),
-            guvData = {};
-        for (let m = 1; m <= 12; m++) guvData[m] = createEmptyGuV();
-        revenueData.forEach(row => processGuVRow(row, guvData, true));
-        expenseData.forEach(row => processGuVRow(row, guvData, false));
-        const guvSheet = ss.getSheetByName("GuV") || ss.insertSheet("GuV");
-        guvSheet.clearContents();
-        guvSheet.appendRow(["Zeitraum", "Einnahmen (netto)", "Ausgaben (netto)", "USt 0%", "USt 7%", "USt 19%", "VSt 0%", "VSt 7%", "VSt 19%", "USt-Zahlung", "Ergebnis (Gewinn/Verlust)"]);
-        const monthNames = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
+        // Lade die Daten (ohne Header)
+        const revenueData = revenueSheet.getDataRange().getValues().slice(1);
+        const expenseData = expenseSheet.getDataRange().getValues().slice(1);
+        const ustvaData = {};
         for (let m = 1; m <= 12; m++) {
-            guvSheet.appendRow(formatGuVRow(monthNames[m - 1], guvData[m]));
-            m % 3 === 0 && guvSheet.appendRow(formatGuVRow(`Quartal ${m / 3}`, aggregateGuV(guvData, m - 2, m)));
+            ustvaData[m] = createEmptyUStVA();
         }
-        guvSheet.appendRow(formatGuVRow("Gesamtjahr", aggregateGuV(guvData, 1, 12)));
-        guvSheet.getRange(2, 2, guvSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
-        guvSheet.autoResizeColumns(1, guvSheet.getLastColumn());
-        SpreadsheetApp.getUi().alert("GuV wurde aktualisiert!");
+
+        revenueData.forEach(row => processUStVARow(row, ustvaData, true));
+        expenseData.forEach(row => processUStVARow(row, ustvaData, false));
+
+        // Bereite alle Ausgabezeilen in einem Array vor (Batch-Schreibvorgang)
+        const outputRows = [];
+        outputRows.push([
+            "Zeitraum",
+            "Einnahmen (steuerpflichtig)",
+            "Steuerfreie Einnahmen",
+            "Ausgaben (steuerpflichtig)",
+            "Steuerfreie Ausgaben",
+            "USt 7%",
+            "USt 19%",
+            "VSt 7%",
+            "VSt 19%",
+            "USt-Zahlung",
+            "Ergebnis"
+        ]);
+        const monthNames = [
+            "Januar",
+            "Februar",
+            "März",
+            "April",
+            "Mai",
+            "Juni",
+            "Juli",
+            "August",
+            "September",
+            "Oktober",
+            "November",
+            "Dezember"
+        ];
+        for (let m = 1; m <= 12; m++) {
+            outputRows.push(formatUStVARow(monthNames[m - 1], ustvaData[m]));
+            if (m % 3 === 0) {
+                outputRows.push(formatUStVARow(`Quartal ${m / 3}`, aggregateUStVA(ustvaData, m - 2, m)));
+            }
+        }
+        outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+
+        const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
+        ustvaSheet.clearContents();
+        ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
+        ustvaSheet.getRange(2, 2, ustvaSheet.getLastRow() - 1, 1).setNumberFormat("#,##0.00€");
+        ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+        SpreadsheetApp.getUi().alert("UStVA wurde aktualisiert!");
     };
 
-    return { calculateGuV };
+    return { calculateUStVA };
 })();
 
 // =================== Modul: BWACalculator ===================
@@ -755,7 +835,7 @@ const onOpen = () => {
         .createMenu("📂 Buchhaltung")
         .addItem("📥 Dateien importieren", "importDriveFiles")
         .addItem("🔄 Refresh Active Sheet", "refreshSheet")
-        .addItem("📊 GuV berechnen", "calculateGuV")
+        .addItem("📊 UStVA berechnen", "calculateUStVA")
         .addItem("📈 BWA berechnen", "calculateBWA")
         .addToUi();
 };
@@ -811,6 +891,6 @@ const setupTrigger = () => {
 
 // Wrapper-Funktionen für einfache Trigger-Aufrufe
 const refreshSheet = () => RefreshModule.refreshActiveSheet();
-const calculateGuV = () => { RefreshModule.refreshAllSheets(); GuVCalculator.calculateGuV(); };
+const calculateUStVA = () => { RefreshModule.refreshAllSheets(); UStVACalculator.calculateUStVA(); };
 const calculateBWA = () => { RefreshModule.refreshAllSheets(); BWACalculator.calculateBWA(); };
 const importDriveFiles = () => { ImportModule.importDriveFiles(); RefreshModule.refreshAllSheets(); };
