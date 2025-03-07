@@ -29,7 +29,7 @@ const CategoryConfig = {
             "Umsatzerlöse": "umsatzerloese",
             "Provisionserlöse": "provisionserloese",
             "Sonstige betriebliche Erträge": "sonstigeErtraege",
-            "Privateinlage": "steuerfreieInlandEinnahmen",
+            "Privateinlage": "privateinlage",
             "Darlehen": "steuerfreieInlandEinnahmen",
             "Zinsen": "steuerfreieInlandEinnahmen"
         }
@@ -55,7 +55,7 @@ const CategoryConfig = {
             "Facebook Ads": { taxType: "steuerfrei_ausland" },
             // Bewirtung, die über das Firmenkonto bezahlt wird, gilt hier als steuerpflichtig
             "Bewirtung": { taxType: "steuerpflichtig" },
-            // Zusatz für Abschreibungen & Zinsen (falls als Ausgaben gebucht)
+            // Zusatz für Abschreibungen & Zinsen
             "Abschreibungen Maschinen": { taxType: "steuerpflichtig" },
             "Abschreibungen Büroausstattung": { taxType: "steuerpflichtig" },
             "Zinsen": { taxType: "steuerpflichtig" },
@@ -93,11 +93,7 @@ const CategoryConfig = {
             "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
             "Miete": "mieteNebenkosten",
             "Versicherungen": "versicherungen",
-            "Porto": "betriebskosten",
-            "Google Ads": "werbungMarketing",
-            "AWS": "werbungMarketing",
-            "Facebook Ads": "werbungMarketing",
-            "Bewirtung": "bewirtung",
+            "Kfz-Kosten": "kfzKosten",
             "Abschreibungen Maschinen": "abschreibungenMaschinen",
             "Abschreibungen Büroausstattung": "abschreibungenBueromaterial",
             "Zinsen": "zinsen",
@@ -105,7 +101,6 @@ const CategoryConfig = {
         }
     },
     bank: {
-        // Für Bankbewegungen (Transaktionen über das Firmenkonto)
         category: [
             "Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge", "Wareneinsatz", "Betriebskosten",
             "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen",
@@ -122,8 +117,6 @@ const CategoryConfig = {
         shareholder: ["Christopher Giebel", "Hendrik Werner"]
     },
     eigenbelege: {
-        // Im Sheet "Eigenbelege" kommen private Belege rein (z. B. Kleidung, Trinkgeld, Bewirtung, etc.)
-        // Hier definieren wir explizit das Mapping – es gibt KEINE zusätzliche Kategorie "Eigenbeleg"
         category: ["Kleidung", "Trinkgeld", "Private Vorauslage", "Bürokosten", "Reisekosten", "Bewirtung", "Sonstiges"],
         mapping: {
             "Kleidung": { taxType: "steuerpflichtig" },
@@ -566,7 +559,6 @@ const RefreshModule = (() => {
 
 // =================== Modul: UStVA-Berechnung ===================
 const UStVACalculator = (() => {
-    // Neues UStVA-Datenobjekt mit allen Feldern (inkl. neuer Spalten)
     const createEmptyUStVA = () => ({
         steuerpflichtige_einnahmen: 0,
         steuerfreie_inland_einnahmen: 0,
@@ -583,22 +575,8 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    /**
-     * Verarbeitet eine Zeile aus Einnahmen, Ausgaben oder Eigenbelegen.
-     * Erwartete Spalten (Index):
-     * - 4: Nettobetrag
-     * - 5: MwSt (%) als String, z. B. "19%"
-     * - 9: Restbetrag
-     * - 13: Zahlungsdatum
-     * - 2: Kategorie
-     *
-     * @param {Array} row - Datenzeile
-     * @param {Object} ustvaData - Aggregiertes UStVA-Datenobjekt (monatlich)
-     * @param {Boolean} isIncome - true für Einnahmen, false für Ausgaben
-     * @param {Boolean} [isEigenbelegSheet=false] - true, wenn die Zeile aus dem Sheet "Eigenbelege" stammt
-     */
     const processUStVARow = (row, ustvaData, isIncome, isEigenbelegSheet = false) => {
-        const paymentDate = Helpers.parseDate(row[13]); // Zahlungsdatum (Spalte N)
+        const paymentDate = Helpers.parseDate(row[13]);
         if (!paymentDate || paymentDate > new Date()) return;
         const month = paymentDate.getMonth() + 1;
         const netto = Helpers.parseCurrency(row[4]);
@@ -759,23 +737,23 @@ const UStVACalculator = (() => {
     return { calculateUStVA };
 })();
 
-// =================== Modul: BWACalculator (Erweitert) ===================
+// =================== Modul: BWACalculator (Final) ===================
 const BWACalculator = (() => {
-    // Erweiterter Datencontainer für die BWA
+    // Erweiterter Datencontainer für die BWA mit allen finalen Positionen
     const createEmptyBWA = () => ({
-        // Betriebserlöse
+        // 1️⃣ Betriebserlöse (Einnahmen)
         umsatzerloese: 0,
         provisionserloese: 0,
         sonstigeErtraege: 0,
         steuerfreieInlandEinnahmen: 0,
         steuerfreieAuslandEinnahmen: 0,
         gesamtErloese: 0,
-        // Wareneinsatz & Materialaufwand
+        // 2️⃣ Wareneinsatz & Materialaufwand
         wareneinsatz: 0,
         fremdleistungen: 0,
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
-        // Betriebsausgaben
+        // 3️⃣ Betriebsausgaben
         mieteNebenkosten: 0,
         gehaelterLoehne: 0,
         werbungMarketing: 0,
@@ -784,23 +762,33 @@ const BWACalculator = (() => {
         kfzKosten: 0,
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
-        // Abschreibungen & Zinsen
+        // 4️⃣ Abschreibungen & Zinsen
         abschreibungenMaschinen: 0,
         abschreibungenBueromaterial: 0,
         zinsen: 0,
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
-        // Weitere Ausgaben
-        steuerpflichtigeAusgaben: 0,
-        eigenbelege: 0,
-        // Gesamtausgaben und Ergebnis
-        gesamtAusgaben: 0,
+        // 5️⃣ Besondere Posten (Eigenbelege & Privatkonten)
+        eigenbelegeSteuerpflichtig: 0,
+        eigenbelegeSteuerfrei: 0,
+        privateinlage: 0,
+        privatentnahme: 0,
+        gewinnVerlustVortrag: 0,
+        gesamtBesonderePosten: 0,
+        // 6️⃣ Rückstellungen & Holding Transfers
+        steuerrueckstellungen: 0,
+        rueckstellungenSonstige: 0,
+        holdingTransfers: 0,
+        gesamtRueckstellungenTransfers: 0,
+        // 7️⃣ Betriebsergebnis vor Steuern (EBIT)
         ebit: 0,
-        // Steuern & Gewinn (hier zunächst 0 – ggf. später zu berechnen)
+        // 8️⃣ Steuern & Vorsteuer
         umsatzsteuer: 0,
         vorsteuer: 0,
+        nichtAbzugsfaehigeVSt: 0,
         gewerbesteuer: 0,
         steuerlast: 0,
+        // 9️⃣ Betriebsergebnis nach Steuern (Gewinn)
         gewinnNachSteuern: 0
     });
 
@@ -823,30 +811,54 @@ const BWACalculator = (() => {
             return paymentDate ? paymentDate.getMonth() + 1 : 0;
         };
 
-        // Einnahmen aggregieren
+        // Aggregation der Einnahmen
         const revenueData = revenueSheet.getDataRange().getValues().slice(1);
         revenueData.forEach(row => {
             const month = getMonthFromRow(row);
             if (!month) return;
             const amount = Helpers.parseCurrency(row[4]);
             const category = row[2] ? row[2].toString().trim() : "";
+            if (category === "Privateinlage") {
+                bwaData[month].privateinlage += amount;
+                return;
+            } else if (category === "Gewinnvortrag" || category === "Verlustvortrag" || category === "Gewinnvortrag/Verlustvortrag") {
+                bwaData[month].gewinnVerlustVortrag += amount;
+                return;
+            }
             const mapping = CategoryConfig.einnahmen.bwaMapping[category];
             if (mapping === "umsatzerloese" || mapping === "provisionserloese" || mapping === "sonstigeErtraege") {
                 bwaData[month][mapping] += amount;
-            } else if (["Privateinlage", "Darlehen", "Zinsen"].includes(category)) {
-                bwaData[month].steuerfreieInlandEinnahmen += amount;
             } else if (Helpers.parseMwstRate(row[5]) === 0) {
                 bwaData[month].steuerfreieAuslandEinnahmen += amount;
+            } else {
+                // Standardfälle (hier ggf. anpassen)
+                bwaData[month].umsatzerloese += amount;
             }
         });
 
-        // Ausgaben aggregieren
+        // Aggregation der Ausgaben
         const expenseData = expenseSheet.getDataRange().getValues().slice(1);
         expenseData.forEach(row => {
             const month = getMonthFromRow(row);
             if (!month) return;
             const amount = Helpers.parseCurrency(row[4]);
             const category = row[2] ? row[2].toString().trim() : "";
+            if (category === "Privatentnahme") {
+                bwaData[month].privatentnahme += amount;
+                return;
+            } else if (category === "Steuerrückstellungen") {
+                bwaData[month].steuerrueckstellungen += amount;
+                return;
+            } else if (category === "Rückstellungen sonstige") {
+                bwaData[month].rueckstellungenSonstige += amount;
+                return;
+            } else if (category === "Holding Transfers") {
+                bwaData[month].holdingTransfers += amount;
+                return;
+            } else if (category === "Gewinnvortrag" || category === "Verlustvortrag" || category === "Gewinnvortrag/Verlustvortrag") {
+                bwaData[month].gewinnVerlustVortrag += amount;
+                return;
+            }
             const mapping = CategoryConfig.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
@@ -859,8 +871,7 @@ const BWACalculator = (() => {
                     bwaData[month].rohHilfsBetriebsstoffe += amount;
                     break;
                 case "betriebskosten":
-                    // Hier können ggf. allgemeine Betriebskosten zusammengefasst werden
-                    bwaData[month].steuerpflichtigeAusgaben += amount;
+                    bwaData[month].sonstigeAufwendungen += amount;
                     break;
                 case "werbungMarketing":
                     bwaData[month].werbungMarketing += amount;
@@ -896,42 +907,53 @@ const BWACalculator = (() => {
                     bwaData[month].leasingkosten += amount;
                     break;
                 default:
-                    bwaData[month].steuerpflichtigeAusgaben += amount;
+                    bwaData[month].sonstigeAufwendungen += amount;
             }
         });
 
-        // Eigenbelege aggregieren
+        // Aggregation der Eigenbelege (Aufteilung in steuerpflichtig & steuerfrei)
         if (eigenbelegeSheet) {
             const eigenData = eigenbelegeSheet.getDataRange().getValues().slice(1);
             eigenData.forEach(row => {
                 const month = getMonthFromRow(row);
                 if (!month) return;
                 const amount = Helpers.parseCurrency(row[4]);
-                bwaData[month].eigenbelege += amount;
+                const category = row[2] ? row[2].toString().trim() : "";
+                const eigenMapping = CategoryConfig.eigenbelege.mapping[category] || { taxType: "steuerpflichtig" };
+                if (eigenMapping.taxType === "steuerfrei") {
+                    bwaData[month].eigenbelegeSteuerfrei += amount;
+                } else {
+                    bwaData[month].eigenbelegeSteuerpflichtig += amount;
+                }
             });
         }
 
         // Berechnung der Zwischensummen je Monat
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
-            // Betriebserlöse
+            // 1️⃣ Betriebserlöse
             d.gesamtErloese =
                 d.umsatzerloese +
                 d.provisionserloese +
                 d.sonstigeErtraege +
                 d.steuerfreieInlandEinnahmen +
                 d.steuerfreieAuslandEinnahmen;
-            // Wareneinsatz & Materialaufwand
+            // 2️⃣ Wareneinsatz & Materialaufwand
             d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
-            // Betriebsausgaben
+            // 3️⃣ Betriebsausgaben
             d.gesamtBetriebsausgaben = d.mieteNebenkosten + d.gehaelterLoehne + d.werbungMarketing + d.reisekosten + d.versicherungen + d.kfzKosten + d.sonstigeAufwendungen;
-            // Abschreibungen & Zinsen
+            // 4️⃣ Abschreibungen & Zinsen
             d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial + d.zinsen + d.leasingkosten;
-            // Gesamtausgaben & EBIT
-            d.gesamtAusgaben = d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.steuerpflichtigeAusgaben + d.eigenbelege;
-            d.ebit = d.gesamtErloese - d.gesamtAusgaben;
-            // Beispielhafte Steuerberechnung (sofern entsprechende Werte erfasst werden)
+            // 5️⃣ Besondere Posten
+            d.gesamtBesonderePosten = d.eigenbelegeSteuerpflichtig + d.eigenbelegeSteuerfrei + d.privateinlage + d.privatentnahme + d.gewinnVerlustVortrag;
+            // 6️⃣ Rückstellungen & Holding Transfers
+            d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige + d.holdingTransfers;
+            // Gesamtausgaben und EBIT
+            const gesamtAusgaben = d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten + d.gesamtRueckstellungenTransfers;
+            d.ebit = d.gesamtErloese - gesamtAusgaben;
+            // 8️⃣ Steuern & Vorsteuer (Beispielhafte Berechnung, ggf. anzupassen)
             d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.gewerbesteuer;
+            // 9️⃣ Betriebsergebnis nach Steuern
             d.gewinnNachSteuern = d.ebit - d.steuerlast;
         }
         return bwaData;
@@ -942,9 +964,9 @@ const BWACalculator = (() => {
         const bwaData = aggregateBWAData();
         if (!bwaData) return;
 
-        // Hier werden alle Positionen gemäß deiner Vorlage ausgegeben.
+        // Ausgabepositionen gemäß finaler BWA-Vorlage
         const positions = [
-            // Betriebserlöse
+            // 1️⃣ Betriebserlöse (Einnahmen)
             {
                 label: "Umsatzerlöse (steuerpflichtig)",
                 get: md => md.umsatzerloese || 0
@@ -969,7 +991,7 @@ const BWACalculator = (() => {
                     (md.steuerfreieAuslandEinnahmen || 0) +
                     ((md.provisionserloese || 0) + (md.sonstigeErtraege || 0))
             },
-            // Wareneinsatz & Materialaufwand
+            // 2️⃣ Wareneinsatz & Materialaufwand
             {
                 label: "Wareneinsatz",
                 get: md => md.wareneinsatz || 0
@@ -986,7 +1008,7 @@ const BWACalculator = (() => {
                 label: "Gesamt-Wareneinsatz",
                 get: md => md.gesamtWareneinsatz || 0
             },
-            // Betriebsausgaben
+            // 3️⃣ Betriebsausgaben
             {
                 label: "Miete & Nebenkosten",
                 get: md => md.mieteNebenkosten || 0
@@ -1019,7 +1041,7 @@ const BWACalculator = (() => {
                 label: "Gesamtbetriebsausgaben",
                 get: md => md.gesamtBetriebsausgaben || 0
             },
-            // Abschreibungen & Zinsen
+            // 4️⃣ Abschreibungen & Zinsen
             {
                 label: "Abschreibungen Maschinen",
                 get: md => md.abschreibungenMaschinen || 0
@@ -1040,14 +1062,56 @@ const BWACalculator = (() => {
                 label: "Gesamt Abschreibungen & Zinsen",
                 get: md => md.gesamtAbschreibungenZinsen || 0
             },
-            // EBIT
+            // 5️⃣ Besondere Posten (Eigenbelege & Privatkonten)
+            {
+                label: "Eigenbelege (steuerpflichtig)",
+                get: md => md.eigenbelegeSteuerpflichtig || 0
+            },
+            {
+                label: "Eigenbelege (steuerfrei)",
+                get: md => md.eigenbelegeSteuerfrei || 0
+            },
+            {
+                label: "Privateinlage",
+                get: md => md.privateinlage || 0
+            },
+            {
+                label: "Privatentnahme",
+                get: md => md.privatentnahme || 0
+            },
+            {
+                label: "Gewinnvortrag/Verlustvortrag",
+                get: md => md.gewinnVerlustVortrag || 0
+            },
+            {
+                label: "Gesamt besondere Posten",
+                get: md => md.gesamtBesonderePosten || 0
+            },
+            // 6️⃣ Rückstellungen & Holding Transfers
+            {
+                label: "Steuerrückstellungen",
+                get: md => md.steuerrueckstellungen || 0
+            },
+            {
+                label: "Rückstellungen sonstige",
+                get: md => md.rueckstellungenSonstige || 0
+            },
+            {
+                label: "Holding Transfers",
+                get: md => md.holdingTransfers || 0
+            },
+            {
+                label: "Gesamt Rückstellungen & Transfers",
+                get: md => md.gesamtRueckstellungenTransfers || 0
+            },
+            // 7️⃣ Betriebsergebnis vor Steuern (EBIT)
             {
                 label: "Betriebsergebnis vor Steuern (EBIT)",
                 get: md => md.ebit || 0
             },
-            // Steuern & Vorsteuer (falls erfasst)
+            // 8️⃣ Steuern & Vorsteuer
             {
-                label: "Umsatzsteuer",
+                label: "Umsatzsteuer (abzuführen)",
                 get: md => md.umsatzsteuer || 0
             },
             {
@@ -1056,7 +1120,7 @@ const BWACalculator = (() => {
             },
             {
                 label: "Nicht abzugsfähige VSt (Bewirtung)",
-                get: md => 0 // Hier ggf. anpassen, falls Daten vorliegen
+                get: md => md.nichtAbzugsfaehigeVSt || 0
             },
             {
                 label: "Gewerbesteuer",
@@ -1066,8 +1130,9 @@ const BWACalculator = (() => {
                 label: "Steuerlast gesamt",
                 get: md => md.steuerlast || 0
             },
+            // 9️⃣ Betriebsergebnis nach Steuern (Gewinn)
             {
-                label: "Gewinn nach Steuern",
+                label: "Betriebsergebnis nach Steuern (Gewinn)",
                 get: md => md.gewinnNachSteuern || 0
             }
         ];
