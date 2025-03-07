@@ -152,7 +152,22 @@ const Helpers = (() => {
         return "";
     };
 
-    return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename };
+    const setConditionalFormattingForColumn = (sheet, column, conditions) => {
+        const lastRow = sheet.getLastRow();
+        const range = sheet.getRange(`${column}2:${column}${lastRow}`);
+        const rules = conditions.map(({ value, background, fontColor }) =>
+            SpreadsheetApp.newConditionalFormatRule()
+                .whenTextEqualTo(value)
+                .setBackground(background)
+                .setFontColor(fontColor)
+                .setRanges([range])
+                .build()
+        );
+        sheet.setConditionalFormatRules(rules);
+    };
+
+
+    return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename, setConditionalFormattingForColumn };
 })();
 
 // =================== Modul: Validator ===================
@@ -406,7 +421,6 @@ const RefreshModule = (() => {
         if (name === "Ausgaben") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.ausgaben.category);
         if (name === "Eigenbelege") Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
         Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
-
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
@@ -448,19 +462,10 @@ const RefreshModule = (() => {
         Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
 
         // 4. Bedingte Formatierung für Spalte E (Transaktionstyp)
-        const ruleEinnahme = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Einnahme")
-            .setBackground("#C6EFCE")
-            .setFontColor("#006100")
-            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
-            .build();
-        const ruleAusgabe = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo("Ausgabe")
-            .setBackground("#FFC7CE")
-            .setFontColor("#9C0006")
-            .setRanges([sheet.getRange(`E2:E${lastRow}`)])
-            .build();
-        sheet.setConditionalFormatRules([ruleEinnahme, ruleAusgabe]);
+        Helpers.setConditionalFormattingForColumn(sheet, "E", [
+            { value: "Einnahme", background: "#C6EFCE", fontColor: "#006100" },
+            { value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006" }
+        ]);
 
         // 5. Zahlenformate: Spalte A (Datum) und Spalten C, D (Währungsformat)
         sheet.getRange(`A2:A${lastRow}`).setNumberFormat("DD.MM.YYYY");
