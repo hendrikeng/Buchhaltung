@@ -760,19 +760,26 @@ const onEdit = (e) => {
     // Trigger nur in den angegebenen Sheets ausführen
     if (!(name in mapping)) return;
 
-    // Ermittle die Anzahl der Spalten in der Headerzeile (Zeile 1)
+    // Überspringe Header-Zeile
+    if (range.getRow() === 1) return;
+
+    // Ermittle die Anzahl der Spalten in der Headerzeile
     const headerLen = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length;
-    // Bearbeite nur Zellen in den Spalten, die in der Headerzeile existieren
+    // Bearbeite nur Zellen in Spalten, die in der Headerzeile existieren
     if (range.getColumn() > headerLen) return;
 
     // Überspringe, falls in der Zielspalte (Timestamp-Spalte) editiert wurde
     if (range.getColumn() === mapping[name]) return;
 
-    // Timestamp im deutschen Format erstellen
+    // Wenn die ganze Zeile leer ist, soll kein Timestamp gesetzt werden.
+    const rowValues = sheet.getRange(range.getRow(), 1, 1, headerLen).getValues()[0];
+    if (rowValues.every(cell => cell === "")) return;
+
+    // Timestamp erstellen und in die Zielspalte einfügen
     const ts = new Date();
-    // Timestamp in die entsprechende Spalte in der gleichen Zeile schreiben
     sheet.getRange(range.getRow(), mapping[name]).setValue(ts);
 };
+
 
 
 const setupTrigger = () => {
