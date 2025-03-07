@@ -44,6 +44,9 @@ const CategoryConfig = {
             "Marketing & Werbung": { taxType: "steuerpflichtig" },
             "Reisekosten": { taxType: "steuerpflichtig" },
             "Personalkosten": { taxType: "steuerpflichtig" },
+            // Neue Kategorien für die Aufteilung von Gehältern:
+            "Bruttolöhne & Gehälter": { taxType: "steuerpflichtig" },
+            "Soziale Abgaben & Arbeitgeberanteile": { taxType: "steuerpflichtig" },
             "Sonstige betriebliche Aufwendungen": { taxType: "steuerpflichtig" },
             // Typische steuerfreie Ausgaben (z. B. Reverse Charge, Inland)
             "Miete": { taxType: "steuerfrei_inland" },
@@ -53,13 +56,15 @@ const CategoryConfig = {
             "Google Ads": { taxType: "steuerfrei_ausland" },
             "AWS": { taxType: "steuerfrei_ausland" },
             "Facebook Ads": { taxType: "steuerfrei_ausland" },
-            // Bewirtung, die über das Firmenkonto bezahlt wird, gilt hier als steuerpflichtig
+            // Bewirtung
             "Bewirtung": { taxType: "steuerpflichtig" },
-            // Zusatz für Abschreibungen & Zinsen
+            // Abschreibungen & Zinsen
             "Abschreibungen Maschinen": { taxType: "steuerpflichtig" },
             "Abschreibungen Büroausstattung": { taxType: "steuerpflichtig" },
             "Zinsen": { taxType: "steuerpflichtig" },
-            "Leasingkosten": { taxType: "steuerpflichtig" }
+            "Leasingkosten": { taxType: "steuerpflichtig" },
+            // Neue Kategorie für Gewerbesteuerrückstellungen
+            "Gewerbesteuerrückstellungen": { taxType: "steuerpflichtig" }
         },
         kontoMapping: {
             "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
@@ -68,7 +73,9 @@ const CategoryConfig = {
             "Betriebskosten": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
             "Marketing & Werbung": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
             "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
-            "Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
+            // Für Gehälter haben wir jetzt separate Mappings:
+            "Bruttolöhne & Gehälter": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
+            "Soziale Abgaben & Arbeitgeberanteile": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
             "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" },
             "Miete": { soll: "4900 Miete & Nebenkosten", gegen: "1200 Bank" },
             "Versicherungen": { soll: "4900 Versicherungen", gegen: "1200 Bank" },
@@ -80,7 +87,8 @@ const CategoryConfig = {
             "Abschreibungen Maschinen": { soll: "4900 Abschreibungen Maschinen", gegen: "1200 Bank" },
             "Abschreibungen Büroausstattung": { soll: "4900 Abschreibungen Büroausstattung", gegen: "1200 Bank" },
             "Zinsen": { soll: "4900 Zinsen", gegen: "1200 Bank" },
-            "Leasingkosten": { soll: "4900 Leasingkosten", gegen: "1200 Bank" }
+            "Leasingkosten": { soll: "4900 Leasingkosten", gegen: "1200 Bank" },
+            "Gewerbesteuerrückstellungen": { soll: "4900 Rückstellungen", gegen: "1200 Bank" }
         },
         bwaMapping: {
             "Wareneinsatz": "wareneinsatz",
@@ -89,7 +97,9 @@ const CategoryConfig = {
             "Betriebskosten": "betriebskosten",
             "Marketing & Werbung": "werbungMarketing",
             "Reisekosten": "reisekosten",
-            "Personalkosten": "gehaelterLoehne",
+            // Für Personalkosten nun:
+            "Bruttolöhne & Gehälter": "bruttoLoehne",
+            "Soziale Abgaben & Arbeitgeberanteile": "sozialeAbgaben",
             "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
             "Miete": "mieteNebenkosten",
             "Versicherungen": "versicherungen",
@@ -97,7 +107,8 @@ const CategoryConfig = {
             "Abschreibungen Maschinen": "abschreibungenMaschinen",
             "Abschreibungen Büroausstattung": "abschreibungenBueromaterial",
             "Zinsen": "zinsen",
-            "Leasingkosten": "leasingkosten"
+            "Leasingkosten": "leasingkosten",
+            "Gewerbesteuerrückstellungen": "gewerbesteuerRueckstellungen"
         }
     },
     bank: {
@@ -755,12 +766,17 @@ const BWACalculator = (() => {
         gesamtWareneinsatz: 0,
         // 3️⃣ Betriebsausgaben
         mieteNebenkosten: 0,
-        gehaelterLoehne: 0,
+        // Aufteilung der Gehälter:
+        bruttoLoehne: 0,
+        sozialeAbgaben: 0,
         werbungMarketing: 0,
         reisekosten: 0,
         versicherungen: 0,
         kfzKosten: 0,
         sonstigeAufwendungen: 0,
+        // Neue Gruppen:
+        betriebsaufwand: 0,
+        verwaltungsaufwand: 0,
         gesamtBetriebsausgaben: 0,
         // 4️⃣ Abschreibungen & Zinsen
         abschreibungenMaschinen: 0,
@@ -787,9 +803,12 @@ const BWACalculator = (() => {
         vorsteuer: 0,
         nichtAbzugsfaehigeVSt: 0,
         gewerbesteuer: 0,
+        gewerbesteuerRueckstellungen: 0,
         steuerlast: 0,
         // 9️⃣ Betriebsergebnis nach Steuern (Gewinn)
-        gewinnNachSteuern: 0
+        gewinnNachSteuern: 0,
+        // Neue Spalte: Steuerlicher Gewinn/Verlust (Gewinn nach Steuern inkl. Rückstellungen)
+        steuerlicherGewinn: 0
     });
 
     const aggregateBWAData = () => {
@@ -831,7 +850,6 @@ const BWACalculator = (() => {
             } else if (Helpers.parseMwstRate(row[5]) === 0) {
                 bwaData[month].steuerfreieAuslandEinnahmen += amount;
             } else {
-                // Standardfälle (hier ggf. anpassen)
                 bwaData[month].umsatzerloese += amount;
             }
         });
@@ -859,6 +877,20 @@ const BWACalculator = (() => {
                 bwaData[month].gewinnVerlustVortrag += amount;
                 return;
             }
+            // Neue Aufteilung für Gehälter:
+            if (category === "Bruttolöhne & Gehälter") {
+                bwaData[month].bruttoLoehne += amount;
+                return;
+            }
+            if (category === "Soziale Abgaben & Arbeitgeberanteile") {
+                bwaData[month].sozialeAbgaben += amount;
+                return;
+            }
+            // Gewerbesteuerrückstellungen
+            if (category === "Gewerbesteuerrückstellungen") {
+                bwaData[month].gewerbesteuerRueckstellungen += amount;
+                return;
+            }
             const mapping = CategoryConfig.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
@@ -878,15 +910,6 @@ const BWACalculator = (() => {
                     break;
                 case "reisekosten":
                     bwaData[month].reisekosten += amount;
-                    break;
-                case "gehaelterLoehne":
-                    bwaData[month].gehaelterLoehne += amount;
-                    break;
-                case "sonstigeAufwendungen":
-                    bwaData[month].sonstigeAufwendungen += amount;
-                    break;
-                case "mieteNebenkosten":
-                    bwaData[month].mieteNebenkosten += amount;
                     break;
                 case "versicherungen":
                     bwaData[month].versicherungen += amount;
@@ -928,7 +951,7 @@ const BWACalculator = (() => {
             });
         }
 
-        // Berechnung der Zwischensummen je Monat
+        // Berechnung der Gruppensummen
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
             // 1️⃣ Betriebserlöse
@@ -940,21 +963,24 @@ const BWACalculator = (() => {
                 d.steuerfreieAuslandEinnahmen;
             // 2️⃣ Wareneinsatz & Materialaufwand
             d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
-            // 3️⃣ Betriebsausgaben
-            d.gesamtBetriebsausgaben = d.mieteNebenkosten + d.gehaelterLoehne + d.werbungMarketing + d.reisekosten + d.versicherungen + d.kfzKosten + d.sonstigeAufwendungen;
+            // 3️⃣ Betriebsausgaben: Zuerst werden die Einzelposten belassen, dann gruppiert:
+            d.betriebsaufwand = d.mieteNebenkosten + d.versicherungen + d.kfzKosten;
+            d.verwaltungsaufwand = d.werbungMarketing + d.reisekosten + d.sonstigeAufwendungen;
+            d.gesamtBetriebsausgaben = d.betriebsaufwand + d.verwaltungsaufwand + d.bruttoLoehne + d.sozialeAbgaben;
             // 4️⃣ Abschreibungen & Zinsen
             d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial + d.zinsen + d.leasingkosten;
             // 5️⃣ Besondere Posten
             d.gesamtBesonderePosten = d.eigenbelegeSteuerpflichtig + d.eigenbelegeSteuerfrei + d.privateinlage + d.privatentnahme + d.gewinnVerlustVortrag;
             // 6️⃣ Rückstellungen & Holding Transfers
             d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige + d.holdingTransfers;
-            // Gesamtausgaben und EBIT
-            const gesamtAusgaben = d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten + d.gesamtRueckstellungenTransfers;
-            d.ebit = d.gesamtErloese - gesamtAusgaben;
-            // 8️⃣ Steuern & Vorsteuer (Beispielhafte Berechnung, ggf. anzupassen)
-            d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.gewerbesteuer;
-            // 9️⃣ Betriebsergebnis nach Steuern
+            // 7️⃣ EBIT
+            d.ebit = d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
+            // 8️⃣ Steuern & Vorsteuer (Beispielrechnung – ggf. anpassen)
+            d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.gewerbesteuer + d.gewerbesteuerRueckstellungen;
+            // 9️⃣ Gewinn nach Steuern
             d.gewinnNachSteuern = d.ebit - d.steuerlast;
+            // Neuer Wert: Steuerlicher Gewinn/Verlust (Gewinn nach Steuern inkl. Rückstellungen)
+            d.steuerlicherGewinn = d.gewinnNachSteuern + d.gesamtRueckstellungenTransfers;
         }
         return bwaData;
     };
@@ -964,177 +990,68 @@ const BWACalculator = (() => {
         const bwaData = aggregateBWAData();
         if (!bwaData) return;
 
-        // Ausgabepositionen gemäß finaler BWA-Vorlage
+        // Final definierte Ausgabepositionen gemäß Vorlage
         const positions = [
             // 1️⃣ Betriebserlöse (Einnahmen)
-            {
-                label: "Umsatzerlöse (steuerpflichtig)",
-                get: md => md.umsatzerloese || 0
-            },
-            {
-                label: "Steuerfreie Inland-Einnahmen",
-                get: md => md.steuerfreieInlandEinnahmen || 0
-            },
-            {
-                label: "Steuerfreie Ausland-Einnahmen",
-                get: md => md.steuerfreieAuslandEinnahmen || 0
-            },
-            {
-                label: "Sonstige betriebliche Erträge",
-                get: md => (md.provisionserloese || 0) + (md.sonstigeErtraege || 0)
-            },
-            {
-                label: "Gesamtbetriebserlöse",
-                get: md =>
-                    (md.umsatzerloese || 0) +
-                    (md.steuerfreieInlandEinnahmen || 0) +
-                    (md.steuerfreieAuslandEinnahmen || 0) +
-                    ((md.provisionserloese || 0) + (md.sonstigeErtraege || 0))
-            },
+            { label: "Umsatzerlöse (steuerpflichtig)", get: md => md.umsatzerloese || 0 },
+            { label: "Steuerfreie Inland-Einnahmen", get: md => md.steuerfreieInlandEinnahmen || 0 },
+            { label: "Steuerfreie Ausland-Einnahmen", get: md => md.steuerfreieAuslandEinnahmen || 0 },
+            { label: "Sonstige betriebliche Erträge", get: md => (md.provisionserloese || 0) + (md.sonstigeErtraege || 0) },
+            { label: "Gesamtbetriebserlöse", get: md => md.gesamtErloese || 0 },
+
             // 2️⃣ Wareneinsatz & Materialaufwand
-            {
-                label: "Wareneinsatz",
-                get: md => md.wareneinsatz || 0
-            },
-            {
-                label: "Fremdleistungen",
-                get: md => md.fremdleistungen || 0
-            },
-            {
-                label: "Roh-, Hilfs- & Betriebsstoffe",
-                get: md => md.rohHilfsBetriebsstoffe || 0
-            },
-            {
-                label: "Gesamt-Wareneinsatz",
-                get: md => md.gesamtWareneinsatz || 0
-            },
-            // 3️⃣ Betriebsausgaben
-            {
-                label: "Miete & Nebenkosten",
-                get: md => md.mieteNebenkosten || 0
-            },
-            {
-                label: "Gehälter & Löhne",
-                get: md => md.gehaelterLoehne || 0
-            },
-            {
-                label: "Werbung & Marketing",
-                get: md => md.werbungMarketing || 0
-            },
-            {
-                label: "Reisekosten",
-                get: md => md.reisekosten || 0
-            },
-            {
-                label: "Versicherungen",
-                get: md => md.versicherungen || 0
-            },
-            {
-                label: "Kfz-Kosten",
-                get: md => md.kfzKosten || 0
-            },
-            {
-                label: "Sonstige betriebliche Aufwendungen",
-                get: md => md.sonstigeAufwendungen || 0
-            },
-            {
-                label: "Gesamtbetriebsausgaben",
-                get: md => md.gesamtBetriebsausgaben || 0
-            },
+            { label: "Wareneinsatz", get: md => md.wareneinsatz || 0 },
+            { label: "Fremdleistungen", get: md => md.fremdleistungen || 0 },
+            { label: "Roh-, Hilfs- & Betriebsstoffe", get: md => md.rohHilfsBetriebsstoffe || 0 },
+            { label: "Gesamt-Wareneinsatz", get: md => md.gesamtWareneinsatz || 0 },
+
+            // 3️⃣ Betriebsausgaben (unterteilt)
+            { label: "Miete & Nebenkosten", get: md => md.mieteNebenkosten || 0 },
+            { label: "Bruttolöhne & Gehälter", get: md => md.bruttoLoehne || 0 },
+            { label: "Soziale Abgaben & Arbeitgeberanteile", get: md => md.sozialeAbgaben || 0 },
+            { label: "Werbung & Marketing", get: md => md.werbungMarketing || 0 },
+            { label: "Reisekosten", get: md => md.reisekosten || 0 },
+            { label: "Versicherungen", get: md => md.versicherungen || 0 },
+            { label: "Kfz-Kosten", get: md => md.kfzKosten || 0 },
+            { label: "Sonstige betriebliche Aufwendungen", get: md => md.sonstigeAufwendungen || 0 },
+            { label: "Betriebsaufwand", get: md => md.betriebsaufwand || 0 },
+            { label: "Verwaltungsaufwand", get: md => md.verwaltungsaufwand || 0 },
+            { label: "Gesamtbetriebsausgaben", get: md => md.gesamtBetriebsausgaben || 0 },
+
             // 4️⃣ Abschreibungen & Zinsen
-            {
-                label: "Abschreibungen Maschinen",
-                get: md => md.abschreibungenMaschinen || 0
-            },
-            {
-                label: "Abschreibungen Büroausstattung",
-                get: md => md.abschreibungenBueromaterial || 0
-            },
-            {
-                label: "Zinsen",
-                get: md => md.zinsen || 0
-            },
-            {
-                label: "Leasingkosten",
-                get: md => md.leasingkosten || 0
-            },
-            {
-                label: "Gesamt Abschreibungen & Zinsen",
-                get: md => md.gesamtAbschreibungenZinsen || 0
-            },
+            { label: "Abschreibungen Maschinen", get: md => md.abschreibungenMaschinen || 0 },
+            { label: "Abschreibungen Büroausstattung", get: md => md.abschreibungenBueromaterial || 0 },
+            { label: "Zinsen", get: md => md.zinsen || 0 },
+            { label: "Leasingkosten", get: md => md.leasingkosten || 0 },
+            { label: "Gesamt Abschreibungen & Zinsen", get: md => md.gesamtAbschreibungenZinsen || 0 },
+
             // 5️⃣ Besondere Posten (Eigenbelege & Privatkonten)
-            {
-                label: "Eigenbelege (steuerpflichtig)",
-                get: md => md.eigenbelegeSteuerpflichtig || 0
-            },
-            {
-                label: "Eigenbelege (steuerfrei)",
-                get: md => md.eigenbelegeSteuerfrei || 0
-            },
-            {
-                label: "Privateinlage",
-                get: md => md.privateinlage || 0
-            },
-            {
-                label: "Privatentnahme",
-                get: md => md.privatentnahme || 0
-            },
-            {
-                label: "Gewinnvortrag/Verlustvortrag",
-                get: md => md.gewinnVerlustVortrag || 0
-            },
-            {
-                label: "Gesamt besondere Posten",
-                get: md => md.gesamtBesonderePosten || 0
-            },
+            { label: "Eigenbelege (steuerpflichtig)", get: md => md.eigenbelegeSteuerpflichtig || 0 },
+            { label: "Eigenbelege (steuerfrei)", get: md => md.eigenbelegeSteuerfrei || 0 },
+            { label: "Privateinlage", get: md => md.privateinlage || 0 },
+            { label: "Privatentnahme", get: md => md.privatentnahme || 0 },
+            { label: "Gewinnvortrag/Verlustvortrag", get: md => md.gewinnVerlustVortrag || 0 },
+            { label: "Gesamt besondere Posten", get: md => md.gesamtBesonderePosten || 0 },
+
             // 6️⃣ Rückstellungen & Holding Transfers
-            {
-                label: "Steuerrückstellungen",
-                get: md => md.steuerrueckstellungen || 0
-            },
-            {
-                label: "Rückstellungen sonstige",
-                get: md => md.rueckstellungenSonstige || 0
-            },
-            {
-                label: "Holding Transfers",
-                get: md => md.holdingTransfers || 0
-            },
-            {
-                label: "Gesamt Rückstellungen & Transfers",
-                get: md => md.gesamtRueckstellungenTransfers || 0
-            },
+            { label: "Steuerrückstellungen", get: md => md.steuerrueckstellungen || 0 },
+            { label: "Rückstellungen sonstige", get: md => md.rueckstellungenSonstige || 0 },
+            { label: "Holding Transfers", get: md => md.holdingTransfers || 0 },
+            { label: "Gesamt Rückstellungen & Transfers", get: md => md.gesamtRueckstellungenTransfers || 0 },
+
             // 7️⃣ Betriebsergebnis vor Steuern (EBIT)
-            {
-                label: "Betriebsergebnis vor Steuern (EBIT)",
-                get: md => md.ebit || 0
-            },
+            { label: "Betriebsergebnis vor Steuern (EBIT)", get: md => md.ebit || 0 },
+
             // 8️⃣ Steuern & Vorsteuer
-            {
-                label: "Umsatzsteuer (abzuführen)",
-                get: md => md.umsatzsteuer || 0
-            },
-            {
-                label: "Vorsteuer",
-                get: md => md.vorsteuer || 0
-            },
-            {
-                label: "Nicht abzugsfähige VSt (Bewirtung)",
-                get: md => md.nichtAbzugsfaehigeVSt || 0
-            },
-            {
-                label: "Gewerbesteuer",
-                get: md => md.gewerbesteuer || 0
-            },
-            {
-                label: "Steuerlast gesamt",
-                get: md => md.steuerlast || 0
-            },
-            // 9️⃣ Betriebsergebnis nach Steuern (Gewinn)
-            {
-                label: "Betriebsergebnis nach Steuern (Gewinn)",
-                get: md => md.gewinnNachSteuern || 0
-            }
+            { label: "Umsatzsteuer (abzuführen)", get: md => md.umsatzsteuer || 0 },
+            { label: "Vorsteuer", get: md => md.vorsteuer || 0 },
+            { label: "Nicht abzugsfähige VSt (Bewirtung)", get: md => md.nichtAbzugsfaehigeVSt || 0 },
+            { label: "Gewerbesteuer", get: md => md.gewerbesteuer || 0 },
+            { label: "Steuerlast gesamt", get: md => md.steuerlast || 0 },
+
+            // 9️⃣ Betriebsergebnis nach Steuern (Gewinn) & steuerlicher Gewinn/Verlust
+            { label: "Betriebsergebnis nach Steuern (Gewinn)", get: md => md.gewinnNachSteuern || 0 },
+            { label: "Steuerlicher Gewinn/Verlust", get: md => md.steuerlicherGewinn || 0 }
         ];
 
         const header = [
