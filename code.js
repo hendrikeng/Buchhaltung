@@ -1,13 +1,13 @@
 // =================== Zentrale Konfiguration ===================
-// =================== Zentrale Konfiguration ===================
 const config = {
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
         months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        defaultMwst: 19,
-        stammkapital: 25000  // Stammkapital für die Bilanz
     },
     tax: {
+        defaultMwst: 19,
+        stammkapital: 25000,
+        year: 2021,
         isHolding: false, // true bei Holding
         holding: {
             gewerbesteuer: 16.45,
@@ -234,7 +234,7 @@ const Helpers = (() => {
     const parseMwstRate = value => {
         if (typeof value === "number") return value < 1 ? value * 100 : value;
         const rate = parseFloat(value.toString().replace("%", "").replace(",", ".").trim());
-        return isNaN(rate) ? config.common.defaultMwst : rate;
+        return isNaN(rate) ? config.tax.defaultMwst : rate;
     };
 
     const getFolderByName = (parent, name) => {
@@ -264,6 +264,12 @@ const Helpers = (() => {
                 .build()
         );
         sheet.setConditionalFormatRules(rules);
+    };
+
+    const getMonthFromRow = (row, colIndex = 13) => {
+        const d = Helpers.parseDate(row[colIndex]);
+        if (!d || d.getFullYear() !== config.tax.year) return 0;
+        return d.getMonth() + 1;
     };
 
     return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename, setConditionalFormattingForColumn };
@@ -494,16 +500,18 @@ const RefreshModule = (() => {
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
 
+        // In RefreshModule, im refreshDataSheet – ersetze den Formelteil für Spalte 12:
         Object.entries({
             7: row => `=E${row}*F${row}`,
             8: row => `=E${row}+G${row}`,
             10: row => `=(H${row}-I${row})/(1+VALUE(F${row}))`,
-            11: row => `=IF(A${row}=""; ""; ROUNDUP(MONTH(A${row})/3;0))`,
-            12: row => `=IF(OR(I${row}=""; I${row}=0); "Offen"; IF(I${row}>=H${row}; "Bezahlt"; "Teilbezahlt"))`
+            11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
+            12: row => `=IF(OR(VALUE(I${row})=0); "Offen"; IF(VALUE(I${row})>=VALUE(H${row}); "Bezahlt"; "Teilbezahlt"))`
         }).forEach(([col, formulaFn]) => {
             const formulas = Array.from({ length: numRows }, (_, i) => [formulaFn(i + 2)]);
             sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
         });
+
 
         const col9Range = sheet.getRange(2, 9, numRows, 1);
         const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
@@ -649,6 +657,7 @@ const UStVACalculator = (() => {
     // Bestimmt den Monat (Spalte 14, Index 13)
     const getMonthFromRow = row => {
         const d = Helpers.parseDate(row[13]);
+        if (!d || d.getFullYear() !== config.tax.year) return 0;
         return d ? d.getMonth() + 1 : 0;
     };
 
@@ -659,7 +668,7 @@ const UStVACalculator = (() => {
         if (!month) return;
         const netto = Helpers.parseCurrency(row[4]);
         const restNetto = Helpers.parseCurrency(row[9]) || 0;
-        const gezahlt = Math.max(0, netto - restNetto);
+        const gezahlt = netto - restNetto;
         const mwstRate = Helpers.parseMwstRate(row[5]);
         const roundedRate = Math.round(mwstRate);
         const tax = gezahlt * (mwstRate / 100);
@@ -1152,7 +1161,7 @@ const calculateBilanz = () => {
     const passiva = [
         ["Passiva (Finanzierung & Schulden)", ""],
         ["2.1 Eigenkapital", ""],
-        ["Stammkapital", config.common.stammkapital],
+        ["Stammkapital", config.tax.stammkapital],
         ["Gewinn-/Verlustvortrag", ""],
         ["Jahresüberschuss/-fehlbetrag", jahresUeberschuss],
         ["Zwischensumme Eigenkapital", "=SUM(F3:F5)"],
