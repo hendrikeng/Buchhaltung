@@ -1,9 +1,11 @@
 // =================== Zentrale Konfiguration ===================
+// =================== Zentrale Konfiguration ===================
 const config = {
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
         months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        defaultMwst: 19
+        defaultMwst: 19,
+        stammkapital: 25000  // Stammkapital für die Bilanz
     },
     tax: {
         isHolding: false, // true bei Holding
@@ -138,13 +140,54 @@ const config = {
             "Telefon & Internet": "telefonInternet",
             "Bürokosten": "buerokosten",
             "Fortbildungskosten": "fortbildungskosten"
-        },
+        }
     },
+    // Hier wird nun die Bank-Konfiguration angepasst:
     bank: {
         category: [
-            "Erlöse aus Lieferungen und Leistungen", "Provisionserlöse", "Sonstige betriebliche Erträge",
-            "Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten",
-            "Sonstige betriebliche Aufwendungen"
+            // Kategorien aus Einnahmen
+            "Erlöse aus Lieferungen und Leistungen",
+            "Provisionserlöse",
+            "Sonstige betriebliche Erträge",
+            "Erträge aus Vermietung/Verpachtung",
+            "Erträge aus Zuschüssen",
+            "Erträge aus Währungsgewinnen",
+            "Erträge aus Anlagenabgängen",
+            "Darlehen",
+            "Zinsen",
+            // Kategorien aus Ausgaben
+            "Wareneinsatz",
+            "Bezogene Leistungen",
+            "Roh-, Hilfs- & Betriebsstoffe",
+            "Betriebskosten",
+            "Marketing & Werbung",
+            "Reisekosten",
+            "Personalkosten",
+            "Bruttolöhne & Gehälter",
+            "Soziale Abgaben & Arbeitgeberanteile",
+            "Sonstige Personalkosten",
+            "Sonstige betriebliche Aufwendungen",
+            "Miete",
+            "Versicherungen",
+            "Porto",
+            "Google Ads",
+            "AWS",
+            "Facebook Ads",
+            "Bewirtung",
+            "Telefon & Internet",
+            "Bürokosten",
+            "Fortbildungskosten",
+            // Kategorien aus Gesellschafterkonto
+            "Gesellschafterdarlehen",
+            "Ausschüttungen",
+            "Kapitalrückführung",
+            // Kategorien aus Holding Transfers
+            "Gewinnübertrag",
+            // Kategorien aus Eigenbelege
+            "Kleidung",
+            "Trinkgeld",
+            "Private Vorauslage",
+            "Sonstiges"
         ],
         type: ["Einnahme", "Ausgabe"]
     },
@@ -603,7 +646,7 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    // Gemeinsame Funktion: Bestimmt den Monat (Spalte 14, Index 13)
+    // Bestimmt den Monat (Spalte 14, Index 13)
     const getMonthFromRow = row => {
         const d = Helpers.parseDate(row[13]);
         return d ? d.getMonth() + 1 : 0;
@@ -828,7 +871,7 @@ const BWACalculator = (() => {
         eigenbelegeSteuerpflichtig: 0
     });
 
-    // Gemeinsame Funktion: Bestimmt den Monat (Spalte 14, Index 13)
+    // Bestimmt den Monat (Spalte 14, Index 13)
     const getMonthFromRow = row => {
         const d = Helpers.parseDate(row[13]);
         return d ? d.getMonth() + 1 : 0;
@@ -917,7 +960,7 @@ const BWACalculator = (() => {
         expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
         if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
 
-        // Berechnung der Gruppensummen und Steuerwerte
+        // Gruppensummen und Steuerwerte berechnen
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
             d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen +
@@ -945,7 +988,7 @@ const BWACalculator = (() => {
         return bwaData;
     };
 
-    // Erzeugt den Header mit Monats- und Quartalsspalten
+    // Erzeugt den Header (2 Spalten: Bezeichnung und Wert) mit Monats- und Quartalsspalten
     const buildHeaderRow = () => {
         const headers = ["Kategorie"];
         for (let q = 0; q < 4; q++) {
@@ -958,14 +1001,13 @@ const BWACalculator = (() => {
         return headers;
     };
 
-    // buildOutputRow wird innerhalb von calculateBWA definiert, damit bwaData im Scope ist
+    // buildOutputRow wird innerhalb von calculateBWA definiert, sodass bwaData im Scope ist
     const calculateBWA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const bwaData = aggregateBWAData();
         if (!bwaData) return;
 
         const positions = [
-            // Gruppe 1
             { label: "Erlöse aus Lieferungen und Leistungen", get: d => d.umsatzerloese || 0 },
             { label: "Sonstige betriebliche Erträge", get: d => d.sonstigeErtraege || 0 },
             { label: "Erträge aus Vermietung/Verpachtung", get: d => d.vermietung || 0 },
@@ -973,12 +1015,10 @@ const BWACalculator = (() => {
             { label: "Erträge aus Währungsgewinnen", get: d => d.waehrungsgewinne || 0 },
             { label: "Erträge aus Anlagenabgängen", get: d => d.anlagenabgaenge || 0 },
             { label: "Betriebserlöse", get: d => d.gesamtErloese || 0 },
-            // Gruppe 2
             { label: "Wareneinsatz", get: d => d.wareneinsatz || 0 },
             { label: "Bezogene Leistungen", get: d => d.fremdleistungen || 0 },
             { label: "Roh-, Hilfs- & Betriebsstoffe", get: d => d.rohHilfsBetriebsstoffe || 0 },
             { label: "Gesamtkosten Material & Fremdleistungen", get: d => d.gesamtWareneinsatz || 0 },
-            // Gruppe 3
             { label: "Bruttolöhne & Gehälter", get: d => d.bruttoLoehne || 0 },
             { label: "Soziale Abgaben & Arbeitgeberanteile", get: d => d.sozialeAbgaben || 0 },
             { label: "Sonstige Personalkosten", get: d => d.sonstigePersonalkosten || 0 },
@@ -990,7 +1030,6 @@ const BWACalculator = (() => {
             { label: "Fortbildungskosten", get: d => d.fortbildungskosten || 0 },
             { label: "Kfz-Kosten", get: d => d.kfzKosten || 0 },
             { label: "Sonstige betriebliche Aufwendungen", get: d => d.sonstigeAufwendungen || 0 },
-            // Gruppe 4
             { label: "Abschreibungen Maschinen", get: d => d.abschreibungenMaschinen || 0 },
             { label: "Abschreibungen Büroausstattung", get: d => d.abschreibungenBueromaterial || 0 },
             { label: "Abschreibungen immaterielle Wirtschaftsgüter", get: d => d.abschreibungenImmateriell || 0 },
@@ -998,16 +1037,12 @@ const BWACalculator = (() => {
             { label: "Zinsen auf Gesellschafterdarlehen", get: d => d.zinsenGesellschafter || 0 },
             { label: "Leasingkosten", get: d => d.leasingkosten || 0 },
             { label: "Gesamt Abschreibungen & Zinsen", get: d => d.gesamtAbschreibungenZinsen || 0 },
-            // Gruppe 5
             { label: "Eigenkapitalveränderungen", get: d => d.eigenkapitalveraenderungen || 0 },
             { label: "Gesellschafterdarlehen", get: d => d.gesellschafterdarlehen || 0 },
             { label: "Ausschüttungen an Gesellschafter", get: d => d.ausschuettungen || 0 },
-            // Gruppe 6
             { label: "Steuerrückstellungen", get: d => d.steuerrueckstellungen || 0 },
             { label: "Rückstellungen sonstige", get: d => d.rueckstellungenSonstige || 0 },
-            // Gruppe 7
             { label: "Betriebsergebnis vor Steuern (EBIT)", get: d => d.ebit || 0 },
-            // Gruppe 8
             { label: "Umsatzsteuer (abzuführen)", get: d => d.umsatzsteuer || 0 },
             { label: "Vorsteuer", get: d => d.vorsteuer || 0 },
             { label: "Nicht abzugsfähige VSt (Bewirtung)", get: d => d.nichtAbzugsfaehigeVSt || 0 },
@@ -1015,14 +1050,13 @@ const BWACalculator = (() => {
             { label: "Solidaritätszuschlag", get: d => d.solidaritaetszuschlag || 0 },
             { label: "Gewerbesteuer", get: d => d.gewerbesteuer || 0 },
             { label: "Gesamtsteueraufwand", get: d => d.steuerlast || 0 },
-            // Gruppe 9
             { label: "Jahresüberschuss/-fehlbetrag", get: d => d.gewinnNachSteuern || 0 }
         ];
 
         const headerRow = buildHeaderRow();
         const outputRows = [headerRow];
 
-        // Funktion zum Bauen einer Zeile; da bwaData hier verfügbar ist
+        // buildOutputRow erhält bwaData aus diesem Scope
         const buildOutputRow = pos => {
             const monthly = [];
             let yearly = 0;
@@ -1067,6 +1101,89 @@ const BWACalculator = (() => {
     return { calculateBWA };
 })();
 
+// =================== Neues Modul: calculateBilanz ===================
+const calculateBilanz = () => {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Ermittelt Bankguthaben aus "Bankbewegungen" (Endsaldo)
+    let bankGuthaben = "";
+    const bankSheet = ss.getSheetByName("Bankbewegungen");
+    if (bankSheet) {
+        const lastRow = bankSheet.getLastRow();
+        if (lastRow >= 1) {
+            const label = bankSheet.getRange(lastRow, 2).getValue().toString().toLowerCase();
+            if (label === "endsaldo") {
+                bankGuthaben = bankSheet.getRange(lastRow, 4).getValue();
+            }
+        }
+    }
+
+    // Jahresüberschuss aus "BWA" (Letzte Zeile, sofern dort "Jahresüberschuss" vorkommt)
+    let jahresUeberschuss = "";
+    const bwaSheet = ss.getSheetByName("BWA");
+    if (bwaSheet) {
+        const data = bwaSheet.getDataRange().getValues();
+        const lastRowData = data[data.length - 1];
+        if (lastRowData[0].toString().toLowerCase().includes("jahresüberschuss")) {
+            jahresUeberschuss = lastRowData[lastRowData.length - 1];
+        }
+    }
+
+    // Aufbau der Aktiva (2 Spalten: Bezeichnung, Wert)
+    const aktiva = [
+        ["Aktiva (Vermögenswerte)", ""],
+        ["1.1 Anlagevermögen", ""],
+        ["Sachanlagen", ""],
+        ["Immaterielle Vermögenswerte", ""],
+        ["Finanzanlagen", ""],
+        ["Zwischensumme Anlagevermögen", "=SUM(B3:B5)"],
+        ["", ""],
+        ["1.2 Umlaufvermögen", ""],
+        ["Bankguthaben", bankGuthaben],
+        ["Kasse", ""],
+        ["Forderungen aus L&L", ""],
+        ["Vorräte", ""],
+        ["Zwischensumme Umlaufvermögen", "=SUM(B9:B12)"],
+        ["", ""],
+        ["Gesamt Aktiva", "=B6+B13"]
+    ];
+
+    // Aufbau der Passiva (2 Spalten: Bezeichnung, Wert)
+    const passiva = [
+        ["Passiva (Finanzierung & Schulden)", ""],
+        ["2.1 Eigenkapital", ""],
+        ["Stammkapital", config.common.stammkapital],
+        ["Gewinn-/Verlustvortrag", ""],
+        ["Jahresüberschuss/-fehlbetrag", jahresUeberschuss],
+        ["Zwischensumme Eigenkapital", "=SUM(F3:F5)"],
+        ["", ""],
+        ["2.2 Verbindlichkeiten", ""],
+        ["Bankdarlehen", ""],
+        ["Gesellschafterdarlehen", ""],
+        ["Verbindlichkeiten aus L&L", ""],
+        ["Steuerrückstellungen", ""],
+        ["Zwischensumme Verbindlichkeiten", "=SUM(F8:F11)"],
+        ["", ""],
+        ["Gesamt Passiva", "=F6+F13"]
+    ];
+
+    // Erstelle oder leere das Blatt "Bilanz"
+    let bilanzSheet = ss.getSheetByName("Bilanz");
+    if (!bilanzSheet) {
+        bilanzSheet = ss.insertSheet("Bilanz");
+    } else {
+        bilanzSheet.clearContents();
+    }
+
+    // Schreibe Aktiva ab Zelle A1 und Passiva ab Zelle E1 (2 Spalten jeweils)
+    bilanzSheet.getRange(1, 1, aktiva.length, 2).setValues(aktiva);
+    bilanzSheet.getRange(1, 5, passiva.length, 2).setValues(passiva);
+
+    // Spalten anpassen
+    bilanzSheet.autoResizeColumns(1, 6);
+    SpreadsheetApp.getUi().alert("Bilanz wurde erstellt!");
+};
+
 // =================== Globale Funktionen ===================
 const onOpen = () => {
     SpreadsheetApp.getUi()
@@ -1075,6 +1192,7 @@ const onOpen = () => {
         .addItem("🔄 Refresh Active Sheet", "refreshSheet")
         .addItem("📊 UStVA berechnen", "calculateUStVA")
         .addItem("📈 BWA berechnen", "calculateBWA")
+        .addItem("📝 Bilanz erstellen", "calculateBilanz")
         .addToUi();
 };
 
