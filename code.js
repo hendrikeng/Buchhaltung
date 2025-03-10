@@ -1,9 +1,26 @@
 // =================== Zentrale Konfiguration ===================
-const CategoryConfig = {
+const config = {
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal"],
         months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
         defaultMwst: 19
+    },
+    tax: {
+        isHolding: false, // true bei Holding
+        holding: {
+            gewerbesteuer: 16.45,
+            koerperschaftsteuer: 5.5,
+            solidaritaetszuschlag: 5.5,
+            gewinnUebertragSteuerfrei: 95,
+            gewinnUebertragSteuerpflichtig: 5
+        },
+        operative: {
+            gewerbesteuer: 16.45,
+            koerperschaftsteuer: 15,
+            solidaritaetszuschlag: 5.5,
+            gewinnUebertragSteuerfrei: 0,
+            gewinnUebertragSteuerpflichtig: 100
+        }
     },
     einnahmen: {
         categories: {
@@ -14,8 +31,8 @@ const CategoryConfig = {
             "Erträge aus Zuschüssen": { taxType: "steuerpflichtig" },
             "Erträge aus Währungsgewinnen": { taxType: "steuerpflichtig" },
             "Erträge aus Anlagenabgängen": { taxType: "steuerpflichtig" },
-            "Darlehen": { taxType: "steuerfrei_inland" }, // wird nicht in der BWA berücksichtigt
-            "Zinsen": { taxType: "steuerfrei_inland" }    // wird nicht in der BWA berücksichtigt
+            "Darlehen": { taxType: "steuerfrei_inland" },
+            "Zinsen": { taxType: "steuerfrei_inland" }
         },
         kontoMapping: {
             "Erlöse aus Lieferungen und Leistungen": { soll: "1200 Bank", gegen: "4400 Erlöse aus L&L" },
@@ -28,7 +45,6 @@ const CategoryConfig = {
             "Darlehen": { soll: "1200 Bank", gegen: "3000 Darlehen" },
             "Zinsen": { soll: "1200 Bank", gegen: "2650 Zinserträge" }
         },
-        // Für die BWA aggregieren wir nur die operativen Umsätze:
         bwaMapping: {
             "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
             "Provisionserlöse": "provisionserloese",
@@ -37,7 +53,6 @@ const CategoryConfig = {
             "Erträge aus Zuschüssen": "zuschuesse",
             "Erträge aus Währungsgewinnen": "waehrungsgewinne",
             "Erträge aus Anlagenabgängen": "anlagenabgaenge"
-            // Darlehen & Zinsen werden nicht in die BWA einbezogen.
         }
     },
     ausgaben: {
@@ -107,16 +122,6 @@ const CategoryConfig = {
             "Sonstige Steuerrückstellungen": { soll: "4900 Sonstige Steuerrückstellungen", gegen: "1200 Bank" }
         },
         bwaMapping: {
-            // Gruppe 1:
-            "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
-            "Provisionserlöse": "provisionserloese",
-            "Sonstige betriebliche Erträge": "sonstigeErtraege",
-            "Erträge aus Vermietung/Verpachtung": "vermietung",
-            "Erträge aus Zuschüssen": "zuschuesse",
-            "Erträge aus Währungsgewinnen": "waehrungsgewinne",
-            "Erträge aus Anlagenabgängen": "anlagenabgaenge",
-            // Gruppe 2: (keine Anpassung – übernimmt die Felder direkt)
-            // Gruppe 3:
             "Wareneinsatz": "wareneinsatz",
             "Bezogene Leistungen": "bezogeneLeistungen",
             "Roh-, Hilfs- & Betriebsstoffe": "rohHilfsBetriebsstoffe",
@@ -132,37 +137,19 @@ const CategoryConfig = {
             "Porto": "betriebskosten",
             "Telefon & Internet": "telefonInternet",
             "Bürokosten": "buerokosten",
-            "Fortbildungskosten": "fortbildungskosten",
-            // Gruppe 4:
-            "Abschreibungen Maschinen": "abschreibungenMaschinen",
-            "Abschreibungen Büroausstattung": "abschreibungenBueromaterial",
-            "Abschreibungen immaterielle Wirtschaftsgüter": "abschreibungenImmateriell",
-            "Zinsen auf Bankdarlehen": "zinsenBank",
-            "Zinsen auf Gesellschafterdarlehen": "zinsenGesellschafter",
-            "Leasingkosten": "leasingkosten",
-            // Gruppe 5: Besondere Posten (Kapitalbewegungen)
-            "Eigenkapitalveränderungen": "eigenkapitalveraenderungen",
-            "Gesellschafterdarlehen": "gesellschafterdarlehen",
-            "Ausschüttungen an Gesellschafter": "ausschuettungen",
-            // Gruppe 6:
-            "Gewerbesteuerrückstellungen": "gewerbesteuerRueckstellungen",
-            // Gruppe 8:
-            "Körperschaftsteuer": "koerperschaftsteuer",
-            "Solidaritätszuschlag": "solidaritaetszuschlag",
-            "Sonstige Steuerrückstellungen": "sonstigeSteuerrueckstellungen"
-        }
+            "Fortbildungskosten": "fortbildungskosten"
+        },
     },
     bank: {
         category: [
             "Erlöse aus Lieferungen und Leistungen", "Provisionserlöse", "Sonstige betriebliche Erträge",
             "Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten",
-            "Sonstige betriebliche Aufwendungen", "Privateinlage", "Darlehen", "Eigenbeleg",
-            "Privatentnahme", "Zinsen", "Gewinnübertrag", "Kapitalrückführung"
+            "Sonstige betriebliche Aufwendungen"
         ],
         type: ["Einnahme", "Ausgabe"]
     },
     gesellschafterkonto: {
-        category: ["Privateinlage", "Privatentnahme", "Darlehen"],
+        category: ["Gesellschafterdarlehen", "Ausschüttungen", "Kapitalrückführung"],
         shareholder: ["Christopher Giebel", "Hendrik Werner"]
     },
     eigenbelege: {
@@ -179,7 +166,7 @@ const CategoryConfig = {
         status: ["Offen", "Erstattet", "Gebucht"]
     },
     holdingTransfers: {
-        category: ["Gewinnübertrag", "Kapitalrückführung"] // wird in der BWA ignoriert
+        category: ["Gewinnübertrag", "Kapitalrückführung"]
     }
 };
 
@@ -204,7 +191,7 @@ const Helpers = (() => {
     const parseMwstRate = value => {
         if (typeof value === "number") return value < 1 ? value * 100 : value;
         const rate = parseFloat(value.toString().replace("%", "").replace(",", ".").trim());
-        return isNaN(rate) ? CategoryConfig.common.defaultMwst : rate;
+        return isNaN(rate) ? config.common.defaultMwst : rate;
     };
 
     const getFolderByName = (parent, name) => {
@@ -481,12 +468,12 @@ const RefreshModule = (() => {
 
         const name = sheet.getName();
         if (name === "Einnahmen")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(CategoryConfig.einnahmen.categories));
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(config.einnahmen.categories));
         if (name === "Ausgaben")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(CategoryConfig.ausgaben.categories));
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(config.ausgaben.categories));
         if (name === "Eigenbelege")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, CategoryConfig.eigenbelege.category);
-        Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, CategoryConfig.common.paymentType);
+            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, config.eigenbelege.category);
+        Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, config.common.paymentType);
         sheet.autoResizeColumns(1, sheet.getLastColumn());
     };
 
@@ -510,13 +497,13 @@ const RefreshModule = (() => {
         });
         sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
 
-        Validator.validateDropdown(sheet, firstDataRow, 5, numDataRows, 1, CategoryConfig.bank.type);
-        Validator.validateDropdown(sheet, firstDataRow, 6, numDataRows, 1, CategoryConfig.bank.category);
-        const allowedKontoSoll = Object.values(CategoryConfig.einnahmen.kontoMapping)
-            .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
+        Validator.validateDropdown(sheet, firstDataRow, 5, numDataRows, 1, config.bank.type);
+        Validator.validateDropdown(sheet, firstDataRow, 6, numDataRows, 1, config.bank.category);
+        const allowedKontoSoll = Object.values(config.einnahmen.kontoMapping)
+            .concat(Object.values(config.ausgaben.kontoMapping))
             .map(m => m.soll);
-        const allowedGegenkonto = Object.values(CategoryConfig.einnahmen.kontoMapping)
-            .concat(Object.values(CategoryConfig.ausgaben.kontoMapping))
+        const allowedGegenkonto = Object.values(config.einnahmen.kontoMapping)
+            .concat(Object.values(config.ausgaben.kontoMapping))
             .map(m => m.gegen);
         Validator.validateDropdown(sheet, firstDataRow, 7, numDataRows, 1, allowedKontoSoll);
         Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
@@ -533,11 +520,11 @@ const RefreshModule = (() => {
             const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
             if (globalRow === lastRow && label === "endsaldo") return;
             const type = row[4];
-            const category = row[5];
+            const category = row[5] || "";
             let mapping = type === "Einnahme"
-                ? CategoryConfig.einnahmen.kontoMapping[category]
+                ? config.einnahmen.kontoMapping[category]
                 : type === "Ausgabe"
-                    ? CategoryConfig.ausgaben.kontoMapping[category]
+                    ? config.ausgaben.kontoMapping[category]
                     : null;
             if (!mapping) mapping = { soll: "Manuell prüfen", gegen: "Manuell prüfen" };
             row[6] = mapping.soll;
@@ -616,86 +603,95 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    const processUStVARow = (row, ustvaData, isIncome, isEigenbelegSheet = false) => {
+    // Gemeinsame Funktion: Bestimmt den Monat (Spalte 14, Index 13)
+    const getMonthFromRow = row => {
+        const d = Helpers.parseDate(row[13]);
+        return d ? d.getMonth() + 1 : 0;
+    };
+
+    const processUStVARow = (row, data, isIncome, isEigen = false) => {
         const paymentDate = Helpers.parseDate(row[13]);
-        const month = paymentDate instanceof Date ? paymentDate.getMonth() + 1 : 0;
-        if (!paymentDate || month === 0 || paymentDate > new Date()) return;
+        if (!paymentDate || paymentDate > new Date()) return;
+        const month = paymentDate.getMonth() + 1;
+        if (!month) return;
         const netto = Helpers.parseCurrency(row[4]);
         const restNetto = Helpers.parseCurrency(row[9]) || 0;
         const gezahlt = Math.max(0, netto - restNetto);
         const mwstRate = Helpers.parseMwstRate(row[5]);
         const roundedRate = Math.round(mwstRate);
         const tax = gezahlt * (mwstRate / 100);
-        const category = row[2] ? row[2].toString().trim() : "";
+        const category = row[2]?.toString().trim() || "";
 
         if (isIncome) {
-            const taxInfo = CategoryConfig.einnahmen.categories[category] || { taxType: "steuerpflichtig" };
-            if (taxInfo.taxType === "steuerfrei_inland") {
-                ustvaData[month].steuerfreie_inland_einnahmen += gezahlt;
-            } else if (taxInfo.taxType === "steuerfrei_ausland" || roundedRate === 0) {
-                ustvaData[month].steuerfreie_ausland_einnahmen += gezahlt;
+            const catCfg = config.einnahmen.categories[category] ?? {};
+            const taxType = catCfg.taxType ?? "steuerpflichtig";
+            if (taxType === "steuerfrei_inland") {
+                data[month].steuerfreie_inland_einnahmen += gezahlt;
+            } else if (taxType === "steuerfrei_ausland" || !roundedRate) {
+                data[month].steuerfreie_ausland_einnahmen += gezahlt;
             } else {
-                ustvaData[month].steuerpflichtige_einnahmen += gezahlt;
-                ustvaData[month][`ust_${roundedRate}`] += tax;
+                data[month].steuerpflichtige_einnahmen += gezahlt;
+                data[month][`ust_${roundedRate}`] += tax;
             }
         } else {
-            if (isEigenbelegSheet) {
-                const eigenMapping = CategoryConfig.eigenbelege.mapping[category] || { taxType: "steuerpflichtig" };
-                if (eigenMapping.taxType === "steuerfrei") {
-                    ustvaData[month].eigenbelege_steuerfrei += gezahlt;
-                } else if (eigenMapping.taxType === "eigenbeleg" && eigenMapping.besonderheit === "bewirtung") {
-                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
-                    ustvaData[month][`vst_${roundedRate}`] += tax * 0.7;
-                    ustvaData[month].nicht_abzugsfaehige_vst += tax * 0.3;
+            if (isEigen) {
+                const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+                const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+                if (taxType === "steuerfrei") {
+                    data[month].eigenbelege_steuerfrei += gezahlt;
+                } else if (taxType === "eigenbeleg" && eigenCfg.besonderheit === "bewirtung") {
+                    data[month].eigenbelege_steuerpflichtig += gezahlt;
+                    data[month][`vst_${roundedRate}`] += tax * 0.7;
+                    data[month].nicht_abzugsfaehige_vst += tax * 0.3;
                 } else {
-                    ustvaData[month].eigenbelege_steuerpflichtig += gezahlt;
-                    ustvaData[month][`vst_${roundedRate}`] += tax;
+                    data[month].eigenbelege_steuerpflichtig += gezahlt;
+                    data[month][`vst_${roundedRate}`] += tax;
                 }
             } else {
-                const taxInfo = CategoryConfig.ausgaben.categories[category] || { taxType: "steuerpflichtig" };
-                if (taxInfo.taxType === "steuerfrei_inland") {
-                    ustvaData[month].steuerfreie_inland_ausgaben += gezahlt;
-                } else if (taxInfo.taxType === "steuerfrei_ausland") {
-                    ustvaData[month].steuerfreie_ausland_ausgaben += gezahlt;
+                const catCfg = config.ausgaben.categories[category] ?? {};
+                const taxType = catCfg.taxType ?? "steuerpflichtig";
+                if (taxType === "steuerfrei_inland") {
+                    data[month].steuerfreie_inland_ausgaben += gezahlt;
+                } else if (taxType === "steuerfrei_ausland") {
+                    data[month].steuerfreie_ausland_ausgaben += gezahlt;
                 } else {
-                    ustvaData[month].steuerpflichtige_ausgaben += gezahlt;
-                    ustvaData[month][`vst_${roundedRate}`] += tax;
+                    data[month].steuerpflichtige_ausgaben += gezahlt;
+                    data[month][`vst_${roundedRate}`] += tax;
                 }
             }
         }
     };
 
-    const formatUStVARow = (label, data) => {
-        const ustZahlung = (data.ust_7 + data.ust_19) - ((data.vst_7 + data.vst_19) - data.nicht_abzugsfaehige_vst);
-        const ergebnis =
-            (data.steuerpflichtige_einnahmen + data.steuerfreie_inland_einnahmen + data.steuerfreie_ausland_einnahmen) -
-            (data.steuerpflichtige_ausgaben + data.steuerfreie_inland_ausgaben + data.steuerfreie_ausland_ausgaben +
-                data.eigenbelege_steuerpflichtig + data.eigenbelege_steuerfrei);
+    const formatUStVARow = (label, d) => {
+        const ustZahlung = (d.ust_7 + d.ust_19) - ((d.vst_7 + d.vst_19) - d.nicht_abzugsfaehige_vst);
+        const ergebnis = (d.steuerpflichtige_einnahmen + d.steuerfreie_inland_einnahmen + d.steuerfreie_ausland_einnahmen) -
+            (d.steuerpflichtige_ausgaben + d.steuerfreie_inland_ausgaben + d.steuerfreie_ausland_ausgaben +
+                d.eigenbelege_steuerpflichtig + d.eigenbelege_steuerfrei);
         return [
             label,
-            data.steuerpflichtige_einnahmen,
-            data.steuerfreie_inland_einnahmen,
-            data.steuerfreie_ausland_einnahmen,
-            data.steuerpflichtige_ausgaben,
-            data.steuerfreie_inland_ausgaben,
-            data.steuerfreie_ausland_ausgaben,
-            data.eigenbelege_steuerpflichtig,
-            data.eigenbelege_steuerfrei,
-            data.nicht_abzugsfaehige_vst,
-            data.ust_7,
-            data.ust_19,
-            data.vst_7,
-            data.vst_19,
+            d.steuerpflichtige_einnahmen,
+            d.steuerfreie_inland_einnahmen,
+            d.steuerfreie_ausland_einnahmen,
+            d.steuerpflichtige_ausgaben,
+            d.steuerfreie_inland_ausgaben,
+            d.steuerfreie_ausland_ausgaben,
+            d.eigenbelege_steuerpflichtig,
+            d.eigenbelege_steuerfrei,
+            d.nicht_abzugsfaehige_vst,
+            d.ust_7,
+            d.ust_19,
+            d.vst_7,
+            d.vst_19,
             ustZahlung,
             ergebnis
         ];
     };
 
-    const aggregateUStVA = (ustvaData, start, end) => {
+    const aggregateUStVA = (data, start, end) => {
         const sum = createEmptyUStVA();
         for (let m = start; m <= end; m++) {
             for (const key in sum) {
-                sum[key] += ustvaData[m][key] || 0;
+                sum[key] += data[m][key] || 0;
             }
         }
         return sum;
@@ -705,7 +701,7 @@ const UStVACalculator = (() => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
-        const eigenbelegeSheet = ss.getSheetByName("Eigenbelege");
+        const eigenSheet = ss.getSheetByName("Eigenbelege");
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return;
@@ -714,63 +710,44 @@ const UStVACalculator = (() => {
 
         const revenueData = revenueSheet.getDataRange().getValues();
         const expenseData = expenseSheet.getDataRange().getValues();
-        const eigenData = eigenbelegeSheet ? eigenbelegeSheet.getDataRange().getValues() : [];
+        const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
+        const ustvaData = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 1, createEmptyUStVA()]));
 
-        const ustvaData = {};
-        for (let m = 1; m <= 12; m++) {
-            ustvaData[m] = createEmptyUStVA();
-        }
-
-        const getMonthFromRow = row => {
-            const paymentDate = Helpers.parseDate(row[13]);
-            return paymentDate instanceof Date ? paymentDate.getMonth() + 1 : 0;
-        };
-
-        if (revenueData.length > 1) {
-            revenueData.slice(1).forEach(row => {
+        const processRows = (data, isIncome, isEigen = false) =>
+            data.slice(1).forEach(row => {
                 const m = getMonthFromRow(row);
-                if (m > 0) processUStVARow(row, ustvaData, true);
+                if (m) processUStVARow(row, ustvaData, isIncome, isEigen);
             });
-        }
-        if (expenseData.length > 1) {
-            expenseData.slice(1).forEach(row => {
-                const m = getMonthFromRow(row);
-                if (m > 0) processUStVARow(row, ustvaData, false);
-            });
-        }
-        if (eigenData.length > 1) {
-            eigenData.slice(1).forEach(row => {
-                const m = getMonthFromRow(row);
-                if (m > 0) processUStVARow(row, ustvaData, false, true);
-            });
-        }
+        processRows(revenueData, true);
+        processRows(expenseData, false);
+        if (eigenData.length) processRows(eigenData, false, true);
 
-        const outputRows = [];
-        outputRows.push([
-            "Zeitraum",
-            "Steuerpflichtige Einnahmen",
-            "Steuerfreie Inland-Einnahmen",
-            "Steuerfreie Ausland-Einnahmen",
-            "Steuerpflichtige Ausgaben",
-            "Steuerfreie Inland-Ausgaben",
-            "Steuerfreie Ausland-Ausgaben",
-            "Eigenbelege steuerpflichtig",
-            "Eigenbelege steuerfrei",
-            "Nicht abzugsfähige VSt (Bewirtung)",
-            "USt 7%",
-            "USt 19%",
-            "VSt 7%",
-            "VSt 19%",
-            "USt-Zahlung",
-            "Ergebnis"
-        ]);
-        const monthNames = CategoryConfig.common.months;
-        for (let m = 1; m <= 12; m++) {
-            outputRows.push(formatUStVARow(monthNames[m - 1], ustvaData[m]));
-            if (m % 3 === 0) {
-                outputRows.push(formatUStVARow(`Quartal ${m / 3}`, aggregateUStVA(ustvaData, m - 2, m)));
+        const outputRows = [
+            [
+                "Zeitraum",
+                "Steuerpflichtige Einnahmen",
+                "Steuerfreie Inland-Einnahmen",
+                "Steuerfreie Ausland-Einnahmen",
+                "Steuerpflichtige Ausgaben",
+                "Steuerfreie Inland-Ausgaben",
+                "Steuerfreie Ausland-Ausgaben",
+                "Eigenbelege steuerpflichtig",
+                "Eigenbelege steuerfrei",
+                "Nicht abzugsfähige VSt (Bewirtung)",
+                "USt 7%",
+                "USt 19%",
+                "VSt 7%",
+                "VSt 19%",
+                "USt-Zahlung",
+                "Ergebnis"
+            ]
+        ];
+        config.common.months.forEach((name, i) => {
+            outputRows.push(formatUStVARow(name, ustvaData[i + 1]));
+            if ((i + 1) % 3 === 0) {
+                outputRows.push(formatUStVARow(`Quartal ${(i + 1) / 3}`, aggregateUStVA(ustvaData, i - 1, i + 1)));
             }
-        }
+        });
         outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
 
         const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
@@ -786,27 +763,23 @@ const UStVACalculator = (() => {
 
 // =================== Modul: BWACalculator (Final) ===================
 const BWACalculator = (() => {
-    // Für die BWA werden nur betriebliche Einnahmen & Ausgaben aggregiert – Kapitalbewegungen (Privateinlage, Privatentnahme, Holding Transfers) werden ignoriert.
-    // Anpassungen gemäß SKR04/Elster: NEU sind u.a. zusätzliche Kategorien in den Bereichen Einnahmen, Personalkosten, Zinsen sowie Steuern.
     const createEmptyBWA = () => ({
         // Gruppe 1: Betriebserlöse (Einnahmen)
-        umsatzerloese: 0,         // Erlöse aus Lieferungen und Leistungen (inkl. Provisionserlöse)
+        umsatzerloese: 0,
         provisionserloese: 0,
         steuerfreieInlandEinnahmen: 0,
         steuerfreieAuslandEinnahmen: 0,
-        sonstigeErtraege: 0,       // Sonstige betriebliche Erträge
-        vermietung: 0,            // Erträge aus Vermietung/Verpachtung
-        zuschuesse: 0,            // Erträge aus Zuschüssen
-        waehrungsgewinne: 0,       // Erträge aus Währungsgewinnen
-        anlagenabgaenge: 0,        // Erträge aus Anlagenabgängen
-        gesamtErloese: 0,          // Aggregierte Betriebserlöse
-
+        sonstigeErtraege: 0,
+        vermietung: 0,
+        zuschuesse: 0,
+        waehrungsgewinne: 0,
+        anlagenabgaenge: 0,
+        gesamtErloese: 0,
         // Gruppe 2: Materialaufwand & Wareneinsatz
         wareneinsatz: 0,
-        fremdleistungen: 0,        // Bezogene Leistungen
+        fremdleistungen: 0,
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
-
         // Gruppe 3: Betriebsausgaben (Sachkosten)
         bruttoLoehne: 0,
         sozialeAbgaben: 0,
@@ -820,7 +793,6 @@ const BWACalculator = (() => {
         kfzKosten: 0,
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
-
         // Gruppe 4: Abschreibungen & Zinsen
         abschreibungenMaschinen: 0,
         abschreibungenBueromaterial: 0,
@@ -829,21 +801,17 @@ const BWACalculator = (() => {
         zinsenGesellschafter: 0,
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
-
         // Gruppe 5: Besondere Posten (Kapitalbewegungen)
         eigenkapitalveraenderungen: 0,
         gesellschafterdarlehen: 0,
         ausschuettungen: 0,
-
         // Gruppe 6: Rückstellungen
         steuerrueckstellungen: 0,
         rueckstellungenSonstige: 0,
         gesamtRueckstellungenTransfers: 0,
-
         // Gruppe 7: EBIT
         ebit: 0,
-
-        // Gruppe 8: Steuern & Vorsteuer (nur Informationswerte für Elster)
+        // Gruppe 8: Steuern & Vorsteuer
         umsatzsteuer: 0,
         vorsteuer: 0,
         nichtAbzugsfaehigeVSt: 0,
@@ -853,262 +821,226 @@ const BWACalculator = (() => {
         gewerbesteuerRueckstellungen: 0,
         sonstigeSteuerrueckstellungen: 0,
         steuerlast: 0,
-
         // Gruppe 9: Jahresüberschuss/-fehlbetrag
-        gewinnNachSteuern: 0
+        gewinnNachSteuern: 0,
+        // Eigenbelege (zur Aggregation)
+        eigenbelegeSteuerfrei: 0,
+        eigenbelegeSteuerpflichtig: 0
     });
+
+    // Gemeinsame Funktion: Bestimmt den Monat (Spalte 14, Index 13)
+    const getMonthFromRow = row => {
+        const d = Helpers.parseDate(row[13]);
+        return d ? d.getMonth() + 1 : 0;
+    };
 
     const aggregateBWAData = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const revenueSheet = ss.getSheetByName("Einnahmen");
         const expenseSheet = ss.getSheetByName("Ausgaben");
-        const eigenbelegeSheet = ss.getSheetByName("Eigenbelege");
+        const eigenSheet = ss.getSheetByName("Eigenbelege");
         if (!revenueSheet || !expenseSheet) {
             SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
             return null;
         }
-        const bwaData = {};
-        for (let m = 1; m <= 12; m++) {
-            bwaData[m] = createEmptyBWA();
-        }
+        const bwaData = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 1, createEmptyBWA()]));
 
-        const getMonthFromRow = row => {
-            const paymentDate = Helpers.parseDate(row[13]);
-            return paymentDate instanceof Date ? paymentDate.getMonth() + 1 : 0;
+        const processRevenue = row => {
+            const m = getMonthFromRow(row);
+            if (!m) return;
+            const amount = Helpers.parseCurrency(row[4]);
+            const category = row[2]?.toString().trim() || "";
+            if (["Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
+            if (category === "Sonstige betriebliche Erträge") return void (bwaData[m].sonstigeErtraege += amount);
+            if (category === "Erträge aus Vermietung/Verpachtung") return void (bwaData[m].vermietung += amount);
+            if (category === "Erträge aus Zuschüssen") return void (bwaData[m].zuschuesse += amount);
+            if (category === "Erträge aus Währungsgewinnen") return void (bwaData[m].waehrungsgewinne += amount);
+            if (category === "Erträge aus Anlagenabgängen") return void (bwaData[m].anlagenabgaenge += amount);
+            const mapping = config.einnahmen.bwaMapping[category];
+            if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
+                bwaData[m][mapping] += amount;
+            } else if (Helpers.parseMwstRate(row[5]) === 0) {
+                bwaData[m].steuerfreieInlandEinnahmen += amount;
+            } else {
+                bwaData[m].umsatzerloese += amount;
+            }
         };
 
-        // Aggregation der Einnahmen – Kapitalbewegungen (Darlehen, Zinsen) werden ignoriert
-        const revenueData = revenueSheet.getDataRange().getValues();
-        if (revenueData.length > 1) {
-            revenueData.slice(1).forEach(row => {
-                const m = getMonthFromRow(row);
-                if (!m) return;
-                const amount = Helpers.parseCurrency(row[4]);
-                const category = row[2] ? row[2].toString().trim() : "";
-                if (category === "Gewinnvortrag" || category === "Verlustvortrag" || category === "Gewinnvortrag/Verlustvortrag") {
-                    bwaData[m].gewinnVerlustVortrag += amount;
-                    return;
-                }
-                if (category === "Sonstige betriebliche Erträge") {
-                    bwaData[m].sonstigeErtraege = (bwaData[m].sonstigeErtraege || 0) + amount;
-                    return;
-                }
-                if (category === "Erträge aus Vermietung/Verpachtung") {
-                    bwaData[m].vermietung += amount;
-                    return;
-                }
-                if (category === "Erträge aus Zuschüssen") {
-                    bwaData[m].zuschuesse += amount;
-                    return;
-                }
-                if (category === "Erträge aus Währungsgewinnen") {
-                    bwaData[m].waehrungsgewinne += amount;
-                    return;
-                }
-                if (category === "Erträge aus Anlagenabgängen") {
-                    bwaData[m].anlagenabgaenge += amount;
-                    return;
-                }
-                const mapping = CategoryConfig.einnahmen.bwaMapping[category];
-                if (mapping === "umsatzerloese" || mapping === "provisionserloese") {
-                    bwaData[m][mapping] += amount;
-                } else if (Helpers.parseMwstRate(row[5]) === 0) {
-                    bwaData[m].steuerfreieInlandEinnahmen += amount;
-                } else {
-                    bwaData[m].umsatzerloese += amount;
-                }
-            });
-        }
-        for (let m = 1; m <= 12; m++) {
-            const d = bwaData[m];
-            d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen + (d.sonstigeErtraege || 0) + d.vermietung + d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge;
-        }
-
-        // Aggregation der Ausgaben – Kapitalbewegungen ignorieren
-        const expenseData = expenseSheet.getDataRange().getValues();
-        if (expenseData.length > 1) {
-            expenseData.slice(1).forEach(row => {
-                const m = getMonthFromRow(row);
-                if (!m) return;
-                const amount = Helpers.parseCurrency(row[4]);
-                const category = row[2] ? row[2].toString().trim() : "";
-                if (category === "Privatentnahme" || category === "Privateinlage" || category === "Holding Transfers") return;
-                if (category === "Gewinnvortrag" || category === "Verlustvortrag" || category === "Gewinnvortrag/Verlustvortrag") {
-                    bwaData[m].gewinnVerlustVortrag += amount;
-                    return;
-                }
-                if (category === "Bruttolöhne & Gehälter") {
-                    bwaData[m].bruttoLoehne += amount;
-                    return;
-                }
-                if (category === "Soziale Abgaben & Arbeitgeberanteile") {
-                    bwaData[m].sozialeAbgaben += amount;
-                    return;
-                }
-                if (category === "Sonstige Personalkosten") {
-                    bwaData[m].sonstigePersonalkosten += amount;
-                    return;
-                }
-                if (category === "Gewerbesteuerrückstellungen") {
-                    bwaData[m].gewerbesteuerRueckstellungen += amount;
-                    return;
-                }
-                if (category === "Telefon & Internet") {
-                    bwaData[m].telefonInternet += amount;
-                    return;
-                }
-                if (category === "Bürokosten") {
-                    bwaData[m].buerokosten += amount;
-                    return;
-                }
-                if (category === "Fortbildungskosten") {
-                    bwaData[m].fortbildungskosten += amount;
-                    return;
-                }
-                const mapping = CategoryConfig.ausgaben.bwaMapping[category];
-                switch (mapping) {
-                    case "wareneinsatz":
-                        bwaData[m].wareneinsatz += amount;
-                        break;
-                    case "bezogeneLeistungen":
-                        bwaData[m].fremdleistungen += amount;
-                        break;
-                    case "rohHilfsBetriebsstoffe":
-                        bwaData[m].rohHilfsBetriebsstoffe += amount;
-                        break;
-                    case "betriebskosten":
-                        bwaData[m].sonstigeAufwendungen += amount;
-                        break;
-                    case "werbungMarketing":
-                        bwaData[m].werbungMarketing += amount;
-                        break;
-                    case "reisekosten":
-                        bwaData[m].reisekosten += amount;
-                        break;
-                    case "versicherungen":
-                        bwaData[m].versicherungen += amount;
-                        break;
-                    case "kfzKosten":
-                        bwaData[m].kfzKosten += amount;
-                        break;
-                    case "abschreibungenMaschinen":
-                        bwaData[m].abschreibungenMaschinen += amount;
-                        break;
-                    case "abschreibungenBueromaterial":
-                        bwaData[m].abschreibungenBueromaterial += amount;
-                        break;
-                    case "zinsenBank":
-                        bwaData[m].zinsenBank += amount;
-                        break;
-                    case "zinsenGesellschafter":
-                        bwaData[m].zinsenGesellschafter += amount;
-                        break;
-                    case "leasingkosten":
-                        bwaData[m].leasingkosten += amount;
-                        break;
-                    default:
-                        bwaData[m].sonstigeAufwendungen += amount;
-                }
-            });
-        }
-
-        // Aggregation der Eigenbelege
-        if (eigenbelegeSheet) {
-            const eigenData = eigenbelegeSheet.getDataRange().getValues();
-            if (eigenData.length > 1) {
-                eigenData.slice(1).forEach(row => {
-                    const m = getMonthFromRow(row);
-                    if (!m) return;
-                    const amount = Helpers.parseCurrency(row[4]);
-                    const category = row[2] ? row[2].toString().trim() : "";
-                    const eigenMapping = CategoryConfig.eigenbelege.mapping[category] || { taxType: "steuerpflichtig" };
-                    if (eigenMapping.taxType === "steuerfrei") {
-                        bwaData[m].eigenbelegeSteuerfrei += amount;
-                    } else {
-                        bwaData[m].eigenbelegeSteuerpflichtig += amount;
-                    }
-                });
+        const processExpense = row => {
+            const m = getMonthFromRow(row);
+            if (!m) return;
+            const amount = Helpers.parseCurrency(row[4]);
+            const category = row[2]?.toString().trim() || "";
+            if (["Privatentnahme", "Privateinlage", "Holding Transfers",
+                "Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
+            if (category === "Bruttolöhne & Gehälter") return void (bwaData[m].bruttoLoehne += amount);
+            if (category === "Soziale Abgaben & Arbeitgeberanteile") return void (bwaData[m].sozialeAbgaben += amount);
+            if (category === "Sonstige Personalkosten") return void (bwaData[m].sonstigePersonalkosten += amount);
+            if (category === "Gewerbesteuerrückstellungen") return void (bwaData[m].gewerbesteuerRueckstellungen += amount);
+            if (category === "Telefon & Internet") return void (bwaData[m].telefonInternet += amount);
+            if (category === "Bürokosten") return void (bwaData[m].buerokosten += amount);
+            if (category === "Fortbildungskosten") return void (bwaData[m].fortbildungskosten += amount);
+            const mapping = config.ausgaben.bwaMapping[category];
+            switch (mapping) {
+                case "wareneinsatz": bwaData[m].wareneinsatz += amount; break;
+                case "bezogeneLeistungen": bwaData[m].fremdleistungen += amount; break;
+                case "rohHilfsBetriebsstoffe": bwaData[m].rohHilfsBetriebsstoffe += amount; break;
+                case "betriebskosten": bwaData[m].sonstigeAufwendungen += amount; break;
+                case "werbungMarketing": bwaData[m].werbungMarketing += amount; break;
+                case "reisekosten": bwaData[m].reisekosten += amount; break;
+                case "versicherungen": bwaData[m].versicherungen += amount; break;
+                case "kfzKosten": bwaData[m].kfzKosten += amount; break;
+                case "abschreibungenMaschinen": bwaData[m].abschreibungenMaschinen += amount; break;
+                case "abschreibungenBueromaterial": bwaData[m].abschreibungenBueromaterial += amount; break;
+                case "zinsenBank": bwaData[m].zinsenBank += amount; break;
+                case "zinsenGesellschafter": bwaData[m].zinsenGesellschafter += amount; break;
+                case "leasingkosten": bwaData[m].leasingkosten += amount; break;
+                default: bwaData[m].sonstigeAufwendungen += amount;
             }
-        }
+        };
 
-        // Gruppensummen berechnen
+        const processEigen = row => {
+            const m = getMonthFromRow(row);
+            if (!m) return;
+            const amount = Helpers.parseCurrency(row[4]);
+            const category = row[2]?.toString().trim() || "";
+            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+            const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+            if (taxType === "steuerfrei") {
+                bwaData[m].eigenbelegeSteuerfrei += amount;
+            } else {
+                bwaData[m].eigenbelegeSteuerpflichtig += amount;
+            }
+        };
+
+        revenueSheet.getDataRange().getValues().slice(1).forEach(processRevenue);
+        expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
+        if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
+
+        // Berechnung der Gruppensummen und Steuerwerte
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
+            d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen +
+                d.sonstigeErtraege + d.vermietung + d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge;
             d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
-            d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten + d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet + d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen;
-            d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial + d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter + d.leasingkosten;
+            d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
+                d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
+                d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen;
+            d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
+                d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter + d.leasingkosten;
             d.gesamtBesonderePosten = d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen;
             d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige;
             d.ebit = d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
-            d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer + d.gewerbesteuerRueckstellungen + d.sonstigeSteuerrueckstellungen;
+            d.gewerbesteuer = d.ebit * (config.tax.operative.gewerbesteuer / 100);
+            if (config.tax.isHolding) {
+                d.koerperschaftsteuer = d.ebit * (config.tax.holding.koerperschaftsteuer / 100) * (config.tax.holding.gewinnUebertragSteuerpflichtig / 100);
+                d.solidaritaetszuschlag = d.ebit * (config.tax.holding.solidaritaetszuschlag / 100) * (config.tax.holding.gewinnUebertragSteuerpflichtig / 100);
+            } else {
+                d.koerperschaftsteuer = d.ebit * (config.tax.operative.koerperschaftsteuer / 100);
+                d.solidaritaetszuschlag = d.ebit * (config.tax.operative.solidaritaetszuschlag / 100);
+            }
+            d.steuerlast = d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer;
             d.gewinnNachSteuern = d.ebit - d.steuerlast;
         }
         return bwaData;
     };
 
-    // --- Ausgabe der BWA mit Gruppen-Headern ---
+    // Erzeugt den Header mit Monats- und Quartalsspalten
+    const buildHeaderRow = () => {
+        const headers = ["Kategorie"];
+        for (let q = 0; q < 4; q++) {
+            for (let m = q * 3; m < q * 3 + 3; m++) {
+                headers.push(`${config.common.months[m]} (€)`);
+            }
+            headers.push(`Q${q + 1} (€)`);
+        }
+        headers.push("Jahr (€)");
+        return headers;
+    };
+
+    // buildOutputRow wird innerhalb von calculateBWA definiert, damit bwaData im Scope ist
     const calculateBWA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const bwaData = aggregateBWAData();
         if (!bwaData) return;
 
-        // Positionsdefinition – nur betriebliche Positionen (Kapitalbewegungen werden entfernt)
-        // Gruppe 1: Betriebserlöse (Einnahmen)
         const positions = [
-            { label: "Erlöse aus Lieferungen und Leistungen", get: md => md.umsatzerloese || 0 },
-            { label: "Sonstige betriebliche Erträge", get: md => md.sonstigeErtraege || 0 },
-            { label: "Erträge aus Vermietung/Verpachtung", get: md => md.vermietung || 0 },
-            { label: "Erträge aus Zuschüssen", get: md => md.zuschuesse || 0 },
-            { label: "Erträge aus Währungsgewinnen", get: md => md.waehrungsgewinne || 0 },
-            { label: "Erträge aus Anlagenabgängen", get: md => md.anlagenabgaenge || 0 },
-            { label: "Betriebserlöse", get: md => md.gesamtErloese || 0 },
-            // Gruppe 2: Materialaufwand & Wareneinsatz
-            { label: "Wareneinsatz", get: md => md.wareneinsatz || 0 },
-            { label: "Bezogene Leistungen", get: md => md.fremdleistungen || 0 },
-            { label: "Roh-, Hilfs- & Betriebsstoffe", get: md => md.rohHilfsBetriebsstoffe || 0 },
-            { label: "Gesamtkosten Material & Fremdleistungen", get: md => md.gesamtWareneinsatz || 0 },
-            // Gruppe 3: Betriebsausgaben (Sachkosten)
-            { label: "Bruttolöhne & Gehälter", get: md => md.bruttoLoehne || 0 },
-            { label: "Soziale Abgaben & Arbeitgeberanteile", get: md => md.sozialeAbgaben || 0 },
-            { label: "Sonstige Personalkosten", get: md => md.sonstigePersonalkosten || 0 },
-            { label: "Werbung & Marketing", get: md => md.werbungMarketing || 0 },
-            { label: "Reisekosten", get: md => md.reisekosten || 0 },
-            { label: "Versicherungen", get: md => md.versicherungen || 0 },
-            { label: "Telefon & Internet", get: md => md.telefonInternet || 0 },
-            { label: "Bürokosten", get: md => md.buerokosten || 0 },
-            { label: "Fortbildungskosten", get: md => md.fortbildungskosten || 0 },
-            { label: "Kfz-Kosten", get: md => md.kfzKosten || 0 },
-            { label: "Sonstige betriebliche Aufwendungen", get: md => md.sonstigeAufwendungen || 0 },
-            // Gruppe 4: Abschreibungen & Zinsen
-            { label: "Abschreibungen Maschinen", get: md => md.abschreibungenMaschinen || 0 },
-            { label: "Abschreibungen Büroausstattung", get: md => md.abschreibungenBueromaterial || 0 },
-            { label: "Abschreibungen immaterielle Wirtschaftsgüter", get: md => md.abschreibungenImmateriell || 0 },
-            { label: "Zinsen auf Bankdarlehen", get: md => md.zinsenBank || 0 },
-            { label: "Zinsen auf Gesellschafterdarlehen", get: md => md.zinsenGesellschafter || 0 },
-            { label: "Leasingkosten", get: md => md.leasingkosten || 0 },
-            { label: "Gesamt Abschreibungen & Zinsen", get: md => md.gesamtAbschreibungenZinsen || 0 },
-            // Gruppe 5: Besondere Posten
-            { label: "Eigenkapitalveränderungen", get: md => md.eigenkapitalveraenderungen || 0 },
-            { label: "Gesellschafterdarlehen", get: md => md.gesellschafterdarlehen || 0 },
-            { label: "Ausschüttungen an Gesellschafter", get: md => md.ausschuettungen || 0 },
-            // Gruppe 6: Rückstellungen
-            { label: "Steuerrückstellungen", get: md => md.steuerrueckstellungen || 0 },
-            { label: "Rückstellungen sonstige", get: md => md.rueckstellungenSonstige || 0 },
-            // Gruppe 7: EBIT
-            { label: "Betriebsergebnis vor Steuern (EBIT)", get: md => md.ebit || 0 },
-            // Gruppe 8: Steuern & Vorsteuer
-            { label: "Umsatzsteuer (abzuführen)", get: md => md.umsatzsteuer || 0 },
-            { label: "Vorsteuer", get: md => md.vorsteuer || 0 },
-            { label: "Nicht abzugsfähige VSt (Bewirtung)", get: md => md.nichtAbzugsfaehigeVSt || 0 },
-            { label: "Körperschaftsteuer", get: md => md.koerperschaftsteuer || 0 },
-            { label: "Solidaritätszuschlag", get: md => md.solidaritaetszuschlag || 0 },
-            { label: "Gewerbesteuer", get: md => md.gewerbesteuer || 0 },
-            { label: "Gesamtsteueraufwand", get: md => md.steuerlast || 0 },
-            // Gruppe 9: Jahresüberschuss/-fehlbetrag
-            { label: "Jahresüberschuss/-fehlbetrag", get: md => md.gewinnNachSteuern || 0 }
+            // Gruppe 1
+            { label: "Erlöse aus Lieferungen und Leistungen", get: d => d.umsatzerloese || 0 },
+            { label: "Sonstige betriebliche Erträge", get: d => d.sonstigeErtraege || 0 },
+            { label: "Erträge aus Vermietung/Verpachtung", get: d => d.vermietung || 0 },
+            { label: "Erträge aus Zuschüssen", get: d => d.zuschuesse || 0 },
+            { label: "Erträge aus Währungsgewinnen", get: d => d.waehrungsgewinne || 0 },
+            { label: "Erträge aus Anlagenabgängen", get: d => d.anlagenabgaenge || 0 },
+            { label: "Betriebserlöse", get: d => d.gesamtErloese || 0 },
+            // Gruppe 2
+            { label: "Wareneinsatz", get: d => d.wareneinsatz || 0 },
+            { label: "Bezogene Leistungen", get: d => d.fremdleistungen || 0 },
+            { label: "Roh-, Hilfs- & Betriebsstoffe", get: d => d.rohHilfsBetriebsstoffe || 0 },
+            { label: "Gesamtkosten Material & Fremdleistungen", get: d => d.gesamtWareneinsatz || 0 },
+            // Gruppe 3
+            { label: "Bruttolöhne & Gehälter", get: d => d.bruttoLoehne || 0 },
+            { label: "Soziale Abgaben & Arbeitgeberanteile", get: d => d.sozialeAbgaben || 0 },
+            { label: "Sonstige Personalkosten", get: d => d.sonstigePersonalkosten || 0 },
+            { label: "Werbung & Marketing", get: d => d.werbungMarketing || 0 },
+            { label: "Reisekosten", get: d => d.reisekosten || 0 },
+            { label: "Versicherungen", get: d => d.versicherungen || 0 },
+            { label: "Telefon & Internet", get: d => d.telefonInternet || 0 },
+            { label: "Bürokosten", get: d => d.buerokosten || 0 },
+            { label: "Fortbildungskosten", get: d => d.fortbildungskosten || 0 },
+            { label: "Kfz-Kosten", get: d => d.kfzKosten || 0 },
+            { label: "Sonstige betriebliche Aufwendungen", get: d => d.sonstigeAufwendungen || 0 },
+            // Gruppe 4
+            { label: "Abschreibungen Maschinen", get: d => d.abschreibungenMaschinen || 0 },
+            { label: "Abschreibungen Büroausstattung", get: d => d.abschreibungenBueromaterial || 0 },
+            { label: "Abschreibungen immaterielle Wirtschaftsgüter", get: d => d.abschreibungenImmateriell || 0 },
+            { label: "Zinsen auf Bankdarlehen", get: d => d.zinsenBank || 0 },
+            { label: "Zinsen auf Gesellschafterdarlehen", get: d => d.zinsenGesellschafter || 0 },
+            { label: "Leasingkosten", get: d => d.leasingkosten || 0 },
+            { label: "Gesamt Abschreibungen & Zinsen", get: d => d.gesamtAbschreibungenZinsen || 0 },
+            // Gruppe 5
+            { label: "Eigenkapitalveränderungen", get: d => d.eigenkapitalveraenderungen || 0 },
+            { label: "Gesellschafterdarlehen", get: d => d.gesellschafterdarlehen || 0 },
+            { label: "Ausschüttungen an Gesellschafter", get: d => d.ausschuettungen || 0 },
+            // Gruppe 6
+            { label: "Steuerrückstellungen", get: d => d.steuerrueckstellungen || 0 },
+            { label: "Rückstellungen sonstige", get: d => d.rueckstellungenSonstige || 0 },
+            // Gruppe 7
+            { label: "Betriebsergebnis vor Steuern (EBIT)", get: d => d.ebit || 0 },
+            // Gruppe 8
+            { label: "Umsatzsteuer (abzuführen)", get: d => d.umsatzsteuer || 0 },
+            { label: "Vorsteuer", get: d => d.vorsteuer || 0 },
+            { label: "Nicht abzugsfähige VSt (Bewirtung)", get: d => d.nichtAbzugsfaehigeVSt || 0 },
+            { label: "Körperschaftsteuer", get: d => d.koerperschaftsteuer || 0 },
+            { label: "Solidaritätszuschlag", get: d => d.solidaritaetszuschlag || 0 },
+            { label: "Gewerbesteuer", get: d => d.gewerbesteuer || 0 },
+            { label: "Gesamtsteueraufwand", get: d => d.steuerlast || 0 },
+            // Gruppe 9
+            { label: "Jahresüberschuss/-fehlbetrag", get: d => d.gewinnNachSteuern || 0 }
         ];
 
-        const groupHeaders = [
+        const headerRow = buildHeaderRow();
+        const outputRows = [headerRow];
+
+        // Funktion zum Bauen einer Zeile; da bwaData hier verfügbar ist
+        const buildOutputRow = pos => {
+            const monthly = [];
+            let yearly = 0;
+            for (let m = 1; m <= 12; m++) {
+                const val = pos.get(bwaData[m]) || 0;
+                monthly.push(val);
+                yearly += val;
+            }
+            const quarters = [0, 0, 0, 0];
+            for (let i = 0; i < 12; i++) {
+                quarters[Math.floor(i / 3)] += monthly[i];
+            }
+            return [pos.label, ...monthly.slice(0, 3), quarters[0], ...monthly.slice(3, 6), quarters[1],
+                ...monthly.slice(6, 9), quarters[2], ...monthly.slice(9, 12), quarters[3], yearly];
+        };
+
+        let posIndex = 0;
+        for (const { header, count } of [
             { header: "1️⃣ Betriebserlöse (Einnahmen)", count: 7 },
             { header: "2️⃣ Materialaufwand & Wareneinsatz", count: 4 },
             { header: "3️⃣ Betriebsausgaben (Sachkosten)", count: 10 },
@@ -1118,59 +1050,12 @@ const BWACalculator = (() => {
             { header: "7️⃣ Betriebsergebnis vor Steuern (EBIT)", count: 1 },
             { header: "8️⃣ Steuern & Vorsteuer", count: 7 },
             { header: "9️⃣ Jahresüberschuss/-fehlbetrag", count: 1 }
-        ];
-
-        const headerRow = [
-            "Kategorie",
-            "Januar (€)",
-            "Februar (€)",
-            "März (€)",
-            "Q1 (€)",
-            "April (€)",
-            "Mai (€)",
-            "Juni (€)",
-            "Q2 (€)",
-            "Juli (€)",
-            "August (€)",
-            "September (€)",
-            "Q3 (€)",
-            "Oktober (€)",
-            "November (€)",
-            "Dezember (€)",
-            "Q4 (€)",
-            "Jahr (€)"
-        ];
-        let outputRows = [];
-        outputRows.push(headerRow);
-
-        const buildOutputRow = pos => {
-            const row = [pos.label];
-            let quarterly = [0, 0, 0, 0];
-            let yearly = 0;
-            for (let m = 1; m <= 12; m++) {
-                const val = pos.get(bwaData[m]) || 0;
-                row.push(val);
-                yearly += val;
-                quarterly[Math.floor((m - 1) / 3)] += val;
+        ]) {
+            outputRows.push([header, ...Array(headerRow.length - 1).fill("")]);
+            for (let i = 0; i < count; i++) {
+                outputRows.push(buildOutputRow(positions[posIndex++]));
             }
-            row.splice(4, 0, quarterly[0]);
-            row.splice(8, 0, quarterly[1]);
-            row.splice(12, 0, quarterly[2]);
-            row.splice(16, 0, quarterly[3]);
-            row.push(yearly);
-            return row;
-        };
-
-        let posIndex = 0;
-        groupHeaders.forEach(group => {
-            let groupRow = Array(headerRow.length).fill("");
-            groupRow[0] = group.header;
-            outputRows.push(groupRow);
-            for (let i = 0; i < group.count; i++) {
-                outputRows.push(buildOutputRow(positions[posIndex]));
-                posIndex++;
-            }
-        });
+        }
 
         const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
         bwaSheet.clearContents();
