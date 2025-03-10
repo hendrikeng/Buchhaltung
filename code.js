@@ -7,35 +7,43 @@ const CategoryConfig = {
     },
     einnahmen: {
         categories: {
-            "Umsatzerlöse": { taxType: "steuerpflichtig" },
+            "Erlöse aus Lieferungen und Leistungen": { taxType: "steuerpflichtig" },
             "Provisionserlöse": { taxType: "steuerpflichtig" },
             "Sonstige betriebliche Erträge": { taxType: "steuerpflichtig" },
-            "Privateinlage": { taxType: "steuerfrei_inland" }, // wird in der BWA ignoriert
-            "Darlehen": { taxType: "steuerfrei_inland" },       // wird in der BWA ignoriert
-            "Zinsen": { taxType: "steuerfrei_inland" }
+            "Erträge aus Vermietung/Verpachtung": { taxType: "steuerfrei_inland" },
+            "Erträge aus Zuschüssen": { taxType: "steuerpflichtig" },
+            "Erträge aus Währungsgewinnen": { taxType: "steuerpflichtig" },
+            "Erträge aus Anlagenabgängen": { taxType: "steuerpflichtig" },
+            "Darlehen": { taxType: "steuerfrei_inland" }, // wird nicht in der BWA berücksichtigt
+            "Zinsen": { taxType: "steuerfrei_inland" }    // wird nicht in der BWA berücksichtigt
         },
         kontoMapping: {
-            "Umsatzerlöse": { soll: "1200 Bank", gegen: "4400 Umsatzerlöse" },
+            "Erlöse aus Lieferungen und Leistungen": { soll: "1200 Bank", gegen: "4400 Erlöse aus L&L" },
             "Provisionserlöse": { soll: "1200 Bank", gegen: "4420 Provisionserlöse" },
             "Sonstige betriebliche Erträge": { soll: "1200 Bank", gegen: "4490 Sonstige betriebliche Erträge" },
-            "Privateinlage": { soll: "1200 Bank", gegen: "1800 Privateinlage" },
+            "Erträge aus Vermietung/Verpachtung": { soll: "1200 Bank", gegen: "4410 Vermietung/Verpachtung" },
+            "Erträge aus Zuschüssen": { soll: "1200 Bank", gegen: "4430 Zuschüsse" },
+            "Erträge aus Währungsgewinnen": { soll: "1200 Bank", gegen: "4440 Währungsgewinne" },
+            "Erträge aus Anlagenabgängen": { soll: "1200 Bank", gegen: "4450 Anlagenabgänge" },
             "Darlehen": { soll: "1200 Bank", gegen: "3000 Darlehen" },
             "Zinsen": { soll: "1200 Bank", gegen: "2650 Zinserträge" }
         },
-        // Für Gruppe 1 (Einnahmen) werden klassische Umsätze zusammengefasst.
+        // Für die BWA aggregieren wir nur die operativen Umsätze:
         bwaMapping: {
-            "Umsatzerlöse": "umsatzerloese",
+            "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
             "Provisionserlöse": "provisionserloese",
-            // "Sonstige betriebliche Erträge" wird separat in Gruppe 1 ausgegeben.
-            "Privateinlage": "privateinlage",
-            "Darlehen": "steuerfreieInlandEinnahmen",
-            "Zinsen": "steuerfreieInlandEinnahmen"
+            "Sonstige betriebliche Erträge": "sonstigeErtraege",
+            "Erträge aus Vermietung/Verpachtung": "vermietung",
+            "Erträge aus Zuschüssen": "zuschuesse",
+            "Erträge aus Währungsgewinnen": "waehrungsgewinne",
+            "Erträge aus Anlagenabgängen": "anlagenabgaenge"
+            // Darlehen & Zinsen werden nicht in die BWA einbezogen.
         }
     },
     ausgaben: {
         categories: {
             "Wareneinsatz": { taxType: "steuerpflichtig" },
-            "Fremdleistungen": { taxType: "steuerpflichtig" },
+            "Bezogene Leistungen": { taxType: "steuerpflichtig" },
             "Roh-, Hilfs- & Betriebsstoffe": { taxType: "steuerpflichtig" },
             "Betriebskosten": { taxType: "steuerpflichtig" },
             "Marketing & Werbung": { taxType: "steuerpflichtig" },
@@ -43,6 +51,7 @@ const CategoryConfig = {
             "Personalkosten": { taxType: "steuerpflichtig" },
             "Bruttolöhne & Gehälter": { taxType: "steuerpflichtig" },
             "Soziale Abgaben & Arbeitgeberanteile": { taxType: "steuerpflichtig" },
+            "Sonstige Personalkosten": { taxType: "steuerpflichtig" },
             "Sonstige betriebliche Aufwendungen": { taxType: "steuerpflichtig" },
             "Miete": { taxType: "steuerfrei_inland" },
             "Versicherungen": { taxType: "steuerfrei_inland" },
@@ -51,21 +60,30 @@ const CategoryConfig = {
             "AWS": { taxType: "steuerfrei_ausland" },
             "Facebook Ads": { taxType: "steuerfrei_ausland" },
             "Bewirtung": { taxType: "steuerpflichtig" },
+            "Telefon & Internet": { taxType: "steuerpflichtig" },
+            "Bürokosten": { taxType: "steuerpflichtig" },
+            "Fortbildungskosten": { taxType: "steuerpflichtig" },
             "Abschreibungen Maschinen": { taxType: "steuerpflichtig" },
             "Abschreibungen Büroausstattung": { taxType: "steuerpflichtig" },
-            "Zinsen": { taxType: "steuerpflichtig" },
+            "Abschreibungen immaterielle Wirtschaftsgüter": { taxType: "steuerpflichtig" },
+            "Zinsen auf Bankdarlehen": { taxType: "steuerpflichtig" },
+            "Zinsen auf Gesellschafterdarlehen": { taxType: "steuerpflichtig" },
             "Leasingkosten": { taxType: "steuerpflichtig" },
-            "Gewerbesteuerrückstellungen": { taxType: "steuerpflichtig" }
+            "Gewerbesteuerrückstellungen": { taxType: "steuerpflichtig" },
+            "Körperschaftsteuer": { taxType: "steuerpflichtig" },
+            "Solidaritätszuschlag": { taxType: "steuerpflichtig" },
+            "Sonstige Steuerrückstellungen": { taxType: "steuerpflichtig" }
         },
         kontoMapping: {
             "Wareneinsatz": { soll: "4900 Wareneinsatz", gegen: "1200 Bank" },
-            "Fremdleistungen": { soll: "4900 Fremdleistungen", gegen: "1200 Bank" },
+            "Bezogene Leistungen": { soll: "4900 Bezogene Leistungen", gegen: "1200 Bank" },
             "Roh-, Hilfs- & Betriebsstoffe": { soll: "4900 Roh-, Hilfs- & Betriebsstoffe", gegen: "1200 Bank" },
             "Betriebskosten": { soll: "4900 Betriebskosten", gegen: "1200 Bank" },
             "Marketing & Werbung": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
             "Reisekosten": { soll: "4900 Reisekosten", gegen: "1200 Bank" },
             "Bruttolöhne & Gehälter": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
             "Soziale Abgaben & Arbeitgeberanteile": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
+            "Sonstige Personalkosten": { soll: "4900 Personalkosten", gegen: "1200 Bank" },
             "Sonstige betriebliche Aufwendungen": { soll: "4900 Sonstige betriebliche Aufwendungen", gegen: "1200 Bank" },
             "Miete": { soll: "4900 Miete & Nebenkosten", gegen: "1200 Bank" },
             "Versicherungen": { soll: "4900 Versicherungen", gegen: "1200 Bank" },
@@ -74,37 +92,72 @@ const CategoryConfig = {
             "AWS": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
             "Facebook Ads": { soll: "4900 Marketing & Werbung", gegen: "1200 Bank" },
             "Bewirtung": { soll: "4900 Bewirtung", gegen: "1200 Bank" },
+            "Telefon & Internet": { soll: "4900 Telefon & Internet", gegen: "1200 Bank" },
+            "Bürokosten": { soll: "4900 Bürokosten", gegen: "1200 Bank" },
+            "Fortbildungskosten": { soll: "4900 Fortbildungskosten", gegen: "1200 Bank" },
             "Abschreibungen Maschinen": { soll: "4900 Abschreibungen Maschinen", gegen: "1200 Bank" },
             "Abschreibungen Büroausstattung": { soll: "4900 Abschreibungen Büroausstattung", gegen: "1200 Bank" },
-            "Zinsen": { soll: "4900 Zinsen", gegen: "1200 Bank" },
+            "Abschreibungen immaterielle Wirtschaftsgüter": { soll: "4900 Abschreibungen Immateriell", gegen: "1200 Bank" },
+            "Zinsen auf Bankdarlehen": { soll: "4900 Zinsen Bankdarlehen", gegen: "1200 Bank" },
+            "Zinsen auf Gesellschafterdarlehen": { soll: "4900 Zinsen Gesellschafterdarlehen", gegen: "1200 Bank" },
             "Leasingkosten": { soll: "4900 Leasingkosten", gegen: "1200 Bank" },
-            "Gewerbesteuerrückstellungen": { soll: "4900 Rückstellungen", gegen: "1200 Bank" }
+            "Gewerbesteuerrückstellungen": { soll: "4900 Rückstellungen", gegen: "1200 Bank" },
+            "Körperschaftsteuer": { soll: "4900 Körperschaftsteuer", gegen: "1200 Bank" },
+            "Solidaritätszuschlag": { soll: "4900 Solidaritätszuschlag", gegen: "1200 Bank" },
+            "Sonstige Steuerrückstellungen": { soll: "4900 Sonstige Steuerrückstellungen", gegen: "1200 Bank" }
         },
         bwaMapping: {
+            // Gruppe 1:
+            "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
+            "Provisionserlöse": "provisionserloese",
+            "Sonstige betriebliche Erträge": "sonstigeErtraege",
+            "Erträge aus Vermietung/Verpachtung": "vermietung",
+            "Erträge aus Zuschüssen": "zuschuesse",
+            "Erträge aus Währungsgewinnen": "waehrungsgewinne",
+            "Erträge aus Anlagenabgängen": "anlagenabgaenge",
+            // Gruppe 2: (keine Anpassung – übernimmt die Felder direkt)
+            // Gruppe 3:
             "Wareneinsatz": "wareneinsatz",
-            "Fremdleistungen": "fremdleistungen",
+            "Bezogene Leistungen": "bezogeneLeistungen",
             "Roh-, Hilfs- & Betriebsstoffe": "rohHilfsBetriebsstoffe",
             "Betriebskosten": "betriebskosten",
             "Marketing & Werbung": "werbungMarketing",
             "Reisekosten": "reisekosten",
             "Bruttolöhne & Gehälter": "bruttoLoehne",
             "Soziale Abgaben & Arbeitgeberanteile": "sozialeAbgaben",
+            "Sonstige Personalkosten": "sonstigePersonalkosten",
             "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
             "Miete": "mieteNebenkosten",
             "Versicherungen": "versicherungen",
-            "Kfz-Kosten": "kfzKosten",
+            "Porto": "betriebskosten",
+            "Telefon & Internet": "telefonInternet",
+            "Bürokosten": "buerokosten",
+            "Fortbildungskosten": "fortbildungskosten",
+            // Gruppe 4:
             "Abschreibungen Maschinen": "abschreibungenMaschinen",
             "Abschreibungen Büroausstattung": "abschreibungenBueromaterial",
-            "Zinsen": "zinsen",
+            "Abschreibungen immaterielle Wirtschaftsgüter": "abschreibungenImmateriell",
+            "Zinsen auf Bankdarlehen": "zinsenBank",
+            "Zinsen auf Gesellschafterdarlehen": "zinsenGesellschafter",
             "Leasingkosten": "leasingkosten",
-            "Gewerbesteuerrückstellungen": "gewerbesteuerRueckstellungen"
+            // Gruppe 5: Besondere Posten (Kapitalbewegungen)
+            "Eigenkapitalveränderungen": "eigenkapitalveraenderungen",
+            "Gesellschafterdarlehen": "gesellschafterdarlehen",
+            "Ausschüttungen an Gesellschafter": "ausschuettungen",
+            // Gruppe 6:
+            "Gewerbesteuerrückstellungen": "gewerbesteuerRueckstellungen",
+            // Gruppe 8:
+            "Körperschaftsteuer": "koerperschaftsteuer",
+            "Solidaritätszuschlag": "solidaritaetszuschlag",
+            "Sonstige Steuerrückstellungen": "sonstigeSteuerrueckstellungen"
         }
     },
     bank: {
         category: [
-            "Umsatzerlöse", "Provisionserlöse", "Sonstige betriebliche Erträge", "Wareneinsatz", "Betriebskosten",
-            "Marketing & Werbung", "Reisekosten", "Personalkosten", "Sonstige betriebliche Aufwendungen",
-            "Privateinlage", "Darlehen", "Eigenbeleg", "Privatentnahme", "Zinsen", "Gewinnübertrag", "Kapitalrückführung"
+            "Erlöse aus Lieferungen und Leistungen", "Provisionserlöse", "Sonstige betriebliche Erträge",
+            "Wareneinsatz", "Betriebskosten", "Marketing & Werbung", "Reisekosten", "Personalkosten",
+            "Sonstige betriebliche Aufwendungen", "Privateinlage", "Darlehen", "Eigenbeleg",
+            "Privatentnahme", "Zinsen", "Gewinnübertrag", "Kapitalrückführung"
         ],
         type: ["Einnahme", "Ausgabe"]
     },
@@ -565,7 +618,6 @@ const UStVACalculator = (() => {
 
     const processUStVARow = (row, ustvaData, isIncome, isEigenbelegSheet = false) => {
         const paymentDate = Helpers.parseDate(row[13]);
-        // Zusätzliche Prüfung: Ist paymentDate ein Date?
         const month = paymentDate instanceof Date ? paymentDate.getMonth() + 1 : 0;
         if (!paymentDate || month === 0 || paymentDate > new Date()) return;
         const netto = Helpers.parseCurrency(row[4]);
@@ -660,7 +712,6 @@ const UStVACalculator = (() => {
         }
         if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) return;
 
-        // Daten einmalig einlesen
         const revenueData = revenueSheet.getDataRange().getValues();
         const expenseData = expenseSheet.getDataRange().getValues();
         const eigenData = eigenbelegeSheet ? eigenbelegeSheet.getDataRange().getValues() : [];
@@ -735,54 +786,75 @@ const UStVACalculator = (() => {
 
 // =================== Modul: BWACalculator (Final) ===================
 const BWACalculator = (() => {
-    // Wir ignorieren Kapitalbewegungen (Privateinlage, Privatentnahme, Holding Transfers)
-    // Entsprechend haben wir die Felder "Steuerlicher Gewinn/Verlust" entfernt und "Gewinnvortrag/Verlustvortrag" in Gruppe 9 platziert.
-    // Zudem wurde "gesamtRueckstellungenTransfers" aus createEmptyBWA entfernt, da sie separat als Summe aus "steuerrueckstellungen" und "rueckstellungenSonstige" berechnet wird.
+    // Für die BWA werden nur betriebliche Einnahmen & Ausgaben aggregiert – Kapitalbewegungen (Privateinlage, Privatentnahme, Holding Transfers) werden ignoriert.
+    // Anpassungen gemäß SKR04/Elster: NEU sind u.a. zusätzliche Kategorien in den Bereichen Einnahmen, Personalkosten, Zinsen sowie Steuern.
     const createEmptyBWA = () => ({
         // Gruppe 1: Betriebserlöse (Einnahmen)
-        umsatzerloese: 0,
+        umsatzerloese: 0,         // Erlöse aus Lieferungen und Leistungen (inkl. Provisionserlöse)
         provisionserloese: 0,
         steuerfreieInlandEinnahmen: 0,
         steuerfreieAuslandEinnahmen: 0,
-        // Aggregiert als "Betriebserlöse" (anstelle von "Gesamtbetriebserlöse")
-        gesamtErloese: 0,
-        // Gruppe 2: Wareneinsatz & Materialaufwand
+        sonstigeErtraege: 0,       // Sonstige betriebliche Erträge
+        vermietung: 0,            // Erträge aus Vermietung/Verpachtung
+        zuschuesse: 0,            // Erträge aus Zuschüssen
+        waehrungsgewinne: 0,       // Erträge aus Währungsgewinnen
+        anlagenabgaenge: 0,        // Erträge aus Anlagenabgängen
+        gesamtErloese: 0,          // Aggregierte Betriebserlöse
+
+        // Gruppe 2: Materialaufwand & Wareneinsatz
         wareneinsatz: 0,
-        fremdleistungen: 0,
+        fremdleistungen: 0,        // Bezogene Leistungen
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
-        // Gruppe 3: Betriebsausgaben
+
+        // Gruppe 3: Betriebsausgaben (Sachkosten)
         bruttoLoehne: 0,
         sozialeAbgaben: 0,
+        sonstigePersonalkosten: 0,
         werbungMarketing: 0,
         reisekosten: 0,
         versicherungen: 0,
+        telefonInternet: 0,
+        buerokosten: 0,
+        fortbildungskosten: 0,
         kfzKosten: 0,
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
+
         // Gruppe 4: Abschreibungen & Zinsen
         abschreibungenMaschinen: 0,
         abschreibungenBueromaterial: 0,
-        zinsen: 0,
+        abschreibungenImmateriell: 0,
+        zinsenBank: 0,
+        zinsenGesellschafter: 0,
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
-        // Gruppe 5: Besondere Posten (nur Eigenbelege, da "Sonstige betriebliche Erträge" gehören zu den Einnahmen)
-        eigenbelegeSteuerpflichtig: 0,
-        eigenbelegeSteuerfrei: 0,
+
+        // Gruppe 5: Besondere Posten (Kapitalbewegungen)
+        eigenkapitalveraenderungen: 0,
+        gesellschafterdarlehen: 0,
+        ausschuettungen: 0,
+
         // Gruppe 6: Rückstellungen
         steuerrueckstellungen: 0,
         rueckstellungenSonstige: 0,
+        gesamtRueckstellungenTransfers: 0,
+
         // Gruppe 7: EBIT
         ebit: 0,
-        // Gruppe 8: Steuern & Vorsteuer
+
+        // Gruppe 8: Steuern & Vorsteuer (nur Informationswerte für Elster)
         umsatzsteuer: 0,
         vorsteuer: 0,
         nichtAbzugsfaehigeVSt: 0,
+        koerperschaftsteuer: 0,
+        solidaritaetszuschlag: 0,
         gewerbesteuer: 0,
         gewerbesteuerRueckstellungen: 0,
+        sonstigeSteuerrueckstellungen: 0,
         steuerlast: 0,
-        // Gruppe 9: Jahresüberschuss/-fehlbetrag (hier: Gewinnvortrag/Verlustvortrag)
-        gewinnVerlustVortrag: 0,
+
+        // Gruppe 9: Jahresüberschuss/-fehlbetrag
         gewinnNachSteuern: 0
     });
 
@@ -805,7 +877,7 @@ const BWACalculator = (() => {
             return paymentDate instanceof Date ? paymentDate.getMonth() + 1 : 0;
         };
 
-        // Aggregation der Einnahmen – Kapitalbewegungen werden ignoriert
+        // Aggregation der Einnahmen – Kapitalbewegungen (Darlehen, Zinsen) werden ignoriert
         const revenueData = revenueSheet.getDataRange().getValues();
         if (revenueData.length > 1) {
             revenueData.slice(1).forEach(row => {
@@ -813,14 +885,28 @@ const BWACalculator = (() => {
                 if (!m) return;
                 const amount = Helpers.parseCurrency(row[4]);
                 const category = row[2] ? row[2].toString().trim() : "";
-                // Gewinnvortrag/Verlustvortrag:
                 if (category === "Gewinnvortrag" || category === "Verlustvortrag" || category === "Gewinnvortrag/Verlustvortrag") {
                     bwaData[m].gewinnVerlustVortrag += amount;
                     return;
                 }
-                // "Sonstige betriebliche Erträge" werden in Gruppe 1 mit einbezogen
                 if (category === "Sonstige betriebliche Erträge") {
                     bwaData[m].sonstigeErtraege = (bwaData[m].sonstigeErtraege || 0) + amount;
+                    return;
+                }
+                if (category === "Erträge aus Vermietung/Verpachtung") {
+                    bwaData[m].vermietung += amount;
+                    return;
+                }
+                if (category === "Erträge aus Zuschüssen") {
+                    bwaData[m].zuschuesse += amount;
+                    return;
+                }
+                if (category === "Erträge aus Währungsgewinnen") {
+                    bwaData[m].waehrungsgewinne += amount;
+                    return;
+                }
+                if (category === "Erträge aus Anlagenabgängen") {
+                    bwaData[m].anlagenabgaenge += amount;
                     return;
                 }
                 const mapping = CategoryConfig.einnahmen.bwaMapping[category];
@@ -833,13 +919,12 @@ const BWACalculator = (() => {
                 }
             });
         }
-        // Aggregiere alle klassischen Einnahmen zu "Betriebserlöse"
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
-            d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen + (d.sonstigeErtraege || 0);
+            d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen + (d.sonstigeErtraege || 0) + d.vermietung + d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge;
         }
 
-        // Aggregation der Ausgaben – Kapitalbewegungen werden ignoriert
+        // Aggregation der Ausgaben – Kapitalbewegungen ignorieren
         const expenseData = expenseSheet.getDataRange().getValues();
         if (expenseData.length > 1) {
             expenseData.slice(1).forEach(row => {
@@ -860,8 +945,24 @@ const BWACalculator = (() => {
                     bwaData[m].sozialeAbgaben += amount;
                     return;
                 }
+                if (category === "Sonstige Personalkosten") {
+                    bwaData[m].sonstigePersonalkosten += amount;
+                    return;
+                }
                 if (category === "Gewerbesteuerrückstellungen") {
                     bwaData[m].gewerbesteuerRueckstellungen += amount;
+                    return;
+                }
+                if (category === "Telefon & Internet") {
+                    bwaData[m].telefonInternet += amount;
+                    return;
+                }
+                if (category === "Bürokosten") {
+                    bwaData[m].buerokosten += amount;
+                    return;
+                }
+                if (category === "Fortbildungskosten") {
+                    bwaData[m].fortbildungskosten += amount;
                     return;
                 }
                 const mapping = CategoryConfig.ausgaben.bwaMapping[category];
@@ -869,7 +970,7 @@ const BWACalculator = (() => {
                     case "wareneinsatz":
                         bwaData[m].wareneinsatz += amount;
                         break;
-                    case "fremdleistungen":
+                    case "bezogeneLeistungen":
                         bwaData[m].fremdleistungen += amount;
                         break;
                     case "rohHilfsBetriebsstoffe":
@@ -896,14 +997,14 @@ const BWACalculator = (() => {
                     case "abschreibungenBueromaterial":
                         bwaData[m].abschreibungenBueromaterial += amount;
                         break;
-                    case "zinsen":
-                        bwaData[m].zinsen += amount;
+                    case "zinsenBank":
+                        bwaData[m].zinsenBank += amount;
+                        break;
+                    case "zinsenGesellschafter":
+                        bwaData[m].zinsenGesellschafter += amount;
                         break;
                     case "leasingkosten":
                         bwaData[m].leasingkosten += amount;
-                        break;
-                    case "gewerbesteuerrückstellungen":
-                        bwaData[m].gewerbesteuerRueckstellungen += amount;
                         break;
                     default:
                         bwaData[m].sonstigeAufwendungen += amount;
@@ -911,7 +1012,7 @@ const BWACalculator = (() => {
             });
         }
 
-        // Aggregation der Eigenbelege – Prüfung, ob Daten vorhanden sind
+        // Aggregation der Eigenbelege
         if (eigenbelegeSheet) {
             const eigenData = eigenbelegeSheet.getDataRange().getValues();
             if (eigenData.length > 1) {
@@ -930,27 +1031,17 @@ const BWACalculator = (() => {
             }
         }
 
-        // Berechnung der Gruppensummen
+        // Gruppensummen berechnen
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
-            // Gruppe 1: Betriebserlöse (bereits aggregiert in gesamtErloese)
-            // Gruppe 2: Gesamtkosten Material & Fremdleistungen
             d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
-            // Gruppe 3: Betriebsausgaben
-            d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.werbungMarketing + d.reisekosten + d.versicherungen + d.kfzKosten + d.sonstigeAufwendungen;
-            // Gruppe 4: Abschreibungen & Zinsen
-            d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial + d.zinsen + d.leasingkosten;
-            // Gruppe 5: Besondere Posten
-            d.gesamtBesonderePosten = d.eigenbelegeSteuerpflichtig + d.eigenbelegeSteuerfrei;
-            // Gruppe 6: Rückstellungen
+            d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten + d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet + d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen;
+            d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial + d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter + d.leasingkosten;
+            d.gesamtBesonderePosten = d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen;
             d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige;
-            // Gruppe 7: EBIT
             d.ebit = d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
-            // Gruppe 8: Steuern & Vorsteuer
-            d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.gewerbesteuer + d.gewerbesteuerRueckstellungen;
-            // Gruppe 9: Jahresüberschuss/-fehlbetrag
+            d.steuerlast = (d.umsatzsteuer - d.vorsteuer) + d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer + d.gewerbesteuerRueckstellungen + d.sonstigeSteuerrueckstellungen;
             d.gewinnNachSteuern = d.ebit - d.steuerlast;
-            // Gewinnvortrag/Verlustvortrag ist bereits aggregiert in gewinnVerlustVortrag
         }
         return bwaData;
     };
@@ -961,69 +1052,71 @@ const BWACalculator = (() => {
         const bwaData = aggregateBWAData();
         if (!bwaData) return;
 
-        // Positionsdefinition (nur betriebliche Positionen – Kapitalbewegungen wurden entfernt)
+        // Positionsdefinition – nur betriebliche Positionen (Kapitalbewegungen werden entfernt)
+        // Gruppe 1: Betriebserlöse (Einnahmen)
         const positions = [
-            // Gruppe 1: Betriebserlöse (Einnahmen)
-            { label: "Umsatzerlöse (steuerpflichtig)", get: md => md.umsatzerloese || 0 },
-            { label: "Steuerfreie Inland-Einnahmen", get: md => md.steuerfreieInlandEinnahmen || 0 },
-            { label: "Steuerfreie Ausland-Einnahmen", get: md => md.steuerfreieAuslandEinnahmen || 0 },
+            { label: "Erlöse aus Lieferungen und Leistungen", get: md => md.umsatzerloese || 0 },
             { label: "Sonstige betriebliche Erträge", get: md => md.sonstigeErtraege || 0 },
+            { label: "Erträge aus Vermietung/Verpachtung", get: md => md.vermietung || 0 },
+            { label: "Erträge aus Zuschüssen", get: md => md.zuschuesse || 0 },
+            { label: "Erträge aus Währungsgewinnen", get: md => md.waehrungsgewinne || 0 },
+            { label: "Erträge aus Anlagenabgängen", get: md => md.anlagenabgaenge || 0 },
             { label: "Betriebserlöse", get: md => md.gesamtErloese || 0 },
-
-            // Gruppe 2: Wareneinsatz & Materialaufwand
+            // Gruppe 2: Materialaufwand & Wareneinsatz
             { label: "Wareneinsatz", get: md => md.wareneinsatz || 0 },
-            { label: "Fremdleistungen", get: md => md.fremdleistungen || 0 },
+            { label: "Bezogene Leistungen", get: md => md.fremdleistungen || 0 },
             { label: "Roh-, Hilfs- & Betriebsstoffe", get: md => md.rohHilfsBetriebsstoffe || 0 },
             { label: "Gesamtkosten Material & Fremdleistungen", get: md => md.gesamtWareneinsatz || 0 },
-
-            // Gruppe 3: Betriebsausgaben
+            // Gruppe 3: Betriebsausgaben (Sachkosten)
             { label: "Bruttolöhne & Gehälter", get: md => md.bruttoLoehne || 0 },
             { label: "Soziale Abgaben & Arbeitgeberanteile", get: md => md.sozialeAbgaben || 0 },
+            { label: "Sonstige Personalkosten", get: md => md.sonstigePersonalkosten || 0 },
             { label: "Werbung & Marketing", get: md => md.werbungMarketing || 0 },
             { label: "Reisekosten", get: md => md.reisekosten || 0 },
             { label: "Versicherungen", get: md => md.versicherungen || 0 },
+            { label: "Telefon & Internet", get: md => md.telefonInternet || 0 },
+            { label: "Bürokosten", get: md => md.buerokosten || 0 },
+            { label: "Fortbildungskosten", get: md => md.fortbildungskosten || 0 },
             { label: "Kfz-Kosten", get: md => md.kfzKosten || 0 },
             { label: "Sonstige betriebliche Aufwendungen", get: md => md.sonstigeAufwendungen || 0 },
-
             // Gruppe 4: Abschreibungen & Zinsen
             { label: "Abschreibungen Maschinen", get: md => md.abschreibungenMaschinen || 0 },
             { label: "Abschreibungen Büroausstattung", get: md => md.abschreibungenBueromaterial || 0 },
-            { label: "Zinsen", get: md => md.zinsen || 0 },
+            { label: "Abschreibungen immaterielle Wirtschaftsgüter", get: md => md.abschreibungenImmateriell || 0 },
+            { label: "Zinsen auf Bankdarlehen", get: md => md.zinsenBank || 0 },
+            { label: "Zinsen auf Gesellschafterdarlehen", get: md => md.zinsenGesellschafter || 0 },
             { label: "Leasingkosten", get: md => md.leasingkosten || 0 },
             { label: "Gesamt Abschreibungen & Zinsen", get: md => md.gesamtAbschreibungenZinsen || 0 },
-
             // Gruppe 5: Besondere Posten
-            { label: "Eigenbelege (steuerpflichtig)", get: md => md.eigenbelegeSteuerpflichtig || 0 },
-            { label: "Eigenbelege (steuerfrei)", get: md => md.eigenbelegeSteuerfrei || 0 },
-
+            { label: "Eigenkapitalveränderungen", get: md => md.eigenkapitalveraenderungen || 0 },
+            { label: "Gesellschafterdarlehen", get: md => md.gesellschafterdarlehen || 0 },
+            { label: "Ausschüttungen an Gesellschafter", get: md => md.ausschuettungen || 0 },
             // Gruppe 6: Rückstellungen
             { label: "Steuerrückstellungen", get: md => md.steuerrueckstellungen || 0 },
             { label: "Rückstellungen sonstige", get: md => md.rueckstellungenSonstige || 0 },
-
-            // Gruppe 7: Betriebsergebnis vor Steuern (EBIT)
+            // Gruppe 7: EBIT
             { label: "Betriebsergebnis vor Steuern (EBIT)", get: md => md.ebit || 0 },
-
             // Gruppe 8: Steuern & Vorsteuer
             { label: "Umsatzsteuer (abzuführen)", get: md => md.umsatzsteuer || 0 },
             { label: "Vorsteuer", get: md => md.vorsteuer || 0 },
             { label: "Nicht abzugsfähige VSt (Bewirtung)", get: md => md.nichtAbzugsfaehigeVSt || 0 },
+            { label: "Körperschaftsteuer", get: md => md.koerperschaftsteuer || 0 },
+            { label: "Solidaritätszuschlag", get: md => md.solidaritaetszuschlag || 0 },
             { label: "Gewerbesteuer", get: md => md.gewerbesteuer || 0 },
             { label: "Gesamtsteueraufwand", get: md => md.steuerlast || 0 },
-
             // Gruppe 9: Jahresüberschuss/-fehlbetrag
-            { label: "Gewinnvortrag/Verlustvortrag", get: md => md.gewinnVerlustVortrag || 0 }
+            { label: "Jahresüberschuss/-fehlbetrag", get: md => md.gewinnNachSteuern || 0 }
         ];
 
-        // Gruppierung mit Headerzeilen einfügen
         const groupHeaders = [
-            { header: "1️⃣ Betriebserlöse (Einnahmen)", count: 5 },
-            { header: "2️⃣ Wareneinsatz & Materialaufwand", count: 4 },
-            { header: "3️⃣ Betriebsausgaben", count: 7 },
-            { header: "4️⃣ Abschreibungen & Zinsen", count: 5 },
-            { header: "5️⃣ Besondere Posten", count: 2 },
+            { header: "1️⃣ Betriebserlöse (Einnahmen)", count: 7 },
+            { header: "2️⃣ Materialaufwand & Wareneinsatz", count: 4 },
+            { header: "3️⃣ Betriebsausgaben (Sachkosten)", count: 10 },
+            { header: "4️⃣ Abschreibungen & Zinsen", count: 7 },
+            { header: "5️⃣ Besondere Posten", count: 3 },
             { header: "6️⃣ Rückstellungen", count: 2 },
             { header: "7️⃣ Betriebsergebnis vor Steuern (EBIT)", count: 1 },
-            { header: "8️⃣ Steuern & Vorsteuer", count: 5 },
+            { header: "8️⃣ Steuern & Vorsteuer", count: 7 },
             { header: "9️⃣ Jahresüberschuss/-fehlbetrag", count: 1 }
         ];
 
@@ -1050,7 +1143,6 @@ const BWACalculator = (() => {
         let outputRows = [];
         outputRows.push(headerRow);
 
-        // Hilfsfunktion zum Erzeugen einer Zeile für eine Position – Quartals-Summen direkt aufsummieren
         const buildOutputRow = pos => {
             const row = [pos.label];
             let quarterly = [0, 0, 0, 0];
@@ -1061,7 +1153,6 @@ const BWACalculator = (() => {
                 yearly += val;
                 quarterly[Math.floor((m - 1) / 3)] += val;
             }
-            // Quartalsspalten an entsprechender Stelle einfügen
             row.splice(4, 0, quarterly[0]);
             row.splice(8, 0, quarterly[1]);
             row.splice(12, 0, quarterly[2]);
