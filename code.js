@@ -266,13 +266,15 @@ const Helpers = (() => {
         sheet.setConditionalFormatRules(rules);
     };
 
+    // Zentrale Funktion zur Ermittlung des Monats inkl. Jahresprüfung.
+// Hier wird die 0-indexierte Monatszahl (+1) zurückgegeben, wenn das Datum vorhanden ist und zum konfigurierten Jahr passt.
     const getMonthFromRow = (row, colIndex = 13) => {
-        const d = Helpers.parseDate(row[colIndex]);
+        const d = parseDate(row[colIndex]);
         if (!d || d.getFullYear() !== config.tax.year) return 0;
         return d.getMonth() + 1;
     };
 
-    return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename, setConditionalFormattingForColumn };
+    return { parseDate, parseCurrency, parseMwstRate, getFolderByName, extractDateFromFilename, setConditionalFormattingForColumn, getMonthFromRow };
 })();
 
 // =================== Modul: Validator ===================
@@ -500,7 +502,7 @@ const RefreshModule = (() => {
         if (lastRow < 2) return;
         const numRows = lastRow - 1;
 
-        // In RefreshModule, im refreshDataSheet – ersetze den Formelteil für Spalte 12:
+        // Ersetze den Formelteil für Spalte 12:
         Object.entries({
             7: row => `=E${row}*F${row}`,
             8: row => `=E${row}+G${row}`,
@@ -511,7 +513,6 @@ const RefreshModule = (() => {
             const formulas = Array.from({ length: numRows }, (_, i) => [formulaFn(i + 2)]);
             sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
         });
-
 
         const col9Range = sheet.getRange(2, 9, numRows, 1);
         const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
@@ -654,21 +655,15 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    // Bestimmt den Monat (Spalte 14, Index 13)
-    const getMonthFromRow = row => {
-        const d = Helpers.parseDate(row[13]);
-        if (!d || d.getFullYear() !== config.tax.year) return 0;
-        return d ? d.getMonth() + 1 : 0;
-    };
-
+    // Hier entfällt die eigene getMonthFromRow – stattdessen nutzen wir Helpers.getMonthFromRow:
     const processUStVARow = (row, data, isIncome, isEigen = false) => {
         const paymentDate = Helpers.parseDate(row[13]);
         if (!paymentDate || paymentDate > new Date()) return;
-        const month = paymentDate.getMonth() + 1;
+        const month = Helpers.getMonthFromRow(row);
         if (!month) return;
         const netto = Helpers.parseCurrency(row[4]);
         const restNetto = Helpers.parseCurrency(row[9]) || 0;
-        const gezahlt = netto - restNetto;
+        const gezahlt = netto - restNetto; // Negative Werte bleiben erhalten
         const mwstRate = Helpers.parseMwstRate(row[5]);
         const roundedRate = Math.round(mwstRate);
         const tax = gezahlt * (mwstRate / 100);
@@ -767,7 +762,7 @@ const UStVACalculator = (() => {
 
         const processRows = (data, isIncome, isEigen = false) =>
             data.slice(1).forEach(row => {
-                const m = getMonthFromRow(row);
+                const m = Helpers.getMonthFromRow(row);
                 if (m) processUStVARow(row, ustvaData, isIncome, isEigen);
             });
         processRows(revenueData, true);
@@ -880,10 +875,9 @@ const BWACalculator = (() => {
         eigenbelegeSteuerpflichtig: 0
     });
 
-    // Bestimmt den Monat (Spalte 14, Index 13)
+    // Hier nutzen wir die zentrale Helpers.getMonthFromRow-Funktion:
     const getMonthFromRow = row => {
-        const d = Helpers.parseDate(row[13]);
-        return d ? d.getMonth() + 1 : 0;
+        return Helpers.getMonthFromRow(row);
     };
 
     const aggregateBWAData = () => {
@@ -969,7 +963,7 @@ const BWACalculator = (() => {
         expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
         if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
 
-        // Gruppensummen und Steuerwerte berechnen
+        // Gruppensummen und weitere Berechnungen
         for (let m = 1; m <= 12; m++) {
             const d = bwaData[m];
             d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen +
@@ -1010,7 +1004,7 @@ const BWACalculator = (() => {
         return headers;
     };
 
-    // buildOutputRow wird innerhalb von calculateBWA definiert, sodass bwaData im Scope ist
+    // Hier wird für jede Position eine Zeile mit Monats-, Quartals- und Jahreswerten aufgebaut:
     const calculateBWA = () => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const bwaData = aggregateBWAData();
@@ -1065,7 +1059,7 @@ const BWACalculator = (() => {
         const headerRow = buildHeaderRow();
         const outputRows = [headerRow];
 
-        // buildOutputRow erhält bwaData aus diesem Scope
+        // Für jede Position wird eine Zeile mit Monats-, Quartals- und Jahreswerten aufgebaut:
         const buildOutputRow = pos => {
             const monthly = [];
             let yearly = 0;
