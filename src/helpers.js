@@ -31,11 +31,35 @@ const Helpers = {
 
     extractDateFromFilename(filename) {
         const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
-        const match = nameWithoutExtension.match(/RE-(\d{4}-\d{2}-\d{2})/);
+
+        // Verschiedene Formate erkennen
+
+        // Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+        let match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
         if (match?.[1]) {
-            const [year, month, day] = match[1].split("-");
-            return `${day}.${month}.${year}`;
+            const dateParts = match[1].split(/[-_.\/]/);
+            if (dateParts.length === 3) {
+                const [year, month, day] = dateParts;
+                return `${day}.${month}.${year}`;
+            }
         }
+
+        // Format: YYYY-MM-DD am Anfang oder Ende
+        match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+        if (match?.[2]) {
+            const dateParts = match[2].split(/[-_.\/]/);
+            if (dateParts.length === 3) {
+                const [year, month, day] = dateParts;
+                return `${day}.${month}.${year}`;
+            }
+        }
+
+        // Format: DD.MM.YYYY im Dateinamen
+        match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
+        if (match?.[1]) {
+            return match[1];
+        }
+
         return "";
     },
 
@@ -54,9 +78,14 @@ const Helpers = {
     },
 
     getMonthFromRow(row, colIndex = 13) {
-        const d = Helpers.parseDate(row[colIndex]); // Aufruf über das Helpers-Objekt
-        // Hier als Beispiel: Falls das Jahr nicht 2021 ist, gib 0 zurück
-        if (!d || d.getFullYear() !== 2021) return 0;
+        const d = Helpers.parseDate(row[colIndex]);
+
+        // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
+        const targetYear = config.tax?.year || new Date().getFullYear();
+
+        // Wenn kein Datum oder das Jahr nicht übereinstimmt
+        if (!d || d.getFullYear() !== targetYear) return 0;
+
         return d.getMonth() + 1;
     }
 };

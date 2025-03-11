@@ -25,9 +25,13 @@ const Validator = (() => {
             {
                 check: r => {
                     const mwstStr = r[5] == null ? "" : r[5].toString().trim();
-                    return isEmpty(mwstStr) || isNaN(parseFloat(mwstStr.replace("%", "").replace(",", ".")));
+                    if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+                    const mwst = parseFloat(mwstStr.replace("%", "").replace(",", "."));
+                    if (isNaN(mwst)) return false; // Wird schon durch andere Regel geprüft
+                    // Prüfe auf erlaubte MwSt-Sätze in Deutschland
+                    return ![0, 7, 19].includes(Math.round(mwst));
                 },
-                message: "Mehrwertsteuer fehlt oder ungültig."
+                message: "Ungültiger MwSt-Satz. Erlaubt sind: 0%, 7%, 19%."
             }
         ];
         const status = row[11] ? row[11].toString().trim().toLowerCase() : "";

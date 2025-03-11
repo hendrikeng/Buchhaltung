@@ -10,11 +10,11 @@ const RefreshModule = (() => {
 
         // Ersetze den Formelteil für Spalte 12:
         Object.entries({
-            7: row => `=E${row}*F${row}`,
+            7: row => `=E${row}*F${row}/100`,  // Korrigiert, falls MwSt als Prozent (z.B. 19 statt 0.19) gespeichert wird
             8: row => `=E${row}+G${row}`,
-            10: row => `=(H${row}-I${row})/(1+VALUE(F${row}))`,
+            10: row => `=(H${row}-I${row})/(1+F${row}/100)`,  // Korrigiert wie oben
             11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
-            12: row => `=IF(OR(VALUE(I${row})=0); "Offen"; IF(VALUE(I${row})>=VALUE(H${row}); "Bezahlt"; "Teilbezahlt"))`
+            12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`  // Überflüssiges OR entfernt
         }).forEach(([col, formulaFn]) => {
             const formulas = Array.from({length: numRows}, (_, i) => [formulaFn(i + 2)]);
             sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
