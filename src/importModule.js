@@ -1,8 +1,14 @@
+// file: src/importModule.js
 /**
  * importModule.js - Modul für den Import von Dateien
  *
- * Importiert Rechnungen und andere Dokumente aus Google Drive in die Buchhaltung
+ * Dieses Modul verwaltet den Import von Rechnungen und anderen Dokumenten
+ * aus Google Drive in die Buchhaltungstabelle. Es ermöglicht sowohl den automatischen
+ * als auch den manuellen Import und bietet eine übersichtliche Benutzeroberfläche.
  */
+
+import HelperModule from "./helperModule.js";
+import CONFIG from "./config.js";
 
 const ImportModule = (function() {
     // Private Variablen und Funktionen
@@ -14,6 +20,7 @@ const ImportModule = (function() {
      * @param {Object} mainSheet - Hauptsheet für die Daten (Einnahmen/Ausgaben)
      * @param {string} type - Typ der Dateien ('Einnahme' oder 'Ausgabe')
      * @param {Object} historySheet - Sheet für die Änderungshistorie
+     * @returns {Object} Statistik über importierte Dateien
      */
     function importFilesFromFolder(folder, importSheet, mainSheet, type, historySheet) {
         // Dateien im Ordner abrufen
@@ -23,7 +30,8 @@ const ImportModule = (function() {
         const getExistingFiles = (sheet, colIndex) =>
             new Set(sheet.getDataRange().getValues().slice(1).map(row => row[colIndex]));
 
-        const existingMain = getExistingFiles(mainSheet, CONFIG.SYSTEM.EINNAHMEN_COLS.DATEINAME);
+        const existingMain = getExistingFiles(mainSheet,
+            type === 'Einnahme' ? CONFIG.SYSTEM.EINNAHMEN_COLS.DATEINAME : CONFIG.SYSTEM.AUSGABEN_COLS.DATEINAME);
         const existingImport = getExistingFiles(importSheet, 0);
 
         // Listen für neue Einträge
@@ -165,6 +173,90 @@ const ImportModule = (function() {
 
     // Öffentliche API
     return {
+        /**
+         * Führt den ursprünglichen Importvorgang aus der alten Version durch
+         * Kompatibilitätsfunktion für die vorherige API
+         */
+        importDriveFiles: function() {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+                // Haupt-Sheets
+                const revenueMain = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.EINNAHMEN);
+                const expenseMain = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.AUSGABEN);
+
+                // Import-Sheets erstellen oder abrufen
+                const revenue = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_EINNAHMEN,
+                    ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+
+                const expense = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_AUSGABEN,
+                    ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+
+                const history = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.AENDERUNGSHISTORIE,
+                    ["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+
+                // Übergeordneten Ordner der Tabelle finden
+                const file = DriveApp.getFileById(ss.getId());
+                const parents = file.getParents();
+                const parentFolder = parents.hasNext() ? parents.next() : null;
+
+                if (!parentFolder) {
+                    SpreadsheetApp.getUi().alert("Kein übergeordneter Ordner gefunden.");
+                    return { error: "Kein übergeordneter Ordner gefunden" };
+                }
+
+                // Statistik für den Import
+                const stats = {
+                    einnahmen: { imported: 0, files: 0 },
+                    ausgaben: { imported: 0, files: 0 }
+                };
+
+                // Einnahmen-Ordner suchen und Dateien importieren
+                const revenueFolder = HelperModule.getFolderByName(parentFolder, "Einnahmen");
+                if (revenueFolder) {
+                    const result = importFilesFromFolder(revenueFolder, revenue, revenueMain, "Einnahme", history);
+                    stats.einnahmen.imported = result.mainCount;
+                    stats.einnahmen.files = result.importCount;
+                } else {
+                    SpreadsheetApp.getUi().alert("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
+                    stats.einnahmen.error = "Ordner nicht gefunden";
+                }
+
+                // Ausgaben-Ordner suchen und Dateien importieren
+                const expenseFolder = HelperModule.getFolderByName(parentFolder, "Ausgaben");
+                if (expenseFolder) {
+                    const result = importFilesFromFolder(expenseFolder, expense, expenseMain, "Ausgabe", history);
+                    stats.ausgaben.imported = result.mainCount;
+                    stats.ausgaben.files = result.importCount;
+                } else {
+                    SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
+                    stats.ausgaben.error = "Ordner nicht gefunden";
+                }
+
+                // Erfolgsmeldung
+                const totalImported = stats.einnahmen.imported + stats.ausgaben.imported;
+                const totalFiles = stats.einnahmen.files + stats.ausgaben.files;
+
+                if (totalImported > 0 || totalFiles > 0) {
+                    HelperModule.showToast(
+                        `Import abgeschlossen: ${totalImported} Dateien in Buchhaltung übernommen`,
+                        'Erfolg'
+                    );
+                } else {
+                    HelperModule.showToast(
+                        'Keine neuen Dateien zum Importieren gefunden',
+                        'Info'
+                    );
+                }
+
+                return stats;
+            } catch (e) {
+                Logger.log(`Fehler beim Importieren von Dateien: ${e.message}`);
+                SpreadsheetApp.getUi().alert(`Fehler beim Importieren: ${e.message}`);
+                return { error: e.message };
+            }
+        },
+
         /**
          * Sucht nach neuen Dateien in den Einnahmen und Ausgaben Ordnern
          * @returns {Object} Liste der gefundenen Dateien
@@ -503,235 +595,151 @@ const ImportModule = (function() {
                     error: e.message
                 };
             }
+        },
+
+        /**
+         * Zeigt einen Dialog zum manuellen Import einer Datei
+         */
+        showImportDialog: function() {
+            const ui = SpreadsheetApp.getUi();
+
+            const typeResponse = ui.alert(
+                'Datei-Import',
+                'Welchen Typ von Datei möchten Sie importieren?',
+                ui.ButtonSet.YES_NO_CANCEL
+            );
+
+            let type;
+            if (typeResponse === ui.Button.YES) {
+                type = 'Einnahme';
+            } else if (typeResponse === ui.Button.NO) {
+                type = 'Ausgabe';
+            } else {
+                return; // Abgebrochen
+            }
+
+            const fileResponse = ui.prompt(
+                'Datei-Import',
+                'Bitte geben Sie die Google Drive Datei-ID oder URL ein:',
+                ui.ButtonSet.OK_CANCEL
+            );
+
+            if (fileResponse.getSelectedButton() !== ui.Button.OK) {
+                return;
+            }
+
+            const input = fileResponse.getResponseText().trim();
+            let fileId;
+
+            if (input.startsWith('https://')) {
+                // URL: ID extrahieren
+                const match = input.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    fileId = match[1];
+                } else {
+                    ui.alert('Fehler', 'Die eingegebene URL konnte nicht verarbeitet werden.', ui.ButtonSet.OK);
+                    return;
+                }
+            } else {
+                // Direkt die ID
+                fileId = input;
+            }
+
+            this.importFileById(fileId, type);
+        },
+
+        /**
+         * Importiert eine einzelne Datei anhand ihrer ID
+         * @param {string} fileId - Google Drive Datei-ID
+         * @param {string} type - Typ der Datei ('Einnahme' oder 'Ausgabe')
+         * @returns {Object} Ergebnis des Imports
+         */
+        importFileById: function(fileId, type) {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+                // Datei abrufen
+                let file;
+                try {
+                    file = DriveApp.getFileById(fileId);
+                } catch (e) {
+                    throw new Error(`Die Datei mit der ID ${fileId} wurde nicht gefunden.`);
+                }
+
+                // Ziel-Sheets basierend auf dem Dateityp bestimmen
+                let mainSheet, importSheet;
+                if (type === 'Einnahme') {
+                    mainSheet = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.EINNAHMEN);
+                    importSheet = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_EINNAHMEN,
+                        ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+                } else {
+                    mainSheet = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.AUSGABEN);
+                    importSheet = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_AUSGABEN,
+                        ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
+                }
+
+                const history = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.AENDERUNGSHISTORIE,
+                    ["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+
+                // Dateiinformationen
+                const fileName = file.getName();
+                const fileUrl = file.getUrl();
+                const baseName = fileName.replace(/\.[^/.]+$/, "");
+                const invoiceName = baseName.replace(/^[^ ]* /, "");
+                const invoiceDate = HelperModule.extractDateFromFilename(fileName);
+
+                // Prüfen, ob die Datei bereits importiert wurde
+                const mainData = mainSheet.getDataRange().getValues();
+                for (let i = 1; i < mainData.length; i++) {
+                    const col = type === 'Einnahme' ?
+                        CONFIG.SYSTEM.EINNAHMEN_COLS.DATEINAME :
+                        CONFIG.SYSTEM.AUSGABEN_COLS.DATEINAME;
+
+                    if (mainData[i][col] === fileName) {
+                        SpreadsheetApp.getUi().alert(`Die Datei "${fileName}" wurde bereits importiert.`);
+                        return { success: false, message: 'Datei bereits importiert' };
+                    }
+                }
+
+                // Neue Zeile für das Hauptsheet erstellen
+                const timestamp = new Date();
+                const cols = type === 'Einnahme' ?
+                    CONFIG.SYSTEM.EINNAHMEN_COLS :
+                    CONFIG.SYSTEM.AUSGABEN_COLS;
+
+                const newMainRow = Array(mainSheet.getLastColumn()).fill("");
+                newMainRow[cols.DATUM] = invoiceDate ? new Date(invoiceDate) : "";
+                newMainRow[cols.RECHNUNGSNUMMER] = invoiceName;
+                newMainRow[cols.LETZTE_AKTUALISIERUNG] = timestamp;
+                newMainRow[cols.DATEINAME] = fileName;
+                newMainRow[cols.RECHNUNG_LINK] = fileUrl;
+
+                // In Hauptsheet einfügen
+                const mainLastRow = mainSheet.getLastRow();
+                mainSheet.getRange(mainLastRow + 1, 1, 1, newMainRow.length).setValues([newMainRow]);
+
+                // In Import-Sheet einfügen
+                const importRow = [fileName, fileUrl, invoiceName];
+                const importLastRow = importSheet.getLastRow();
+                importSheet.getRange(importLastRow + 1, 1, 1, importRow.length).setValues([importRow]);
+
+                // In Änderungshistorie eintragen
+                const historyRow = [timestamp, type, fileName, fileUrl];
+                const historyLastRow = history.getLastRow();
+                history.getRange(historyLastRow + 1, 1, 1, historyRow.length).setValues([historyRow]);
+
+                // Erfolgsmeldung
+                HelperModule.showToast(`Datei "${fileName}" erfolgreich importiert`, 'Erfolg');
+
+                // Zur neuen Zeile springen
+                mainSheet.setActiveRange(mainSheet.getRange(mainLastRow + 1, 1));
+
+                return { success: true, message: 'Datei erfolgreich importiert' };
+            } catch (e) {
+                Logger.log(`Fehler beim Importieren der Datei: ${e.message}`);
+                SpreadsheetApp.getUi().alert(`Fehler beim Importieren: ${e.message}`);
+                return { success: false, error: e.message };
+            }
         }
     };
 })();
-* Importiert Dateien aus Google Drive in die Buchhaltung
-* @returns {Object} Importstatistik
-*/
-importDriveFiles: function() {
-    try {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-        // Haupt-Sheets
-        const revenueMain = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.EINNAHMEN);
-        const expenseMain = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.AUSGABEN);
-
-        // Import-Sheets erstellen oder abrufen
-        const revenue = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_EINNAHMEN,
-            ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-
-        const expense = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_AUSGABEN,
-            ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-
-        const history = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.AENDERUNGSHISTORIE,
-            ["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
-
-        // Übergeordneten Ordner der Tabelle finden
-        const file = DriveApp.getFileById(ss.getId());
-        const parents = file.getParents();
-        const parentFolder = parents.hasNext() ? parents.next() : null;
-
-        if (!parentFolder) {
-            SpreadsheetApp.getUi().alert("Kein übergeordneter Ordner gefunden.");
-            return { error: "Kein übergeordneter Ordner gefunden" };
-        }
-
-        // Statistik für den Import
-        const stats = {
-            einnahmen: { imported: 0, files: 0 },
-            ausgaben: { imported: 0, files: 0 }
-        };
-
-        // Einnahmen-Ordner suchen und Dateien importieren
-        const revenueFolder = HelperModule.getFolderByName(parentFolder, "Einnahmen");
-        if (revenueFolder) {
-            const result = importFilesFromFolder(revenueFolder, revenue, revenueMain, "Einnahme", history);
-            stats.einnahmen.imported = result.mainCount;
-            stats.einnahmen.files = result.importCount;
-        } else {
-            SpreadsheetApp.getUi().alert("Fehler: 'Einnahmen'-Ordner nicht gefunden.");
-            stats.einnahmen.error = "Ordner nicht gefunden";
-        }
-
-        // Ausgaben-Ordner suchen und Dateien importieren
-        const expenseFolder = HelperModule.getFolderByName(parentFolder, "Ausgaben");
-        if (expenseFolder) {
-            const result = importFilesFromFolder(expenseFolder, expense, expenseMain, "Ausgabe", history);
-            stats.ausgaben.imported = result.mainCount;
-            stats.ausgaben.files = result.importCount;
-        } else {
-            SpreadsheetApp.getUi().alert("Fehler: 'Ausgaben'-Ordner nicht gefunden.");
-            stats.ausgaben.error = "Ordner nicht gefunden";
-        }
-
-        // Erfolgsmeldung
-        const totalImported = stats.einnahmen.imported + stats.ausgaben.imported;
-        const totalFiles = stats.einnahmen.files + stats.ausgaben.files;
-
-        if (totalImported > 0 || totalFiles > 0) {
-            HelperModule.showToast(
-                `Import abgeschlossen: ${totalImported} Dateien in Buchhaltung übernommen`,
-                'Erfolg'
-            );
-        } else {
-            HelperModule.showToast(
-                'Keine neuen Dateien zum Importieren gefunden',
-                'Info'
-            );
-        }
-
-        return stats;
-    } catch (e) {
-        Logger.log(`Fehler beim Importieren von Dateien: ${e.message}`);
-        SpreadsheetApp.getUi().alert(`Fehler beim Importieren: ${e.message}`);
-        return { error: e.message };
-    }
-},
-
-/**
- * Zeigt einen Dialog zum manuellen Import einer Datei
- */
-showImportDialog: function() {
-    const ui = SpreadsheetApp.getUi();
-
-    const typeResponse = ui.alert(
-        'Datei-Import',
-        'Welchen Typ von Datei möchten Sie importieren?',
-        ui.ButtonSet.YES_NO_CANCEL
-    );
-
-    let type;
-    if (typeResponse === ui.Button.YES) {
-        type = 'Einnahme';
-    } else if (typeResponse === ui.Button.NO) {
-        type = 'Ausgabe';
-    } else {
-        return; // Abgebrochen
-    }
-
-    const fileResponse = ui.prompt(
-        'Datei-Import',
-        'Bitte geben Sie die Google Drive Datei-ID oder URL ein:',
-        ui.ButtonSet.OK_CANCEL
-    );
-
-    if (fileResponse.getSelectedButton() !== ui.Button.OK) {
-        return;
-    }
-
-    const input = fileResponse.getResponseText().trim();
-    let fileId;
-
-    if (input.startsWith('https://')) {
-        // URL: ID extrahieren
-        const match = input.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if (match && match[1]) {
-            fileId = match[1];
-        } else {
-            ui.alert('Fehler', 'Die eingegebene URL konnte nicht verarbeitet werden.', ui.ButtonSet.OK);
-            return;
-        }
-    } else {
-        // Direkt die ID
-        fileId = input;
-    }
-
-    this.importFileById(fileId, type);
-},
-
-/**
- * Importiert eine einzelne Datei anhand ihrer ID
- * @param {string} fileId - Google Drive Datei-ID
- * @param {string} type - Typ der Datei ('Einnahme' oder 'Ausgabe')
- * @returns {Object} Ergebnis des Imports
- */
-importFileById: function(fileId, type) {
-    try {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-        // Datei abrufen
-        let file;
-        try {
-            file = DriveApp.getFileById(fileId);
-        } catch (e) {
-            throw new Error(`Die Datei mit der ID ${fileId} wurde nicht gefunden.`);
-        }
-
-        // Ziel-Sheets basierend auf dem Dateityp bestimmen
-        let mainSheet, importSheet;
-        if (type === 'Einnahme') {
-            mainSheet = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.EINNAHMEN);
-            importSheet = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_EINNAHMEN,
-                ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-        } else {
-            mainSheet = ss.getSheetByName(CONFIG.SYSTEM.SHEET_NAMES.AUSGABEN);
-            importSheet = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.RECHNUNGEN_AUSGABEN,
-                ["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-        }
-
-        const history = getOrCreateSheet(ss, CONFIG.SYSTEM.SHEET_NAMES.AENDERUNGSHISTORIE,
-            ["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
-
-        // Dateiinformationen
-        const fileName = file.getName();
-        const fileUrl = file.getUrl();
-        const baseName = fileName.replace(/\.[^/.]+$/, "");
-        const invoiceName = baseName.replace(/^[^ ]* /, "");
-        const invoiceDate = HelperModule.extractDateFromFilename(fileName);
-
-        // Prüfen, ob die Datei bereits importiert wurde
-        const mainData = mainSheet.getDataRange().getValues();
-        for (let i = 1; i < mainData.length; i++) {
-            const col = type === 'Einnahme' ?
-                CONFIG.SYSTEM.EINNAHMEN_COLS.DATEINAME :
-                CONFIG.SYSTEM.AUSGABEN_COLS.DATEINAME;
-
-            if (mainData[i][col] === fileName) {
-                SpreadsheetApp.getUi().alert(`Die Datei "${fileName}" wurde bereits importiert.`);
-                return { success: false, message: 'Datei bereits importiert' };
-            }
-        }
-
-        // Neue Zeile für das Hauptsheet erstellen
-        const timestamp = new Date();
-        const cols = type === 'Einnahme' ?
-            CONFIG.SYSTEM.EINNAHMEN_COLS :
-            CONFIG.SYSTEM.AUSGABEN_COLS;
-
-        const newMainRow = Array(mainSheet.getLastColumn()).fill("");
-        newMainRow[cols.DATUM] = invoiceDate ? new Date(invoiceDate) : "";
-        newMainRow[cols.RECHNUNGSNUMMER] = invoiceName;
-        newMainRow[cols.LETZTE_AKTUALISIERUNG] = timestamp;
-        newMainRow[cols.DATEINAME] = fileName;
-        newMainRow[cols.RECHNUNG_LINK] = fileUrl;
-
-        // In Hauptsheet einfügen
-        const mainLastRow = mainSheet.getLastRow();
-        mainSheet.getRange(mainLastRow + 1, 1, 1, newMainRow.length).setValues([newMainRow]);
-
-        // In Import-Sheet einfügen
-        const importRow = [fileName, fileUrl, invoiceName];
-        const importLastRow = importSheet.getLastRow();
-        importSheet.getRange(importLastRow + 1, 1, 1, importRow.length).setValues([importRow]);
-
-        // In Änderungshistorie eintragen
-        const historyRow = [timestamp, type, fileName, fileUrl];
-        const historyLastRow = history.getLastRow();
-        history.getRange(historyLastRow + 1, 1, 1, historyRow.length).setValues([historyRow]);
-
-        // Erfolgsmeldung
-        HelperModule.showToast(`Datei "${fileName}" erfolgreich importiert`, 'Erfolg');
-
-        // Zur neuen Zeile springen
-        mainSheet.setActiveRange(mainSheet.getRange(mainLastRow + 1, 1));
-
-        return { success: true, message: 'Datei erfolgreich importiert' };
-    } catch (e) {
-        Logger.log(`Fehler beim Importieren der Datei: ${e.message}`);
-        SpreadsheetApp.getUi().alert(`Fehler beim Importieren: ${e.message}`);
-        return { success: false, error: e.message };
-    }
-},
-
-/**
