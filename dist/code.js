@@ -1,402 +1,11 @@
 /* Bundled Code for Google Apps Script */
 'use strict';
 
-// src/helpers.js
-
-const Helpers = {
-    parseDate(value) {
-        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-        if (typeof value === "string") {
-            const d = new Date(value);
-            return isNaN(d.getTime()) ? null : d;
-        }
-        return null;
-    },
-
-    parseCurrency(value) {
-        if (typeof value === "number") return value;
-        const str = value.toString().replace(/[^\d,.-]/g, "").replace(",", ".");
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : num;
-    },
-
-    parseMwstRate(value) {
-        // Hier kannst du zum Beispiel einen Default-Wert festlegen, falls config.tax.defaultMwst nicht verfügbar ist.
-        if (typeof value === "number") return value < 1 ? value * 100 : value;
-        const rate = parseFloat(value.toString().replace("%", "").replace(",", ".").trim());
-        return isNaN(rate) ? 19 : rate;
-    },
-
-    getFolderByName(parent, name) {
-        const folderIter = parent.getFoldersByName(name);
-        return folderIter.hasNext() ? folderIter.next() : null;
-    },
-
-    extractDateFromFilename(filename) {
-        const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
-
-        // Verschiedene Formate erkennen
-
-        // Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
-        let match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
-        if (match?.[1]) {
-            const dateParts = match[1].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
-            }
-        }
-
-        // Format: YYYY-MM-DD am Anfang oder Ende
-        match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
-        if (match?.[2]) {
-            const dateParts = match[2].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
-            }
-        }
-
-        // Format: DD.MM.YYYY im Dateinamen
-        match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
-        if (match?.[1]) {
-            return match[1];
-        }
-
-        return "";
-    },
-
-    setConditionalFormattingForColumn(sheet, column, conditions) {
-        const lastRow = sheet.getLastRow();
-        const range = sheet.getRange(`${column}2:${column}${lastRow}`);
-        const rules = conditions.map(({ value, background, fontColor }) =>
-            SpreadsheetApp.newConditionalFormatRule()
-                .whenTextEqualTo(value)
-                .setBackground(background)
-                .setFontColor(fontColor)
-                .setRanges([range])
-                .build()
-        );
-        sheet.setConditionalFormatRules(rules);
-    },
-
-    getMonthFromRow(row, colIndex = 13) {
-        const d = Helpers.parseDate(row[colIndex]);
-
-        // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
-        const targetYear = config.tax?.year || new Date().getFullYear();
-
-        // Wenn kein Datum oder das Jahr nicht übereinstimmt
-        if (!d || d.getFullYear() !== targetYear) return 0;
-
-        return d.getMonth() + 1;
-    }
-};
-
-const ImportModule = (() => {
-    const importFilesFromFolder = (folder, importSheet, mainSheet, type, historySheet) => {
-        const files = folder.getFiles();
-        const getExistingFiles = (sheet, colIndex) =>
-            new Set(sheet.getDataRange().getValues().slice(1).map(row => row[colIndex]));
-        const existingMain = getExistingFiles(mainSheet, 16);
-        const existingImport = getExistingFiles(importSheet, 0);
-        const newMainRows = [];
-        const newImportRows = [];
-        const newHistoryRows = [];
-        const timestamp = new Date();
-
-        while (files.hasNext()) {
-            const file = files.next();
-            const baseName = file.getName().replace(/\.[^/.]+$/, "");
-            const invoiceName = baseName.replace(/^[^ ]* /, "");
-            const fileName = baseName;
-            const invoiceDate = Helpers.extractDateFromFilename(fileName);
-            const fileUrl = file.getUrl();
-            let wasImported = false;
-
-            if (!existingMain.has(fileName)) {
-                newMainRows.push([
-                    invoiceDate,
-                    invoiceName,
-                    "", "", "", "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "", "", "",
-                    timestamp,
-                    fileName,
-                    fileUrl
-                ]);
-                existingMain.add(fileName);
-                wasImported = true;
-            }
-            if (!existingImport.has(fileName)) {
-                newImportRows.push([fileName, fileUrl, fileName]);
-                existingImport.add(fileName);
-                wasImported = true;
-            }
-            wasImported && newHistoryRows.push([timestamp, type, fileName, fileUrl]);
-        }
-        if (newImportRows.length)
-            importSheet.getRange(importSheet.getLastRow() + 1, 1, newImportRows.length, newImportRows[0].length)
-                .setValues(newImportRows);
-        if (newMainRows.length)
-            mainSheet.getRange(mainSheet.getLastRow() + 1, 1, newMainRows.length, newMainRows[0].length)
-                .setValues(newMainRows);
-        if (newHistoryRows.length)
-            historySheet.getRange(historySheet.getLastRow() + 1, 1, newHistoryRows.length, newHistoryRows[0].length)
-                .setValues(newHistoryRows);
-    };
-
-    const importDriveFiles = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const ui = SpreadsheetApp.getUi();
-
-        try {
-            const revenueMain = ss.getSheetByName("Einnahmen");
-            const expenseMain = ss.getSheetByName("Ausgaben");
-
-            if (!revenueMain || !expenseMain) {
-                ui.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!");
-                return;
-            }
-
-            const revenue = ss.getSheetByName("Rechnungen Einnahmen") || ss.insertSheet("Rechnungen Einnahmen");
-            const expense = ss.getSheetByName("Rechnungen Ausgaben") || ss.insertSheet("Rechnungen Ausgaben");
-            const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
-
-            // Header-Zeilen initialisieren falls nötig
-            if (revenue.getLastRow() === 0)
-                revenue.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-            if (expense.getLastRow() === 0)
-                expense.appendRow(["Dateiname", "Link zur Datei", "Rechnungsnummer"]);
-            if (history.getLastRow() === 0)
-                history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
-
-            // Auf übergeordneten Ordner zugreifen
-            let parentFolder;
-            try {
-                const file = DriveApp.getFileById(ss.getId());
-                const parents = file.getParents();
-                parentFolder = parents.hasNext() ? parents.next() : null;
-                if (!parentFolder) {
-                    ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
-                    return;
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf Google Drive: " + e.toString());
-                return;
-            }
-
-            // Unterordner für Einnahmen und Ausgaben finden
-            let revenueFolder, expenseFolder;
-
-            try {
-                revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
-                if (!revenueFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Einnahmen' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        revenueFolder = parentFolder.createFolder("Einnahmen");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Einnahmen-Ordner: " + e.toString());
-            }
-
-            try {
-                expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
-                if (!expenseFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Ausgaben' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        expenseFolder = parentFolder.createFolder("Ausgaben");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Ausgaben-Ordner: " + e.toString());
-            }
-
-            // Import durchführen wenn Ordner existieren
-            let importCount = 0;
-
-            if (revenueFolder) {
-                try {
-                    importFilesFromFolder(revenueFolder, revenue, revenueMain, "Einnahme", history);
-                    importCount++;
-                } catch (e) {
-                    ui.alert("Fehler beim Import der Einnahmen: " + e.toString());
-                }
-            }
-
-            if (expenseFolder) {
-                try {
-                    importFilesFromFolder(expenseFolder, expense, expenseMain, "Ausgabe", history);
-                    importCount++;
-                } catch (e) {
-                    ui.alert("Fehler beim Import der Ausgaben: " + e.toString());
-                }
-            }
-
-            if (importCount === 0) {
-                ui.alert("Es wurden keine Dateien importiert. Bitte überprüfe die Ordnerstruktur.");
-            } else {
-                ui.alert("Import abgeschlossen.");
-            }
-        } catch (e) {
-            ui.alert("Ein unerwarteter Fehler ist aufgetreten: " + e.toString());
-        }
-    };
-
-    return {importDriveFiles};
-})();
-
-const Validator = (() => {
-    const isEmpty = v => v == null || v.toString().trim() === "";
-    const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
-
-    const validateDropdown = (sheet, row, col, numRows, numCols, list) =>
-        sheet.getRange(row, col, numRows, numCols).setDataValidation(
-            SpreadsheetApp.newDataValidation().requireValueInList(list, true).build()
-        );
-
-    const validateRevenueAndExpenses = (row, rowIndex) => {
-        const warnings = [];
-        const validateRow = (row, idx, rules) => {
-            rules.forEach(({check, message}) => {
-                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
-            });
-        };
-        const baseRules = [
-            {check: r => isEmpty(r[0]), message: "Rechnungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Rechnungsnummer fehlt."},
-            {check: r => isEmpty(r[2]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[3]), message: "Kunde fehlt."},
-            {check: r => isInvalidNumber(r[4]), message: "Nettobetrag fehlt oder ungültig."},
-            {
-                check: r => {
-                    const mwstStr = r[5] == null ? "" : r[5].toString().trim();
-                    if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
-                    const mwst = parseFloat(mwstStr.replace("%", "").replace(",", "."));
-                    if (isNaN(mwst)) return false; // Wird schon durch andere Regel geprüft
-                    // Prüfe auf erlaubte MwSt-Sätze in Deutschland
-                    return ![0, 7, 19].includes(Math.round(mwst));
-                },
-                message: "Ungültiger MwSt-Satz. Erlaubt sind: 0%, 7%, 19%."
-            }
-        ];
-        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
-        const paymentRules = status === "offen"
-            ? [
-                {check: r => !isEmpty(r[12]), message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'},
-                {check: r => !isEmpty(r[13]), message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'}
-            ]
-            : [
-                {
-                    check: r => isEmpty(r[12]),
-                    message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
-                },
-                {
-                    check: r => isEmpty(r[13]),
-                    message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
-                },
-                {
-                    check: r => {
-                        if (isEmpty(r[13]) || isEmpty(r[0])) return false;
-                        const paymentDate = Helpers.parseDate(r[13]);
-                        return paymentDate ? paymentDate > new Date() : false;
-                    },
-                    message: "Zahlungsdatum darf nicht in der Zukunft liegen."
-                },
-                {
-                    check: r => {
-                        if (isEmpty(r[13]) || isEmpty(r[0])) return false;
-                        const paymentDate = Helpers.parseDate(r[13]);
-                        const invoiceDate = Helpers.parseDate(r[0]);
-                        return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
-                    },
-                    message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
-                }
-            ];
-        const rules = baseRules.concat(paymentRules);
-        validateRow(row, rowIndex, rules);
-        return warnings;
-    };
-
-    const validateBanking = bankSheet => {
-        const data = bankSheet.getDataRange().getValues();
-        const warnings = [];
-        const validateRow = (row, idx, rules) => {
-            rules.forEach(({check, message}) => {
-                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
-            });
-        };
-        const headerFooterRules = [
-            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
-            {
-                check: r => !isEmpty(r[2]) || !isNaN(parseFloat(r[2].toString().trim())),
-                message: "Betrag darf nicht gesetzt sein."
-            },
-            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
-            {check: r => !isEmpty(r[4]), message: "Typ darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[5]), message: "Kategorie darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[6]), message: "Konto (Soll) darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
-        ];
-        const dataRowRules = [
-            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
-            {check: r => isEmpty(r[2]) || isInvalidNumber(r[2]), message: "Betrag fehlt oder ungültig."},
-            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
-            {check: r => isEmpty(r[4]), message: "Typ fehlt."},
-            {check: r => isEmpty(r[5]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[6]), message: "Konto (Soll) fehlt."},
-            {check: r => isEmpty(r[7]), message: "Gegenkonto (Haben) fehlt."}
-        ];
-        data.forEach((row, i) => {
-            const idx = i + 1;
-            if (i === 1 || i === data.length - 1) {
-                validateRow(row, idx, headerFooterRules);
-            } else if (i > 1 && i < data.length - 1) {
-                validateRow(row, idx, dataRowRules);
-            }
-        });
-        return warnings;
-    };
-
-    const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
-        const revData = revenueSheet.getDataRange().getValues();
-        const expData = expenseSheet.getDataRange().getValues();
-        const revenueWarnings = revData.length > 1 ? revData.slice(1).reduce((acc, row, i) => acc.concat(validateRevenueAndExpenses(row, i + 2)), []) : [];
-        const expenseWarnings = expData.length > 1 ? expData.slice(1).reduce((acc, row, i) => acc.concat(validateRevenueAndExpenses(row, i + 2)), []) : [];
-        const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
-        const msgArr = [];
-        revenueWarnings.length && msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
-        expenseWarnings.length && msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
-        bankWarnings.length && msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
-        if (msgArr.length) {
-            SpreadsheetApp.getUi().alert(msgArr.join("\n\n"));
-            return false;
-        }
-        return true;
-    };
-
-    return {validateDropdown, validateRevenueAndExpenses, validateBanking, validateAllSheets};
-})();
-
 /**
  * Konfiguration für die Buchhaltungsanwendung
  * Unterstützt die Buchhaltung für Holding und operative GmbH nach SKR04
  */
-const config$1 = {
+const config = {
     // Allgemeine Einstellungen
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
@@ -414,7 +23,7 @@ const config$1 = {
 
         // Holding-spezifische Steuersätze
         holding: {
-            gewerbesteuer: 16.45,  // Angepasst an lokalen Hebesatz
+            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
             koerperschaftsteuer: 15,
             solidaritaetszuschlag: 5.5,
             gewinnUebertragSteuerfrei: 95,  // % der Beteiligungserträge steuerfrei
@@ -423,7 +32,7 @@ const config$1 = {
 
         // Operative GmbH Steuersätze
         operative: {
-            gewerbesteuer: 16.45,  // Angepasst an lokalen Hebesatz
+            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
             koerperschaftsteuer: 15,
             solidaritaetszuschlag: 5.5,
             gewinnUebertragSteuerfrei: 0,
@@ -714,159 +323,1173 @@ const config$1 = {
 };
 
 // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-config$1.bank.category = [
-    ...Object.keys(config$1.einnahmen.categories),
-    ...Object.keys(config$1.ausgaben.categories),
-    ...config$1.gesellschafterkonto.category,
-    ...config$1.holdingTransfers.category,
-    ...config$1.eigenbelege.category
+config.bank.category = [
+    ...Object.keys(config.einnahmen.categories),
+    ...Object.keys(config.ausgaben.categories),
+    ...config.gesellschafterkonto.category,
+    ...config.holdingTransfers.category,
+    ...config.eigenbelege.category
 ];
 
 // Duplikate aus den Kategorien entfernen
-config$1.bank.category = [...new Set(config$1.bank.category)];
+config.bank.category = [...new Set(config.bank.category)];
 
-const RefreshModule = (() => {
-    const refreshDataSheet = sheet => {
-        const lastRow = sheet.getLastRow();
-        if (lastRow < 2) return;
-        const numRows = lastRow - 1;
+// src/helpers.js
 
-        // Ersetze den Formelteil für Spalte 12:
-        Object.entries({
-            7: row => `=E${row}*F${row}`,
-            8: row => `=E${row}+G${row}`,
-            10: row => `=(H${row}-I${row})/(1+F${row})`,
-            11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
-            12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`  // Überflüssiges OR entfernt
-        }).forEach(([col, formulaFn]) => {
-            const formulas = Array.from({length: numRows}, (_, i) => [formulaFn(i + 2)]);
-            sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
-        });
+/**
+ * Hilfsmodule für verschiedene häufig benötigte Funktionen
+ */
+const Helpers = {
+    /**
+     * Konvertiert verschiedene Datumsformate in ein gültiges Date-Objekt
+     * @param {Date|string} value - Das zu parsende Datum
+     * @returns {Date|null} - Das geparste Datum oder null bei ungültigem Format
+     */
+    parseDate(value) {
+        // Wenn bereits ein Date-Objekt
+        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
 
-        const col9Range = sheet.getRange(2, 9, numRows, 1);
-        const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
-        col9Range.setValues(col9Values.map(val => [val]));
-
-        const name = sheet.getName();
-        if (name === "Einnahmen")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(config$1.einnahmen.categories));
-        if (name === "Ausgaben")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, Object.keys(config$1.ausgaben.categories));
-        if (name === "Eigenbelege")
-            Validator.validateDropdown(sheet, 2, 3, lastRow - 1, 1, config$1.eigenbelege.category);
-        Validator.validateDropdown(sheet, 2, 13, lastRow - 1, 1, config$1.common.paymentType);
-        sheet.autoResizeColumns(1, sheet.getLastColumn());
-    };
-
-    const refreshBankSheet = sheet => {
-        const lastRow = sheet.getLastRow();
-        if (lastRow < 3) return;
-        const firstDataRow = 3;
-        const numDataRows = lastRow - firstDataRow + 1;
-        const transRows = lastRow - firstDataRow - 1;
-
-        if (transRows > 0) {
-            sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
-                Array.from({length: transRows}, (_, i) => [`=D${firstDataRow + i - 1}+C${firstDataRow + i}`])
-            );
-        }
-
-        const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
-        const typeValues = amounts.map(([val]) => {
-            const amt = parseFloat(val) || 0;
-            return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
-        });
-        sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
-
-        Validator.validateDropdown(sheet, firstDataRow, 5, numDataRows, 1, config$1.bank.type);
-        Validator.validateDropdown(sheet, firstDataRow, 6, numDataRows, 1, config$1.bank.category);
-        const allowedKontoSoll = Object.values(config$1.einnahmen.kontoMapping)
-            .concat(Object.values(config$1.ausgaben.kontoMapping))
-            .map(m => m.soll);
-        const allowedGegenkonto = Object.values(config$1.einnahmen.kontoMapping)
-            .concat(Object.values(config$1.ausgaben.kontoMapping))
-            .map(m => m.gegen);
-        Validator.validateDropdown(sheet, firstDataRow, 7, numDataRows, 1, allowedKontoSoll);
-        Validator.validateDropdown(sheet, firstDataRow, 8, numDataRows, 1, allowedGegenkonto);
-
-        Helpers.setConditionalFormattingForColumn(sheet, "E", [
-            {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
-            {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
-        ]);
-
-        const dataRange = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn());
-        const data = dataRange.getValues();
-        data.forEach((row, i) => {
-            const globalRow = i + firstDataRow;
-            const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
-            if (globalRow === lastRow && label === "endsaldo") return;
-            const type = row[4];
-            const category = row[5] || "";
-            let mapping = type === "Einnahme"
-                ? config$1.einnahmen.kontoMapping[category]
-                : type === "Ausgabe"
-                    ? config$1.ausgaben.kontoMapping[category]
-                    : null;
-            if (!mapping) mapping = {soll: "Manuell prüfen", gegen: "Manuell prüfen"};
-            row[6] = mapping.soll;
-            row[7] = mapping.gegen;
-        });
-        dataRange.setValues(data);
-
-        const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
-        const formattedDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy");
-        if (lastRowText === "endsaldo") {
-            sheet.getRange(lastRow, 1).setValue(formattedDate);
-            sheet.getRange(lastRow, 4).setFormula(`=D${lastRow - 1}`);
-        } else {
-            sheet.appendRow([
-                formattedDate,
-                "Endsaldo",
-                "",
-                sheet.getRange(lastRow, 4).getValue(),
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                ""
-            ]);
-        }
-        sheet.autoResizeColumns(1, sheet.getLastColumn());
-    };
-
-    const refreshActiveSheet = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const sheet = ss.getActiveSheet();
-        const name = sheet.getName();
-        const ui = SpreadsheetApp.getUi();
-        if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
-            refreshDataSheet(sheet);
-            ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
-        } else if (name === "Bankbewegungen") {
-            refreshBankSheet(sheet);
-            ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
-        } else {
-            ui.alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
-        }
-    };
-
-    const refreshAllSheets = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"].forEach(name => {
-            const sheet = ss.getSheetByName(name);
-            if (sheet) {
-                name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+        // Wenn String
+        if (typeof value === "string") {
+            // Deutsche Datumsformate (DD.MM.YYYY) unterstützen
+            if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(value)) {
+                const [day, month, year] = value.split('.').map(Number);
+                const date = new Date(year, month - 1, day);
+                return isNaN(date.getTime()) ? null : date;
             }
-        });
+
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        return null;
+    },
+
+    /**
+     * Konvertiert einen String oder eine Zahl in einen numerischen Währungswert
+     * @param {number|string} value - Der zu parsende Wert
+     * @returns {number} - Der geparste Währungswert oder 0 bei ungültigem Format
+     */
+    parseCurrency(value) {
+        if (value === null || value === undefined || value === "") return 0;
+        if (typeof value === "number") return value;
+
+        // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
+        const str = value.toString()
+            .replace(/[^\d,.-]/g, "")
+            .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
+
+        // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
+        const parts = str.split('.');
+        if (parts.length > 2) {
+            const last = parts.pop();
+            return parseFloat(parts.join('') + '.' + last);
+        }
+
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : num;
+    },
+
+    /**
+     * Parst einen MwSt-Satz und normalisiert ihn
+     * @param {number|string} value - Der zu parsende MwSt-Satz
+     * @returns {number} - Der normalisierte MwSt-Satz (0-100)
+     */
+    parseMwstRate(value) {
+        if (value === null || value === undefined || value === "") {
+            // Verwende den Standard-MwSt-Satz aus der Konfiguration oder fallback auf 19%
+            return config?.tax?.defaultMwst || 19;
+        }
+
+        if (typeof value === "number") {
+            // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
+            return value < 1 ? value * 100 : value;
+        }
+
+        // String-Wert parsen und bereinigen
+        const rate = parseFloat(
+            value.toString()
+                .replace(/%/g, "")
+                .replace(/,/g, ".")
+                .trim()
+        );
+
+        // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
+        if (isNaN(rate)) {
+            return config?.tax?.defaultMwst || 19;
+        }
+
+        // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
+        return rate < 1 ? rate * 100 : rate;
+    },
+
+    /**
+     * Sucht nach einem Ordner mit bestimmtem Namen innerhalb eines übergeordneten Ordners
+     * @param {Folder} parent - Der übergeordnete Ordner
+     * @param {string} name - Der gesuchte Ordnername
+     * @returns {Folder|null} - Der gefundene Ordner oder null
+     */
+    getFolderByName(parent, name) {
+        if (!parent) return null;
+
+        try {
+            const folderIter = parent.getFoldersByName(name);
+            return folderIter.hasNext() ? folderIter.next() : null;
+        } catch (e) {
+            console.error("Fehler beim Suchen des Ordners:", e);
+            return null;
+        }
+    },
+
+    /**
+     * Extrahiert ein Datum aus einem Dateinamen in verschiedenen Formaten
+     * @param {string} filename - Der Dateiname, aus dem das Datum extrahiert werden soll
+     * @returns {string} - Das extrahierte Datum im Format DD.MM.YYYY oder leer
+     */
+    extractDateFromFilename(filename) {
+        if (!filename) return "";
+
+        const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+
+        // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
+
+        // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
+        let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
+        if (match?.[1]) {
+            return match[1];
+        }
+
+        // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+        if (match?.[1]) {
+            const dateParts = match[1].split(/[-_.\/]/);
+            if (dateParts.length === 3) {
+                const [year, month, day] = dateParts;
+                return `${day}.${month}.${year}`;
+            }
+        }
+
+        // 3. Format: YYYY-MM-DD am Anfang oder Ende
+        match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+        if (match?.[2]) {
+            const dateParts = match[2].split(/[-_.\/]/);
+            if (dateParts.length === 3) {
+                const [year, month, day] = dateParts;
+                return `${day}.${month}.${year}`;
+            }
+        }
+
+        // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
+        match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+        if (match) {
+            const [_, day, month, year] = match;
+            return `${day}.${month}.${year}`;
+        }
+
+        // 5. Aktuelles Datum als Fallback (optional)
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+
+        // Als Kommentar belassen, da es möglicherweise besser ist, ein leeres Datum zurückzugeben
+        // return `${day}.${month}.${year}`;
+
+        return "";
+    },
+
+    /**
+     * Setzt bedingte Formatierung für eine Spalte
+     * @param {Sheet} sheet - Das zu formatierende Sheet
+     * @param {string} column - Die zu formatierende Spalte (z.B. "A")
+     * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor})
+     */
+    setConditionalFormattingForColumn(sheet, column, conditions) {
+        if (!sheet || !column || !conditions || !conditions.length) return;
+
+        try {
+            const lastRow = Math.max(sheet.getLastRow(), 2);
+            const range = sheet.getRange(`${column}2:${column}${lastRow}`);
+
+            // Bestehende Regeln für die Spalte löschen
+            const existingRules = sheet.getConditionalFormatRules();
+            const newRules = existingRules.filter(rule => {
+                const ranges = rule.getRanges();
+                return !ranges.some(r =>
+                    r.getColumn() === range.getColumn() &&
+                    r.getRow() === range.getRow() &&
+                    r.getNumColumns() === range.getNumColumns()
+                );
+            });
+
+            // Neue Regeln erstellen
+            const formatRules = conditions.map(({ value, background, fontColor }) =>
+                SpreadsheetApp.newConditionalFormatRule()
+                    .whenTextEqualTo(value)
+                    .setBackground(background || "#ffffff")
+                    .setFontColor(fontColor || "#000000")
+                    .setRanges([range])
+                    .build()
+            );
+
+            // Regeln anwenden
+            sheet.setConditionalFormatRules([...newRules, ...formatRules]);
+        } catch (e) {
+            console.error("Fehler beim Setzen der bedingten Formatierung:", e);
+        }
+    },
+
+    /**
+     * Extrahiert den Monat aus einem Datum in einer Zeile
+     * @param {Array} row - Die Zeile mit dem Datum
+     * @param {number} colIndex - Der Index der Spalte mit dem Datum (0-basiert)
+     * @returns {number} - Die Monatsnummer (1-12) oder 0 bei Fehler
+     */
+    getMonthFromRow(row, colIndex = 13) {
+        if (!row || row.length <= colIndex) return 0;
+
+        const d = this.parseDate(row[colIndex]);
+
+        // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+
+        // Wenn kein Datum oder das Jahr nicht übereinstimmt
+        if (!d || d.getFullYear() !== targetYear) return 0;
+
+        return d.getMonth() + 1; // JavaScript Monate sind 0-basiert, wir geben 1-12 zurück
+    },
+
+    /**
+     * Formatiert ein Datum im deutschen Format (DD.MM.YYYY)
+     * @param {Date|string} date - Das zu formatierende Datum
+     * @returns {string} - Das formatierte Datum oder leer bei ungültigem Datum
+     */
+    formatDate(date) {
+        const d = this.parseDate(date);
+        if (!d) return "";
+
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+
+        return `${day}.${month}.${year}`;
+    },
+
+    /**
+     * Formatiert einen Währungsbetrag im deutschen Format
+     * @param {number|string} amount - Der zu formatierende Betrag
+     * @param {string} currency - Das Währungssymbol (Standard: "€")
+     * @returns {string} - Der formatierte Betrag
+     */
+    formatCurrency(amount, currency = "€") {
+        const value = this.parseCurrency(amount);
+        return value.toLocaleString('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }) + " " + currency;
+    },
+
+    /**
+     * Generiert eine eindeutige ID (für Referenzzwecke)
+     * @param {string} prefix - Optional ein Präfix für die ID
+     * @returns {string} - Eine eindeutige ID
+     */
+    generateUniqueId(prefix = "") {
+        const timestamp = new Date().getTime();
+        const random = Math.floor(Math.random() * 10000);
+        return `${prefix}${timestamp}${random}`;
+    }
+};
+
+// file: src/importModule.js
+
+/**
+ * Modul für den Import von Dateien aus Google Drive in die Buchhaltungstabelle
+ */
+const ImportModule = (() => {
+    /**
+     * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
+     *
+     * @param {Folder} folder - Google Drive Ordner mit den zu importierenden Dateien
+     * @param {Sheet} mainSheet - Hauptsheet (Einnahmen oder Ausgaben)
+     * @param {string} type - Typ der Dateien ("Einnahme" oder "Ausgabe")
+     * @param {Sheet} historySheet - Sheet für die Änderungshistorie
+     * @param {Set} existingFiles - Set mit bereits importierten Dateinamen
+     * @returns {number} - Anzahl der importierten Dateien
+     */
+    const importFilesFromFolder = (folder, mainSheet, type, historySheet, existingFiles) => {
+        const files = folder.getFiles();
+        const newMainRows = [];
+        const newHistoryRows = [];
+        const timestamp = new Date();
+        let importedCount = 0;
+
+        while (files.hasNext()) {
+            const file = files.next();
+            const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
+            const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
+            const invoiceDate = Helpers.extractDateFromFilename(fileName);
+            const fileUrl = file.getUrl();
+
+            // Prüfe, ob die Datei bereits importiert wurde
+            if (!existingFiles.has(fileName)) {
+                // Neue Zeile für das Hauptsheet erstellen
+                newMainRows.push([
+                    invoiceDate,        // Datum
+                    invoiceName,        // Beschreibung
+                    "", "", "", "",     // Leere Felder für manuelle Eingabe
+                    "",                 // Zahlungsart
+                    "",                 // Betrag netto
+                    "",                 // MwSt-Betrag
+                    "",                 // Betrag brutto
+                    "",                 // Kontonummer
+                    "",                 // Gegenkonto
+                    "", "", "",         // Zusätzliche leere Felder
+                    timestamp,          // Zeitstempel
+                    fileName,           // Dateiname zur Referenz
+                    fileUrl             // Link zur Originaldatei
+                ]);
+
+                // Protokolliere den Import in der Änderungshistorie
+                newHistoryRows.push([
+                    timestamp,          // Zeitstempel
+                    type,               // Typ (Einnahme/Ausgabe)
+                    fileName,           // Dateiname
+                    fileUrl             // Link zur Datei
+                ]);
+
+                existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
+                importedCount++;
+            }
+        }
+
+        // Neue Zeilen in die entsprechenden Sheets schreiben
+        if (newMainRows.length > 0) {
+            mainSheet.getRange(
+                mainSheet.getLastRow() + 1,
+                1,
+                newMainRows.length,
+                newMainRows[0].length
+            ).setValues(newMainRows);
+        }
+
+        if (newHistoryRows.length > 0) {
+            historySheet.getRange(
+                historySheet.getLastRow() + 1,
+                1,
+                newHistoryRows.length,
+                newHistoryRows[0].length
+            ).setValues(newHistoryRows);
+        }
+
+        return importedCount;
     };
 
-    return {refreshActiveSheet, refreshAllSheets};
+    /**
+     * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- und Ausgabenordnern
+     * @returns {number} Anzahl der importierten Dateien
+     */
+    const importDriveFiles = () => {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const ui = SpreadsheetApp.getUi();
+        let totalImported = 0;
+
+        try {
+            // Hauptsheets für Einnahmen und Ausgaben abrufen
+            const revenueMain = ss.getSheetByName("Einnahmen");
+            const expenseMain = ss.getSheetByName("Ausgaben");
+
+            if (!revenueMain || !expenseMain) {
+                ui.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!");
+                return 0;
+            }
+
+            // Änderungshistorie abrufen oder erstellen
+            const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
+
+            // Header-Zeile für Änderungshistorie initialisieren, falls nötig
+            if (history.getLastRow() === 0) {
+                history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+                history.getRange(1, 1, 1, 4).setFontWeight("bold");
+            }
+
+            // Bereits importierte Dateien aus der Änderungshistorie erfassen
+            const historyData = history.getDataRange().getValues();
+            const existingFiles = new Set();
+
+            // Überschriftenzeile überspringen und alle Dateinamen sammeln (Spalte C)
+            for (let i = 1; i < historyData.length; i++) {
+                existingFiles.add(historyData[i][2]); // Dateiname steht in Spalte C (Index 2)
+            }
+
+            // Auf übergeordneten Ordner zugreifen
+            let parentFolder;
+            try {
+                const file = DriveApp.getFileById(ss.getId());
+                const parents = file.getParents();
+                parentFolder = parents.hasNext() ? parents.next() : null;
+
+                if (!parentFolder) {
+                    ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
+                    return 0;
+                }
+            } catch (e) {
+                ui.alert("Fehler beim Zugriff auf Google Drive: " + e.toString());
+                return 0;
+            }
+
+            // Unterordner für Einnahmen und Ausgaben finden oder erstellen
+            let revenueFolder, expenseFolder;
+            let importedRevenue = 0, importedExpense = 0;
+
+            try {
+                revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
+                if (!revenueFolder) {
+                    const createFolder = ui.alert(
+                        "Der Ordner 'Einnahmen' existiert nicht. Soll er erstellt werden?",
+                        ui.ButtonSet.YES_NO
+                    );
+                    if (createFolder === ui.Button.YES) {
+                        revenueFolder = parentFolder.createFolder("Einnahmen");
+                    }
+                }
+            } catch (e) {
+                ui.alert("Fehler beim Zugriff auf den Einnahmen-Ordner: " + e.toString());
+            }
+
+            try {
+                expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
+                if (!expenseFolder) {
+                    const createFolder = ui.alert(
+                        "Der Ordner 'Ausgaben' existiert nicht. Soll er erstellt werden?",
+                        ui.ButtonSet.YES_NO
+                    );
+                    if (createFolder === ui.Button.YES) {
+                        expenseFolder = parentFolder.createFolder("Ausgaben");
+                    }
+                }
+            } catch (e) {
+                ui.alert("Fehler beim Zugriff auf den Ausgaben-Ordner: " + e.toString());
+            }
+
+            // Import durchführen wenn Ordner existieren
+            if (revenueFolder) {
+                try {
+                    importedRevenue = importFilesFromFolder(
+                        revenueFolder,
+                        revenueMain,
+                        "Einnahme",
+                        history,
+                        existingFiles
+                    );
+                    totalImported += importedRevenue;
+                } catch (e) {
+                    console.error("Fehler beim Import der Einnahmen:", e);
+                    ui.alert("Fehler beim Import der Einnahmen: " + e.toString());
+                }
+            }
+
+            if (expenseFolder) {
+                try {
+                    importedExpense = importFilesFromFolder(
+                        expenseFolder,
+                        expenseMain,
+                        "Ausgabe",
+                        history,
+                        existingFiles  // Das gleiche Set wird für beide Importe verwendet
+                    );
+                    totalImported += importedExpense;
+                } catch (e) {
+                    console.error("Fehler beim Import der Ausgaben:", e);
+                    ui.alert("Fehler beim Import der Ausgaben: " + e.toString());
+                }
+            }
+
+            // Abschluss-Meldung anzeigen
+            if (totalImported === 0) {
+                ui.alert("Es wurden keine neuen Dateien gefunden.");
+            } else {
+                ui.alert(
+                    `Import abgeschlossen.\n\n` +
+                    `${importedRevenue} Einnahmen importiert.\n` +
+                    `${importedExpense} Ausgaben importiert.`
+                );
+            }
+
+            return totalImported;
+        } catch (e) {
+            console.error("Unerwarteter Fehler beim Import:", e);
+            ui.alert("Ein unerwarteter Fehler ist aufgetreten: " + e.toString());
+            return 0;
+        }
+    };
+
+    // Öffentliche API des Moduls
+    return {
+        importDriveFiles
+    };
 })();
 
+// file: src/validator.js
+
+/**
+ * Modul zur Validierung der Eingaben in den verschiedenen Tabellen
+ */
+const Validator = (() => {
+    /**
+     * Prüft, ob ein Wert leer ist
+     * @param {*} v - Der zu prüfende Wert
+     * @returns {boolean} - True, wenn der Wert leer ist
+     */
+    const isEmpty = v => v == null || v.toString().trim() === "";
+
+    /**
+     * Prüft, ob ein Wert keine gültige Zahl ist
+     * @param {*} v - Der zu prüfende Wert
+     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
+     */
+    const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
+
+    /**
+     * Erstellt eine Dropdown-Validierung für einen Bereich
+     * @param {Sheet} sheet - Das Sheet, in dem validiert werden soll
+     * @param {number} row - Die Start-Zeile
+     * @param {number} col - Die Start-Spalte
+     * @param {number} numRows - Die Anzahl der Zeilen
+     * @param {number} numCols - Die Anzahl der Spalten
+     * @param {Array<string>} list - Die Liste der gültigen Werte
+     * @returns {Range} - Der validierte Bereich
+     */
+    const validateDropdown = (sheet, row, col, numRows, numCols, list) => {
+        if (!sheet || !list || !list.length) return null;
+
+        try {
+            return sheet.getRange(row, col, numRows, numCols).setDataValidation(
+                SpreadsheetApp.newDataValidation()
+                    .requireValueInList(list, true)
+                    .setAllowInvalid(false)
+                    .build()
+            );
+        } catch (e) {
+            console.error("Fehler beim Erstellen der Dropdown-Validierung:", e);
+            return null;
+        }
+    };
+
+    /**
+     * Validiert eine Einnahmen- oder Ausgaben-Zeile
+     * @param {Array} row - Die zu validierende Zeile
+     * @param {number} rowIndex - Der Index der Zeile (für Fehlermeldungen)
+     * @returns {Array<string>} - Array mit Warnungen
+     */
+    const validateRevenueAndExpenses = (row, rowIndex) => {
+        const warnings = [];
+
+        /**
+         * Validiert eine Zeile anhand von Regeln
+         * @param {Array} row - Die zu validierende Zeile
+         * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
+         * @param {Array<Object>} rules - Array mit Regeln ({check, message})
+         */
+        const validateRow = (row, idx, rules) => {
+            rules.forEach(({check, message}) => {
+                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+            });
+        };
+
+        // Grundlegende Validierungsregeln
+        const baseRules = [
+            {check: r => isEmpty(r[0]), message: "Rechnungsdatum fehlt."},
+            {check: r => isEmpty(r[1]), message: "Rechnungsnummer fehlt."},
+            {check: r => isEmpty(r[2]), message: "Kategorie fehlt."},
+            {check: r => isEmpty(r[3]), message: "Kunde fehlt."},
+            {check: r => isInvalidNumber(r[4]), message: "Nettobetrag fehlt oder ungültig."},
+            {
+                check: r => {
+                    const mwstStr = r[5] == null ? "" : r[5].toString().trim();
+                    if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+
+                    // MwSt-Satz extrahieren und normalisieren
+                    const mwst = Helpers.parseMwstRate(mwstStr);
+                    if (isNaN(mwst)) return true;
+
+                    // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
+                    const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                    return !allowedRates.includes(Math.round(mwst));
+                },
+                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config?.tax?.allowedMwst?.join('%, ')}% oder leer.`
+            }
+        ];
+
+        // Status-abhängige Regeln
+        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
+
+        // Regeln für offene Zahlungen
+        const openPaymentRules = [
+            {check: r => !isEmpty(r[12]), message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'},
+            {check: r => !isEmpty(r[13]), message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'}
+        ];
+
+        // Regeln für bezahlte Zahlungen
+        const paidPaymentRules = [
+            {
+                check: r => isEmpty(r[12]),
+                message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+            },
+            {
+                check: r => isEmpty(r[13]),
+                message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+            },
+            {
+                check: r => {
+                    if (isEmpty(r[13])) return false; // Wird schon durch andere Regel geprüft
+
+                    const paymentDate = Helpers.parseDate(r[13]);
+                    return paymentDate ? paymentDate > new Date() : false;
+                },
+                message: "Zahlungsdatum darf nicht in der Zukunft liegen."
+            },
+            {
+                check: r => {
+                    if (isEmpty(r[13]) || isEmpty(r[0])) return false;
+
+                    const paymentDate = Helpers.parseDate(r[13]);
+                    const invoiceDate = Helpers.parseDate(r[0]);
+                    return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
+                },
+                message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
+            }
+        ];
+
+        // Regeln basierend auf Zahlungsstatus zusammenstellen
+        const paymentRules = status === "offen" ? openPaymentRules : paidPaymentRules;
+
+        // Alle Regeln kombinieren und anwenden
+        const rules = [...baseRules, ...paymentRules];
+        validateRow(row, rowIndex, rules);
+
+        return warnings;
+    };
+
+    /**
+     * Validiert das Bankbewegungen-Sheet
+     * @param {Sheet} bankSheet - Das zu validierende Sheet
+     * @returns {Array<string>} - Array mit Warnungen
+     */
+    const validateBanking = bankSheet => {
+        if (!bankSheet) return ["Bankbewegungen-Sheet nicht gefunden"];
+
+        const data = bankSheet.getDataRange().getValues();
+        const warnings = [];
+
+        /**
+         * Validiert eine Zeile anhand von Regeln
+         * @param {Array} row - Die zu validierende Zeile
+         * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
+         * @param {Array<Object>} rules - Array mit Regeln ({check, message})
+         */
+        const validateRow = (row, idx, rules) => {
+            rules.forEach(({check, message}) => {
+                if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+            });
+        };
+
+        // Regeln für Header- und Footer-Zeilen
+        const headerFooterRules = [
+            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
+            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
+            {
+                check: r => !isEmpty(r[2]) && !isNaN(parseFloat(r[2].toString().trim())),
+                message: "Betrag darf nicht gesetzt sein."
+            },
+            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
+            {check: r => !isEmpty(r[4]), message: "Typ darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[5]), message: "Kategorie darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[6]), message: "Konto (Soll) darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
+        ];
+
+        // Regeln für Datenzeilen
+        const dataRowRules = [
+            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
+            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
+            {check: r => isEmpty(r[2]) || isInvalidNumber(r[2]), message: "Betrag fehlt oder ungültig."},
+            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
+            {check: r => isEmpty(r[4]), message: "Typ fehlt."},
+            {check: r => isEmpty(r[5]), message: "Kategorie fehlt."},
+            {check: r => isEmpty(r[6]), message: "Konto (Soll) fehlt."},
+            {check: r => isEmpty(r[7]), message: "Gegenkonto (Haben) fehlt."}
+        ];
+
+        // Zeilen validieren
+        data.forEach((row, i) => {
+            const idx = i + 1;
+
+            // Header oder Footer
+            if (i === 0 || i === data.length - 1) {
+                validateRow(row, idx, headerFooterRules);
+            }
+            // Datenzeilen
+            else if (i > 0 && i < data.length - 1) {
+                validateRow(row, idx, dataRowRules);
+            }
+        });
+
+        return warnings;
+    };
+
+    /**
+     * Validiert alle Sheets auf Fehler
+     * @param {Sheet} revenueSheet - Das Einnahmen-Sheet
+     * @param {Sheet} expenseSheet - Das Ausgaben-Sheet
+     * @param {Sheet|null} bankSheet - Das Bankbewegungen-Sheet (optional)
+     * @returns {boolean} - True, wenn keine Fehler gefunden wurden
+     */
+    const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
+        if (!revenueSheet || !expenseSheet) {
+            SpreadsheetApp.getUi().alert("Fehler: Benötigte Sheets nicht gefunden!");
+            return false;
+        }
+
+        try {
+            // Daten aus den Sheets lesen
+            const revData = revenueSheet.getDataRange().getValues();
+            const expData = expenseSheet.getDataRange().getValues();
+
+            // Einnahmen validieren (Header-Zeile überspringen)
+            const revenueWarnings = revData.length > 1
+                ? revData.slice(1).reduce((acc, row, i) => {
+                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
+                        return acc.concat(validateRevenueAndExpenses(row, i + 2));
+                    }
+                    return acc;
+                }, [])
+                : [];
+
+            // Ausgaben validieren (Header-Zeile überspringen)
+            const expenseWarnings = expData.length > 1
+                ? expData.slice(1).reduce((acc, row, i) => {
+                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
+                        return acc.concat(validateRevenueAndExpenses(row, i + 2));
+                    }
+                    return acc;
+                }, [])
+                : [];
+
+            // Bank validieren (falls verfügbar)
+            const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
+
+            // Fehlermeldungen zusammenstellen
+            const msgArr = [];
+            if (revenueWarnings.length) {
+                msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+            }
+
+            if (expenseWarnings.length) {
+                msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+            }
+
+            if (bankWarnings.length) {
+                msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+            }
+
+            // Fehlermeldungen anzeigen, falls vorhanden
+            if (msgArr.length) {
+                const ui = SpreadsheetApp.getUi();
+                // Bei vielen Fehlern ggf. einschränken, um UI-Limits zu vermeiden
+                const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
+                let alertMsg = msgArr.join("\n\n");
+
+                if (alertMsg.length > maxMsgLength) {
+                    alertMsg = alertMsg.substring(0, maxMsgLength) +
+                        "\n\n... und weitere Fehler. Bitte beheben Sie die angezeigten Fehler zuerst.";
+                }
+
+                ui.alert("Validierungsfehler gefunden", alertMsg, ui.ButtonSet.OK);
+                return false;
+            }
+
+            return true;
+        } catch (e) {
+            console.error("Fehler bei der Validierung:", e);
+            SpreadsheetApp.getUi().alert("Ein Fehler ist bei der Validierung aufgetreten: " + e.toString());
+            return false;
+        }
+    };
+
+    /**
+     * Validiert eine einzelne Zelle anhand eines festgelegten Formats
+     * @param {*} value - Der zu validierende Wert
+     * @param {string} type - Der Validierungstyp (date, number, currency, mwst, text)
+     * @returns {Object} - Validierungsergebnis {isValid, message}
+     */
+    const validateCellValue = (value, type) => {
+        switch (type.toLowerCase()) {
+            case 'date':
+                const date = Helpers.parseDate(value);
+                return {
+                    isValid: !!date,
+                    message: date ? "" : "Ungültiges Datumsformat. Bitte verwenden Sie DD.MM.YYYY."
+                };
+
+            case 'number':
+                const num = parseFloat(value);
+                return {
+                    isValid: !isNaN(num),
+                    message: !isNaN(num) ? "" : "Ungültige Zahl."
+                };
+
+            case 'currency':
+                const amount = Helpers.parseCurrency(value);
+                return {
+                    isValid: !isNaN(amount),
+                    message: !isNaN(amount) ? "" : "Ungültiger Geldbetrag."
+                };
+
+            case 'mwst':
+                const mwst = Helpers.parseMwstRate(value);
+                const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                return {
+                    isValid: allowedRates.includes(Math.round(mwst)),
+                    message: allowedRates.includes(Math.round(mwst))
+                        ? ""
+                        : `Ungültiger MwSt-Satz. Erlaubt sind: ${allowedRates.join('%, ')}%.`
+                };
+
+            case 'text':
+                return {
+                    isValid: !isEmpty(value),
+                    message: !isEmpty(value) ? "" : "Text darf nicht leer sein."
+                };
+
+            default:
+                return {
+                    isValid: true,
+                    message: ""
+                };
+        }
+    };
+
+    // Öffentliche API des Moduls
+    return {
+        validateDropdown,
+        validateRevenueAndExpenses,
+        validateBanking,
+        validateAllSheets,
+        validateCellValue,
+        isEmpty,
+        isInvalidNumber
+    };
+})();
+
+// file: src/refreshModule.js
+
+/**
+ * Modul zum Aktualisieren der Tabellenblätter und Neuberechnen von Formeln
+ */
+const RefreshModule = (() => {
+    /**
+     * Aktualisiert ein Datenblatt (Einnahmen, Ausgaben, Eigenbelege)
+     * @param {Sheet} sheet - Das zu aktualisierende Sheet
+     * @returns {boolean} - true bei erfolgreicher Aktualisierung
+     */
+    const refreshDataSheet = sheet => {
+        try {
+            const lastRow = sheet.getLastRow();
+            if (lastRow < 2) return true; // Keine Daten zum Aktualisieren
+
+            const numRows = lastRow - 1;
+            const name = sheet.getName();
+
+            // Formeln für verschiedene Spalten setzen (ORIGINAL-FORMELN BEIBEHALTEN)
+            const formulas = {
+                // MwSt-Betrag (G) - KORRIGIERT: Originalformel verwenden
+                7: row => `=E${row}*F${row}`,
+
+                // Brutto-Betrag (H)
+                8: row => `=E${row}+G${row}`,
+
+                // Steuerbemessungsgrundlage - für Teilzahlungen (J)
+                10: row => `=(H${row}-I${row})/(1+F${row})`,
+
+                // Quartal (K)
+                11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
+
+                // Zahlungsstatus (L)
+                12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`
+            };
+
+            // Formeln für jede Spalte anwenden
+            Object.entries(formulas).forEach(([col, formulaFn]) => {
+                const formulasArray = Array.from({length: numRows}, (_, i) => [formulaFn(i + 2)]);
+                sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulasArray);
+            });
+
+            // Bezahlter Betrag (I) - Leerzeichen durch 0 ersetzen für Berechnungen
+            const col9Range = sheet.getRange(2, 9, numRows, 1);
+            const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
+            col9Range.setValues(col9Values.map(val => [val]));
+
+            // Dropdown-Validierungen je nach Sheet-Typ setzen
+            if (name === "Einnahmen") {
+                Validator.validateDropdown(
+                    sheet, 2, 3, numRows, 1,
+                    Object.keys(config.einnahmen.categories)
+                );
+            } else if (name === "Ausgaben") {
+                Validator.validateDropdown(
+                    sheet, 2, 3, numRows, 1,
+                    Object.keys(config.ausgaben.categories)
+                );
+            } else if (name === "Eigenbelege") {
+                Validator.validateDropdown(
+                    sheet, 2, 3, numRows, 1,
+                    config.eigenbelege.category
+                );
+
+                // Für Eigenbelege: Status-Dropdown hinzufügen
+                Validator.validateDropdown(
+                    sheet, 2, 12, numRows, 1,
+                    config.eigenbelege.status
+                );
+
+                // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
+                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                    {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
+                    {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
+                    {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
+                ]);
+            }
+
+            // Zahlungsart-Dropdown für alle Blätter
+            Validator.validateDropdown(
+                sheet, 2, 13, numRows, 1,
+                config.common.paymentType
+            );
+
+            // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
+            if (name !== "Eigenbelege") {
+                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                    {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
+                    {value: "Teilbezahlt", background: "#FFEB9C", fontColor: "#9C6500"},
+                    {value: "Bezahlt", background: "#C6EFCE", fontColor: "#006100"}
+                ]);
+            }
+
+            // Spaltenbreiten automatisch anpassen
+            sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+            return true;
+        } catch (e) {
+            console.error(`Fehler beim Aktualisieren von ${sheet.getName()}:`, e);
+            return false;
+        }
+    };
+
+    /**
+     * Aktualisiert das Bankbewegungen-Sheet
+     * @param {Sheet} sheet - Das Bankbewegungen-Sheet
+     * @returns {boolean} - true bei erfolgreicher Aktualisierung
+     */
+    const refreshBankSheet = sheet => {
+        try {
+            const lastRow = sheet.getLastRow();
+            if (lastRow < 3) return true; // Nicht genügend Daten zum Aktualisieren
+
+            const firstDataRow = 3; // Erste Datenzeile (nach Header-Zeile)
+            const numDataRows = lastRow - firstDataRow + 1;
+            const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
+
+            // Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
+            if (transRows > 0) {
+                sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
+                    Array.from({length: transRows}, (_, i) =>
+                        [`=D${firstDataRow + i - 1}+C${firstDataRow + i}`]
+                    )
+                );
+            }
+
+            // Transaktionstyp basierend auf dem Betrag setzen (Einnahme/Ausgabe)
+            const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
+            const typeValues = amounts.map(([val]) => {
+                const amt = parseFloat(val) || 0;
+                return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
+            });
+            sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
+
+            // Dropdown-Validierungen für Typ, Kategorie und Konten
+            Validator.validateDropdown(
+                sheet, firstDataRow, 5, numDataRows, 1,
+                config.bank.type
+            );
+
+            Validator.validateDropdown(
+                sheet, firstDataRow, 6, numDataRows, 1,
+                config.bank.category
+            );
+
+            // Konten für Dropdown-Validierung sammeln (wie im Original)
+            const allowedKontoSoll = Object.values(config.einnahmen.kontoMapping)
+                .concat(Object.values(config.ausgaben.kontoMapping))
+                .map(m => m.soll);
+
+            const allowedGegenkonto = Object.values(config.einnahmen.kontoMapping)
+                .concat(Object.values(config.ausgaben.kontoMapping))
+                .map(m => m.gegen);
+
+            // Dropdown-Validierungen für Konten setzen
+            Validator.validateDropdown(
+                sheet, firstDataRow, 7, numDataRows, 1,
+                allowedKontoSoll
+            );
+
+            Validator.validateDropdown(
+                sheet, firstDataRow, 8, numDataRows, 1,
+                allowedGegenkonto
+            );
+
+            // Bedingte Formatierung für Transaktionstyp-Spalte
+            Helpers.setConditionalFormattingForColumn(sheet, "E", [
+                {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
+                {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
+            ]);
+
+            // Kontonummern basierend auf Kategorie automatisch zuweisen
+            const dataRange = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn());
+            const data = dataRange.getValues();
+
+            data.forEach((row, i) => {
+                const globalRow = i + firstDataRow;
+
+                // Letzte Zeile (Endsaldo) überspringen
+                const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
+                if (globalRow === lastRow && label === "endsaldo") return;
+
+                const type = row[4];
+                const category = row[5] || "";
+
+                let mapping = null;
+
+                // Mapping basierend auf Typ und Kategorie finden
+                if (type === "Einnahme") {
+                    mapping = config.einnahmen.kontoMapping[category];
+                } else if (type === "Ausgabe") {
+                    mapping = config.ausgaben.kontoMapping[category];
+                }
+
+                // Falls keine Zuordnung gefunden, Hinweis setzen
+                if (!mapping) {
+                    mapping = {soll: "Manuell prüfen", gegen: "Manuell prüfen"};
+                }
+
+                row[6] = mapping.soll;
+                row[7] = mapping.gegen;
+            });
+
+            // Aktualisierte Daten zurückschreiben
+            dataRange.setValues(data);
+
+            // Endsaldo-Zeile prüfen und aktualisieren/hinzufügen
+            const lastRowText = sheet.getRange(lastRow, 2).getValue().toString().trim().toLowerCase();
+            const formattedDate = Utilities.formatDate(
+                new Date(),
+                Session.getScriptTimeZone(),
+                "dd.MM.yyyy"
+            );
+
+            if (lastRowText === "endsaldo") {
+                // Datum und Saldo-Formel aktualisieren
+                sheet.getRange(lastRow, 1).setValue(formattedDate);
+                sheet.getRange(lastRow, 4).setFormula(`=D${lastRow - 1}`);
+            } else {
+                // Endsaldo-Zeile hinzufügen
+                sheet.appendRow([
+                    formattedDate,
+                    "Endsaldo",
+                    "",
+                    sheet.getRange(lastRow, 4).getValue(),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    ""
+                ]);
+            }
+
+            // Spaltenbreiten automatisch anpassen
+            sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+            return true;
+        } catch (e) {
+            console.error("Fehler beim Aktualisieren des Bankbewegungen-Sheets:", e);
+            return false;
+        }
+    };
+
+    /**
+     * Aktualisiert das aktive Tabellenblatt
+     */
+    const refreshActiveSheet = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const sheet = ss.getActiveSheet();
+            const name = sheet.getName();
+            const ui = SpreadsheetApp.getUi();
+
+            if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
+                refreshDataSheet(sheet);
+                ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
+            } else if (name === "Bankbewegungen") {
+                refreshBankSheet(sheet);
+                ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
+            } else {
+                ui.alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
+            }
+        } catch (e) {
+            console.error("Fehler beim Aktualisieren des aktiven Sheets:", e);
+            SpreadsheetApp.getUi().alert("Ein Fehler ist beim Aktualisieren aufgetreten: " + e.toString());
+        }
+    };
+
+    /**
+     * Aktualisiert alle relevanten Tabellenblätter
+     */
+    const refreshAllSheets = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+            ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"].forEach(name => {
+                const sheet = ss.getSheetByName(name);
+                if (sheet) {
+                    name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+                }
+            });
+        } catch (e) {
+            console.error("Fehler beim Aktualisieren aller Sheets:", e);
+        }
+    };
+
+    // Öffentliche API des Moduls
+    return {
+        refreshActiveSheet,
+        refreshAllSheets
+    };
+})();
+
+// file: src/uStVACalculator.js
+
+/**
+ * Modul zur Berechnung der Umsatzsteuervoranmeldung (UStVA)
+ * Unterstützt die Berechnung nach SKR04 für monatliche und quartalsweise Auswertungen
+ */
 const UStVACalculator = (() => {
+    /**
+     * Erstellt ein leeres UStVA-Datenobjekt mit Nullwerten
+     * @returns {Object} Leere UStVA-Datenstruktur
+     */
     const createEmptyUStVA = () => ({
         steuerpflichtige_einnahmen: 0,
         steuerfreie_inland_einnahmen: 0,
@@ -883,65 +1506,139 @@ const UStVACalculator = (() => {
         vst_19: 0
     });
 
-    // Hier entfällt die eigene getMonthFromRow – stattdessen nutzen wir Helpers.getMonthFromRow:
+    /**
+     * Verarbeitet eine Zeile aus den Einnahmen/Ausgaben/Eigenbelegen für die UStVA
+     *
+     * @param {Array} row - Datenzeile aus einem Sheet
+     * @param {Object} data - UStVA-Datenobjekt nach Monaten
+     * @param {boolean} isIncome - Handelt es sich um Einnahmen (true) oder Ausgaben (false)
+     * @param {boolean} isEigen - Handelt es sich um Eigenbelege (true oder false)
+     */
     const processUStVARow = (row, data, isIncome, isEigen = false) => {
-        const paymentDate = Helpers.parseDate(row[13]);
-        if (!paymentDate || paymentDate > new Date()) return;
-        const month = Helpers.getMonthFromRow(row);
-        if (!month) return;
-        const netto = Helpers.parseCurrency(row[4]);
-        const restNetto = Helpers.parseCurrency(row[9]) || 0;
-        const gezahlt = netto - restNetto; // Negative Werte bleiben erhalten
-        const mwstRate = Helpers.parseMwstRate(row[5]);
-        const roundedRate = Math.round(mwstRate);
-        const tax = gezahlt * (mwstRate / 100);
-        const category = row[2]?.toString().trim() || "";
+        try {
+            // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+            const paymentDate = Helpers.parseDate(row[13]);
+            if (!paymentDate || paymentDate > new Date()) return;
 
-        if (isIncome) {
-            const catCfg = config$1.einnahmen.categories[category] ?? {};
-            const taxType = catCfg.taxType ?? "steuerpflichtig";
-            if (taxType === "steuerfrei_inland") {
-                data[month].steuerfreie_inland_einnahmen += gezahlt;
-            } else if (taxType === "steuerfrei_ausland" || !roundedRate) {
-                data[month].steuerfreie_ausland_einnahmen += gezahlt;
-            } else {
-                data[month].steuerpflichtige_einnahmen += gezahlt;
-                data[month][`ust_${roundedRate}`] += tax;
-            }
-        } else {
-            if (isEigen) {
-                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+            // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
+            const month = Helpers.getMonthFromRow(row);
+            if (!month || month < 1 || month > 12) return;
+
+            // Beträge aus der Zeile extrahieren
+            const netto = Helpers.parseCurrency(row[4]);
+            const restNetto = Helpers.parseCurrency(row[10]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+            const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
+
+            // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
+            if (gezahlt === 0) return;
+
+            // MwSt-Satz normalisieren
+            const mwstRate = Helpers.parseMwstRate(row[5]);
+            const roundedRate = Math.round(mwstRate);
+
+            // Steuer berechnen
+            const tax = gezahlt * (mwstRate / 100);
+
+            // Kategorie ermitteln
+            const category = row[2]?.toString().trim() || "";
+
+            // Je nach Typ (Einnahme/Ausgabe/Eigenbeleg) unterschiedlich verarbeiten
+            if (isIncome) {
+                // EINNAHMEN
+                const catCfg = config.einnahmen.categories[category] ?? {};
+                const taxType = catCfg.taxType ?? "steuerpflichtig";
+
+                if (taxType === "steuerfrei_inland") {
+                    // Steuerfreie Einnahmen im Inland (z.B. Vermietung)
+                    data[month].steuerfreie_inland_einnahmen += gezahlt;
+                } else if (taxType === "steuerfrei_ausland" || !roundedRate) {
+                    // Steuerfreie Einnahmen aus dem Ausland oder ohne MwSt
+                    data[month].steuerfreie_ausland_einnahmen += gezahlt;
+                } else {
+                    // Steuerpflichtige Einnahmen
+                    data[month].steuerpflichtige_einnahmen += gezahlt;
+
+                    // USt nach Steuersatz addieren
+                    // Wir prüfen ob es ein gültiger Steuersatz ist
+                    if (roundedRate === 7 || roundedRate === 19) {
+                        data[month][`ust_${roundedRate}`] += tax;
+                    } else {
+                        console.warn(`Unbekannter MwSt-Satz für Einnahme: ${roundedRate}%`);
+                    }
+                }
+            } else if (isEigen) {
+                // EIGENBELEGE
+                const eigenCfg = config.eigenbelege.mapping[category] ?? {};
                 const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+
                 if (taxType === "steuerfrei") {
+                    // Steuerfreie Eigenbelege
                     data[month].eigenbelege_steuerfrei += gezahlt;
                 } else if (taxType === "eigenbeleg" && eigenCfg.besonderheit === "bewirtung") {
+                    // Bewirtungsbelege (nur 70% der Vorsteuer absetzbar)
                     data[month].eigenbelege_steuerpflichtig += gezahlt;
-                    data[month][`vst_${roundedRate}`] += tax * 0.7;
-                    data[month].nicht_abzugsfaehige_vst += tax * 0.3;
+
+                    if (roundedRate === 7 || roundedRate === 19) {
+                        data[month][`vst_${roundedRate}`] += tax * 0.7; // 70% absetzbare Vorsteuer
+                        data[month].nicht_abzugsfaehige_vst += tax * 0.3; // 30% nicht absetzbar
+                    } else {
+                        console.warn(`Unbekannter MwSt-Satz für Bewirtung: ${roundedRate}%`);
+                    }
                 } else {
+                    // Normale steuerpflichtige Eigenbelege
                     data[month].eigenbelege_steuerpflichtig += gezahlt;
-                    data[month][`vst_${roundedRate}`] += tax;
+
+                    if (roundedRate === 7 || roundedRate === 19) {
+                        data[month][`vst_${roundedRate}`] += tax;
+                    } else {
+                        console.warn(`Unbekannter MwSt-Satz für Eigenbeleg: ${roundedRate}%`);
+                    }
                 }
             } else {
-                const catCfg = config$1.ausgaben.categories[category] ?? {};
+                // AUSGABEN
+                const catCfg = config.ausgaben.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
+
                 if (taxType === "steuerfrei_inland") {
+                    // Steuerfreie Ausgaben im Inland
                     data[month].steuerfreie_inland_ausgaben += gezahlt;
                 } else if (taxType === "steuerfrei_ausland") {
+                    // Steuerfreie Ausgaben im Ausland
                     data[month].steuerfreie_ausland_ausgaben += gezahlt;
                 } else {
+                    // Steuerpflichtige Ausgaben
                     data[month].steuerpflichtige_ausgaben += gezahlt;
-                    data[month][`vst_${roundedRate}`] += tax;
+
+                    if (roundedRate === 7 || roundedRate === 19) {
+                        data[month][`vst_${roundedRate}`] += tax;
+                    } else if (roundedRate !== 0) {
+                        // 0% ist kein Fehler, daher nur für andere Sätze warnen
+                        console.warn(`Unbekannter MwSt-Satz für Ausgabe: ${roundedRate}%`);
+                    }
                 }
             }
+        } catch (e) {
+            console.error("Fehler bei der Verarbeitung einer UStVA-Zeile:", e);
         }
     };
 
+    /**
+     * Formatiert eine UStVA-Datenzeile für die Ausgabe
+     *
+     * @param {string} label - Bezeichnung der Zeile (z.B. Monat oder Quartal)
+     * @param {Object} d - UStVA-Datenobjekt für den Zeitraum
+     * @returns {Array} Formatierte Zeile für die Ausgabe
+     */
     const formatUStVARow = (label, d) => {
+        // Berechnung der USt-Zahlung: USt minus VSt (abzüglich nicht abzugsfähiger VSt)
         const ustZahlung = (d.ust_7 + d.ust_19) - ((d.vst_7 + d.vst_19) - d.nicht_abzugsfaehige_vst);
+
+        // Berechnung des Gesamtergebnisses: Einnahmen minus Ausgaben (ohne Steueranteil)
         const ergebnis = (d.steuerpflichtige_einnahmen + d.steuerfreie_inland_einnahmen + d.steuerfreie_ausland_einnahmen) -
             (d.steuerpflichtige_ausgaben + d.steuerfreie_inland_ausgaben + d.steuerfreie_ausland_ausgaben +
                 d.eigenbelege_steuerpflichtig + d.eigenbelege_steuerfrei);
+
+        // Formatierte Zeile zurückgeben
         return [
             label,
             d.steuerpflichtige_einnahmen,
@@ -962,81 +1659,181 @@ const UStVACalculator = (() => {
         ];
     };
 
+    /**
+     * Aggregiert UStVA-Daten für einen Zeitraum (z.B. Quartal oder Jahr)
+     *
+     * @param {Object} data - UStVA-Datenobjekt nach Monaten
+     * @param {number} start - Startmonat (1-12)
+     * @param {number} end - Endmonat (1-12)
+     * @returns {Object} Aggregiertes UStVA-Datenobjekt
+     */
     const aggregateUStVA = (data, start, end) => {
         const sum = createEmptyUStVA();
+
         for (let m = start; m <= end; m++) {
+            if (!data[m]) continue; // Überspringe, falls keine Daten für den Monat
+
             for (const key in sum) {
                 sum[key] += data[m][key] || 0;
             }
         }
+
         return sum;
     };
 
+    /**
+     * Hauptfunktion zur Berechnung der UStVA
+     * Sammelt Daten aus allen relevanten Sheets und erstellt ein UStVA-Sheet
+     */
     const calculateUStVA = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const revenueSheet = ss.getSheetByName("Einnahmen");
-        const expenseSheet = ss.getSheetByName("Ausgaben");
-        const eigenSheet = ss.getSheetByName("Eigenbelege");
-        if (!revenueSheet || !expenseSheet) {
-            SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
-            return;
-        }
-        if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) return;
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const ui = SpreadsheetApp.getUi();
 
-        const revenueData = revenueSheet.getDataRange().getValues();
-        const expenseData = expenseSheet.getDataRange().getValues();
-        const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
-        const ustvaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()]));
+            // Benötigte Sheets abrufen
+            const revenueSheet = ss.getSheetByName("Einnahmen");
+            const expenseSheet = ss.getSheetByName("Ausgaben");
+            const eigenSheet = ss.getSheetByName("Eigenbelege");
 
-        const processRows = (data, isIncome, isEigen = false) =>
-            data.slice(1).forEach(row => {
-                const m = Helpers.getMonthFromRow(row);
-                if (m) processUStVARow(row, ustvaData, isIncome, isEigen);
-            });
-        processRows(revenueData, true);
-        processRows(expenseData, false);
-        if (eigenData.length) processRows(eigenData, false, true);
-
-        const outputRows = [
-            [
-                "Zeitraum",
-                "Steuerpflichtige Einnahmen",
-                "Steuerfreie Inland-Einnahmen",
-                "Steuerfreie Ausland-Einnahmen",
-                "Steuerpflichtige Ausgaben",
-                "Steuerfreie Inland-Ausgaben",
-                "Steuerfreie Ausland-Ausgaben",
-                "Eigenbelege steuerpflichtig",
-                "Eigenbelege steuerfrei",
-                "Nicht abzugsfähige VSt (Bewirtung)",
-                "USt 7%",
-                "USt 19%",
-                "VSt 7%",
-                "VSt 19%",
-                "USt-Zahlung",
-                "Ergebnis"
-            ]
-        ];
-        config$1.common.months.forEach((name, i) => {
-            outputRows.push(formatUStVARow(name, ustvaData[i + 1]));
-            if ((i + 1) % 3 === 0) {
-                outputRows.push(formatUStVARow(`Quartal ${(i + 1) / 3}`, aggregateUStVA(ustvaData, i - 1, i + 1)));
+            // Prüfen, ob alle benötigten Sheets vorhanden sind
+            if (!revenueSheet || !expenseSheet) {
+                ui.alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
+                return;
             }
-        });
-        outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
 
-        const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
-        ustvaSheet.clearContents();
-        ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
-        ustvaSheet.autoResizeColumns(1, outputRows[0].length);
-        ss.setActiveSheet(ustvaSheet);
-        SpreadsheetApp.getUi().alert("UStVA wurde aktualisiert!");
+            // Sheets validieren
+            if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
+                ui.alert("Die UStVA-Berechnung wurde abgebrochen, da Fehler in den Daten gefunden wurden.");
+                return;
+            }
+
+            // Daten aus den Sheets laden
+            const revenueData = revenueSheet.getDataRange().getValues();
+            const expenseData = expenseSheet.getDataRange().getValues();
+            const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
+
+            // Leere UStVA-Datenstruktur für alle Monate erstellen
+            const ustvaData = Object.fromEntries(
+                Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
+            );
+
+            // Helfer-Funktion zum Verarbeiten von Datenzeilen
+            const processRows = (data, isIncome, isEigen = false) => {
+                data.slice(1).forEach(row => { // Ab Zeile 2 (nach Header)
+                    processUStVARow(row, ustvaData, isIncome, isEigen);
+                });
+            };
+
+            // Daten verarbeiten
+            processRows(revenueData, true);         // Einnahmen
+            processRows(expenseData, false);        // Ausgaben
+            if (eigenData.length) {
+                processRows(eigenData, false, true); // Eigenbelege
+            }
+
+            // Ausgabe-Header erstellen
+            const outputRows = [
+                [
+                    "Zeitraum",
+                    "Steuerpflichtige Einnahmen",
+                    "Steuerfreie Inland-Einnahmen",
+                    "Steuerfreie Ausland-Einnahmen",
+                    "Steuerpflichtige Ausgaben",
+                    "Steuerfreie Inland-Ausgaben",
+                    "Steuerfreie Ausland-Ausgaben",
+                    "Eigenbelege steuerpflichtig",
+                    "Eigenbelege steuerfrei",
+                    "Nicht abzugsfähige VSt (Bewirtung)",
+                    "USt 7%",
+                    "USt 19%",
+                    "VSt 7%",
+                    "VSt 19%",
+                    "USt-Zahlung",
+                    "Ergebnis"
+                ]
+            ];
+
+            // Monatliche Daten ausgeben
+            config.common.months.forEach((name, i) => {
+                const month = i + 1;
+                outputRows.push(formatUStVARow(name, ustvaData[month]));
+
+                // Nach jedem Quartal eine Zusammenfassung einfügen
+                if (month % 3 === 0) {
+                    const quartalsNummer = month / 3;
+                    const quartalsStart = month - 2;
+                    outputRows.push(formatUStVARow(
+                        `Quartal ${quartalsNummer}`,
+                        aggregateUStVA(ustvaData, quartalsStart, month)
+                    ));
+                }
+            });
+
+            // Jahresergebnis anfügen
+            outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+
+            // UStVA-Sheet erstellen oder aktualisieren
+            const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
+            ustvaSheet.clearContents();
+
+            // Daten in das Sheet schreiben
+            const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+            dataRange.setValues(outputRows);
+
+            // Header formatieren
+            ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+
+            // Quartalszellen formatieren
+            for (let i = 0; i < 4; i++) {
+                const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
+                ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+            }
+
+            // Jahreszeile formatieren
+            ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
+                .setBackground("#d9e6f2")
+                .setFontWeight("bold");
+
+            // Zahlenformate anwenden
+            // Währungsformat für Beträge (Spalten 2-16)
+            ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
+
+            // Spaltenbreiten anpassen
+            ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+
+            // UStVA-Sheet aktivieren
+            ss.setActiveSheet(ustvaSheet);
+
+            ui.alert("UStVA wurde erfolgreich aktualisiert!");
+        } catch (e) {
+            console.error("Fehler bei der UStVA-Berechnung:", e);
+            SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
+        }
     };
 
-    return {calculateUStVA};
+    // Öffentliche API des Moduls
+    return {
+        calculateUStVA,
+        // Für Testzwecke könnten hier weitere Funktionen exportiert werden
+        _internal: {
+            createEmptyUStVA,
+            processUStVARow,
+            formatUStVARow,
+            aggregateUStVA
+        }
+    };
 })();
 
+// file: src/bWACalculator.js
+
+/**
+ * Modul zur Berechnung der Betriebswirtschaftlichen Auswertung (BWA)
+ */
 const BWACalculator = (() => {
+    /**
+     * Erstellt ein leeres BWA-Datenobjekt mit Nullwerten
+     * @returns {Object} Leere BWA-Datenstruktur
+     */
     const createEmptyBWA = () => ({
         // Gruppe 1: Betriebserlöse (Einnahmen)
         umsatzerloese: 0,
@@ -1049,11 +1846,13 @@ const BWACalculator = (() => {
         waehrungsgewinne: 0,
         anlagenabgaenge: 0,
         gesamtErloese: 0,
+
         // Gruppe 2: Materialaufwand & Wareneinsatz
         wareneinsatz: 0,
         fremdleistungen: 0,
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
+
         // Gruppe 3: Betriebsausgaben (Sachkosten)
         bruttoLoehne: 0,
         sozialeAbgaben: 0,
@@ -1067,6 +1866,7 @@ const BWACalculator = (() => {
         kfzKosten: 0,
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
+
         // Gruppe 4: Abschreibungen & Zinsen
         abschreibungenMaschinen: 0,
         abschreibungenBueromaterial: 0,
@@ -1075,16 +1875,21 @@ const BWACalculator = (() => {
         zinsenGesellschafter: 0,
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
+
         // Gruppe 5: Besondere Posten (Kapitalbewegungen)
         eigenkapitalveraenderungen: 0,
         gesellschafterdarlehen: 0,
         ausschuettungen: 0,
+        gesamtBesonderePosten: 0,
+
         // Gruppe 6: Rückstellungen
         steuerrueckstellungen: 0,
         rueckstellungenSonstige: 0,
         gesamtRueckstellungenTransfers: 0,
+
         // Gruppe 7: EBIT
         ebit: 0,
+
         // Gruppe 8: Steuern & Vorsteuer
         umsatzsteuer: 0,
         vorsteuer: 0,
@@ -1095,41 +1900,40 @@ const BWACalculator = (() => {
         gewerbesteuerRueckstellungen: 0,
         sonstigeSteuerrueckstellungen: 0,
         steuerlast: 0,
+
         // Gruppe 9: Jahresüberschuss/-fehlbetrag
         gewinnNachSteuern: 0,
+
         // Eigenbelege (zur Aggregation)
         eigenbelegeSteuerfrei: 0,
         eigenbelegeSteuerpflichtig: 0
     });
 
-    // Hier nutzen wir die zentrale Helpers.getMonthFromRow-Funktion:
-    const getMonthFromRow = row => {
-        return Helpers.getMonthFromRow(row);
-    };
-
-    const aggregateBWAData = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const revenueSheet = ss.getSheetByName("Einnahmen");
-        const expenseSheet = ss.getSheetByName("Ausgaben");
-        const eigenSheet = ss.getSheetByName("Eigenbelege");
-        if (!revenueSheet || !expenseSheet) {
-            SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
-            return null;
-        }
-        const bwaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyBWA()]));
-
-        const processRevenue = row => {
-            const m = getMonthFromRow(row);
+    /**
+     * Verarbeitet Einnahmen und ordnet sie den BWA-Kategorien zu
+     *
+     * @param {Array} row - Zeile aus dem Einnahmen-Sheet
+     * @param {Object} bwaData - BWA-Datenstruktur
+     */
+    const processRevenue = (row, bwaData) => {
+        try {
+            const m = Helpers.getMonthFromRow(row);
             if (!m) return;
+
             const amount = Helpers.parseCurrency(row[4]);
             const category = row[2]?.toString().trim() || "";
+
             if (["Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
+
+            // Spezielle Kategorien direkt zuordnen
             if (category === "Sonstige betriebliche Erträge") return void (bwaData[m].sonstigeErtraege += amount);
             if (category === "Erträge aus Vermietung/Verpachtung") return void (bwaData[m].vermietung += amount);
             if (category === "Erträge aus Zuschüssen") return void (bwaData[m].zuschuesse += amount);
             if (category === "Erträge aus Währungsgewinnen") return void (bwaData[m].waehrungsgewinne += amount);
             if (category === "Erträge aus Anlagenabgängen") return void (bwaData[m].anlagenabgaenge += amount);
-            const mapping = config$1.einnahmen.bwaMapping[category];
+
+            // BWA-Mapping aus Konfiguration verwenden
+            const mapping = config.einnahmen.bwaMapping[category];
             if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
                 bwaData[m][mapping] += amount;
             } else if (Helpers.parseMwstRate(row[5]) === 0) {
@@ -1137,15 +1941,30 @@ const BWACalculator = (() => {
             } else {
                 bwaData[m].umsatzerloese += amount;
             }
-        };
+        } catch (e) {
+            console.error("Fehler bei der Verarbeitung einer Einnahme:", e);
+        }
+    };
 
-        const processExpense = row => {
-            const m = getMonthFromRow(row);
+    /**
+     * Verarbeitet Ausgaben und ordnet sie den BWA-Kategorien zu
+     *
+     * @param {Array} row - Zeile aus dem Ausgaben-Sheet
+     * @param {Object} bwaData - BWA-Datenstruktur
+     */
+    const processExpense = (row, bwaData) => {
+        try {
+            const m = Helpers.getMonthFromRow(row);
             if (!m) return;
+
             const amount = Helpers.parseCurrency(row[4]);
             const category = row[2]?.toString().trim() || "";
+
+            // Nicht-betriebliche Positionen ignorieren
             if (["Privatentnahme", "Privateinlage", "Holding Transfers",
                 "Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
+
+            // Spezielle Kategorien direkt zuordnen
             if (category === "Bruttolöhne & Gehälter") return void (bwaData[m].bruttoLoehne += amount);
             if (category === "Soziale Abgaben & Arbeitgeberanteile") return void (bwaData[m].sozialeAbgaben += amount);
             if (category === "Sonstige Personalkosten") return void (bwaData[m].sonstigePersonalkosten += amount);
@@ -1153,19 +1972,18 @@ const BWACalculator = (() => {
             if (category === "Telefon & Internet") return void (bwaData[m].telefonInternet += amount);
             if (category === "Bürokosten") return void (bwaData[m].buerokosten += amount);
             if (category === "Fortbildungskosten") return void (bwaData[m].fortbildungskosten += amount);
-            const mapping = config$1.ausgaben.bwaMapping[category];
+
+            // BWA-Mapping aus Konfiguration verwenden
+            const mapping = config.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
                     bwaData[m].wareneinsatz += amount;
                     break;
-                case "bezogeneLeistungen":
+                case "fremdleistungen":
                     bwaData[m].fremdleistungen += amount;
                     break;
                 case "rohHilfsBetriebsstoffe":
                     bwaData[m].rohHilfsBetriebsstoffe += amount;
-                    break;
-                case "betriebskosten":
-                    bwaData[m].sonstigeAufwendungen += amount;
                     break;
                 case "werbungMarketing":
                     bwaData[m].werbungMarketing += amount;
@@ -1185,6 +2003,9 @@ const BWACalculator = (() => {
                 case "abschreibungenBueromaterial":
                     bwaData[m].abschreibungenBueromaterial += amount;
                     break;
+                case "abschreibungenImmateriell":
+                    bwaData[m].abschreibungenImmateriell += amount;
+                    break;
                 case "zinsenBank":
                     bwaData[m].zinsenBank += amount;
                     break;
@@ -1194,63 +2015,142 @@ const BWACalculator = (() => {
                 case "leasingkosten":
                     bwaData[m].leasingkosten += amount;
                     break;
+                case "koerperschaftsteuer":
+                    bwaData[m].koerperschaftsteuer += amount;
+                    break;
+                case "solidaritaetszuschlag":
+                    bwaData[m].solidaritaetszuschlag += amount;
+                    break;
+                case "gewerbesteuer":
+                    bwaData[m].gewerbesteuer += amount;
+                    break;
                 default:
                     bwaData[m].sonstigeAufwendungen += amount;
             }
-        };
+        } catch (e) {
+            console.error("Fehler bei der Verarbeitung einer Ausgabe:", e);
+        }
+    };
 
-        const processEigen = row => {
-            const m = getMonthFromRow(row);
+    /**
+     * Verarbeitet Eigenbelege und ordnet sie den BWA-Kategorien zu
+     *
+     * @param {Array} row - Zeile aus dem Eigenbelege-Sheet
+     * @param {Object} bwaData - BWA-Datenstruktur
+     */
+    const processEigen = (row, bwaData) => {
+        try {
+            const m = Helpers.getMonthFromRow(row);
             if (!m) return;
+
             const amount = Helpers.parseCurrency(row[4]);
             const category = row[2]?.toString().trim() || "";
-            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+
             if (taxType === "steuerfrei") {
                 bwaData[m].eigenbelegeSteuerfrei += amount;
             } else {
                 bwaData[m].eigenbelegeSteuerpflichtig += amount;
             }
-        };
-
-        revenueSheet.getDataRange().getValues().slice(1).forEach(processRevenue);
-        expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
-        if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
-
-        // Gruppensummen und weitere Berechnungen
-        for (let m = 1; m <= 12; m++) {
-            const d = bwaData[m];
-            d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen + d.steuerfreieAuslandEinnahmen +
-                d.sonstigeErtraege + d.vermietung + d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge;
-            d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
-            d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
-                d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
-                d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen;
-            d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
-                d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter + d.leasingkosten;
-            d.gesamtBesonderePosten = d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen;
-            d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige;
-            d.ebit = d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben + d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
-            d.gewerbesteuer = d.ebit * (config$1.tax.operative.gewerbesteuer / 100);
-            if (config$1.tax.isHolding) {
-                d.koerperschaftsteuer = d.ebit * (config$1.tax.holding.koerperschaftsteuer / 100) * (config$1.tax.holding.gewinnUebertragSteuerpflichtig / 100);
-                d.solidaritaetszuschlag = d.ebit * (config$1.tax.holding.solidaritaetszuschlag / 100) * (config$1.tax.holding.gewinnUebertragSteuerpflichtig / 100);
-            } else {
-                d.koerperschaftsteuer = d.ebit * (config$1.tax.operative.koerperschaftsteuer / 100);
-                d.solidaritaetszuschlag = d.ebit * (config$1.tax.operative.solidaritaetszuschlag / 100);
-            }
-            d.steuerlast = d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer;
-            d.gewinnNachSteuern = d.ebit - d.steuerlast;
+        } catch (e) {
+            console.error("Fehler bei der Verarbeitung eines Eigenbelegs:", e);
         }
-        return bwaData;
     };
 
-    // Erzeugt den Header (2 Spalten: Bezeichnung und Wert) mit Monats- und Quartalsspalten
+    /**
+     * Sammelt alle BWA-Daten aus den verschiedenen Sheets
+     *
+     * @returns {Object|null} BWA-Datenstruktur oder null bei Fehler
+     */
+    const aggregateBWAData = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const revenueSheet = ss.getSheetByName("Einnahmen");
+            const expenseSheet = ss.getSheetByName("Ausgaben");
+            const eigenSheet = ss.getSheetByName("Eigenbelege");
+
+            if (!revenueSheet || !expenseSheet) {
+                SpreadsheetApp.getUi().alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
+                return null;
+            }
+
+            // BWA-Daten für alle Monate initialisieren
+            const bwaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyBWA()]));
+
+            // Daten aus den Sheets verarbeiten
+            revenueSheet.getDataRange().getValues().slice(1).forEach(processRevenue);
+            expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
+            if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
+
+            // Gruppensummen und weitere Berechnungen
+            for (let m = 1; m <= 12; m++) {
+                const d = bwaData[m];
+
+                // Erlöse
+                d.gesamtErloese = d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen +
+                    d.steuerfreieAuslandEinnahmen + d.sonstigeErtraege + d.vermietung +
+                    d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge;
+
+                // Materialkosten
+                d.gesamtWareneinsatz = d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe;
+
+                // Betriebsausgaben
+                d.gesamtBetriebsausgaben = d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
+                    d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
+                    d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen;
+
+                // Abschreibungen & Zinsen
+                d.gesamtAbschreibungenZinsen = d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
+                    d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter +
+                    d.leasingkosten;
+
+                // Besondere Posten
+                d.gesamtBesonderePosten = d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen;
+
+                // Rückstellungen
+                d.gesamtRueckstellungenTransfers = d.steuerrueckstellungen + d.rueckstellungenSonstige;
+
+                // EBIT
+                d.ebit = d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben +
+                    d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
+
+                // Steuern berechnen
+                const taxConfig = config.tax.isHolding ? config.tax.holding : config.tax.operative;
+
+                // Für Holdings gelten spezielle Steuersätze wegen Beteiligungsprivileg
+                const steuerfaktor = config.tax.isHolding
+                    ? taxConfig.gewinnUebertragSteuerpflichtig / 100
+                    : 1;
+
+                d.gewerbesteuer = d.ebit * (taxConfig.gewerbesteuer / 100) * steuerfaktor;
+                d.koerperschaftsteuer = d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor;
+                d.solidaritaetszuschlag = d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100);
+
+                // Gesamte Steuerlast
+                d.steuerlast = d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer;
+
+                // Gewinn nach Steuern
+                d.gewinnNachSteuern = d.ebit - d.steuerlast;
+            }
+
+            return bwaData;
+        } catch (e) {
+            console.error("Fehler bei der Aggregation der BWA-Daten:", e);
+            SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + e.toString());
+            return null;
+        }
+    };
+
+    /**
+     * Erstellt den Header für die BWA mit Monats- und Quartalsspalten
+     * @returns {Array} Header-Zeile
+     */
     const buildHeaderRow = () => {
         const headers = ["Kategorie"];
         for (let q = 0; q < 4; q++) {
             for (let m = q * 3; m < q * 3 + 3; m++) {
-                headers.push(`${config$1.common.months[m]} (€)`);
+                headers.push(`${config.common.months[m]} (€)`);
             }
             headers.push(`Q${q + 1} (€)`);
         }
@@ -1258,125 +2158,578 @@ const BWACalculator = (() => {
         return headers;
     };
 
-    // Hier wird für jede Position eine Zeile mit Monats-, Quartals- und Jahreswerten aufgebaut:
-    const calculateBWA = () => {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const bwaData = aggregateBWAData();
-        if (!bwaData) return;
+    /**
+     * Erstellt eine Ausgabezeile für eine Position
+     * @param {Object} pos - Position mit Label und Wert-Funktion
+     * @param {Object} bwaData - BWA-Daten
+     * @returns {Array} Formatierte Zeile
+     */
+    const buildOutputRow = (pos, bwaData) => {
+        const monthly = [];
+        let yearly = 0;
 
-        const positions = [
-            {label: "Erlöse aus Lieferungen und Leistungen", get: d => d.umsatzerloese || 0},
-            {label: "Sonstige betriebliche Erträge", get: d => d.sonstigeErtraege || 0},
-            {label: "Erträge aus Vermietung/Verpachtung", get: d => d.vermietung || 0},
-            {label: "Erträge aus Zuschüssen", get: d => d.zuschuesse || 0},
-            {label: "Erträge aus Währungsgewinnen", get: d => d.waehrungsgewinne || 0},
-            {label: "Erträge aus Anlagenabgängen", get: d => d.anlagenabgaenge || 0},
-            {label: "Betriebserlöse", get: d => d.gesamtErloese || 0},
-            {label: "Wareneinsatz", get: d => d.wareneinsatz || 0},
-            {label: "Bezogene Leistungen", get: d => d.fremdleistungen || 0},
-            {label: "Roh-, Hilfs- & Betriebsstoffe", get: d => d.rohHilfsBetriebsstoffe || 0},
-            {label: "Gesamtkosten Material & Fremdleistungen", get: d => d.gesamtWareneinsatz || 0},
-            {label: "Bruttolöhne & Gehälter", get: d => d.bruttoLoehne || 0},
-            {label: "Soziale Abgaben & Arbeitgeberanteile", get: d => d.sozialeAbgaben || 0},
-            {label: "Sonstige Personalkosten", get: d => d.sonstigePersonalkosten || 0},
-            {label: "Werbung & Marketing", get: d => d.werbungMarketing || 0},
-            {label: "Reisekosten", get: d => d.reisekosten || 0},
-            {label: "Versicherungen", get: d => d.versicherungen || 0},
-            {label: "Telefon & Internet", get: d => d.telefonInternet || 0},
-            {label: "Bürokosten", get: d => d.buerokosten || 0},
-            {label: "Fortbildungskosten", get: d => d.fortbildungskosten || 0},
-            {label: "Kfz-Kosten", get: d => d.kfzKosten || 0},
-            {label: "Sonstige betriebliche Aufwendungen", get: d => d.sonstigeAufwendungen || 0},
-            {label: "Abschreibungen Maschinen", get: d => d.abschreibungenMaschinen || 0},
-            {label: "Abschreibungen Büroausstattung", get: d => d.abschreibungenBueromaterial || 0},
-            {label: "Abschreibungen immaterielle Wirtschaftsgüter", get: d => d.abschreibungenImmateriell || 0},
-            {label: "Zinsen auf Bankdarlehen", get: d => d.zinsenBank || 0},
-            {label: "Zinsen auf Gesellschafterdarlehen", get: d => d.zinsenGesellschafter || 0},
-            {label: "Leasingkosten", get: d => d.leasingkosten || 0},
-            {label: "Gesamt Abschreibungen & Zinsen", get: d => d.gesamtAbschreibungenZinsen || 0},
-            {label: "Eigenkapitalveränderungen", get: d => d.eigenkapitalveraenderungen || 0},
-            {label: "Gesellschafterdarlehen", get: d => d.gesellschafterdarlehen || 0},
-            {label: "Ausschüttungen an Gesellschafter", get: d => d.ausschuettungen || 0},
-            {label: "Steuerrückstellungen", get: d => d.steuerrueckstellungen || 0},
-            {label: "Rückstellungen sonstige", get: d => d.rueckstellungenSonstige || 0},
-            {label: "Betriebsergebnis vor Steuern (EBIT)", get: d => d.ebit || 0},
-            {label: "Umsatzsteuer (abzuführen)", get: d => d.umsatzsteuer || 0},
-            {label: "Vorsteuer", get: d => d.vorsteuer || 0},
-            {label: "Nicht abzugsfähige VSt (Bewirtung)", get: d => d.nichtAbzugsfaehigeVSt || 0},
-            {label: "Körperschaftsteuer", get: d => d.koerperschaftsteuer || 0},
-            {label: "Solidaritätszuschlag", get: d => d.solidaritaetszuschlag || 0},
-            {label: "Gewerbesteuer", get: d => d.gewerbesteuer || 0},
-            {label: "Gesamtsteueraufwand", get: d => d.steuerlast || 0},
-            {label: "Jahresüberschuss/-fehlbetrag", get: d => d.gewinnNachSteuern || 0}
-        ];
-
-        const headerRow = buildHeaderRow();
-        const outputRows = [headerRow];
-
-        // Für jede Position wird eine Zeile mit Monats-, Quartals- und Jahreswerten aufgebaut:
-        const buildOutputRow = pos => {
-            const monthly = [];
-            let yearly = 0;
-            for (let m = 1; m <= 12; m++) {
-                const val = pos.get(bwaData[m]) || 0;
-                monthly.push(val);
-                yearly += val;
-            }
-            const quarters = [0, 0, 0, 0];
-            for (let i = 0; i < 12; i++) {
-                quarters[Math.floor(i / 3)] += monthly[i];
-            }
-            return [pos.label, ...monthly.slice(0, 3), quarters[0], ...monthly.slice(3, 6), quarters[1],
-                ...monthly.slice(6, 9), quarters[2], ...monthly.slice(9, 12), quarters[3], yearly];
-        };
-
-        let posIndex = 0;
-        for (const {header, count} of [
-            {header: "1️⃣ Betriebserlöse (Einnahmen)", count: 7},
-            {header: "2️⃣ Materialaufwand & Wareneinsatz", count: 4},
-            {header: "3️⃣ Betriebsausgaben (Sachkosten)", count: 10},
-            {header: "4️⃣ Abschreibungen & Zinsen", count: 7},
-            {header: "5️⃣ Besondere Posten", count: 3},
-            {header: "6️⃣ Rückstellungen", count: 2},
-            {header: "7️⃣ Betriebsergebnis vor Steuern (EBIT)", count: 1},
-            {header: "8️⃣ Steuern & Vorsteuer", count: 7},
-            {header: "9️⃣ Jahresüberschuss/-fehlbetrag", count: 1}
-        ]) {
-            outputRows.push([header, ...Array(headerRow.length - 1).fill("")]);
-            for (let i = 0; i < count; i++) {
-                outputRows.push(buildOutputRow(positions[posIndex++]));
-            }
+        // Monatswerte berechnen
+        for (let m = 1; m <= 12; m++) {
+            const val = pos.get(bwaData[m]) || 0;
+            monthly.push(val);
+            yearly += val;
         }
 
-        const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
-        bwaSheet.clearContents();
-        bwaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
-        bwaSheet.autoResizeColumns(1, outputRows[0].length);
-        SpreadsheetApp.getUi().alert("BWA wurde aktualisiert!");
+        // Quartalswerte berechnen
+        const quarters = [0, 0, 0, 0];
+        for (let i = 0; i < 12; i++) {
+            quarters[Math.floor(i / 3)] += monthly[i];
+        }
+
+        // Zeile zusammenstellen
+        return [pos.label,
+            ...monthly.slice(0, 3), quarters[0],
+            ...monthly.slice(3, 6), quarters[1],
+            ...monthly.slice(6, 9), quarters[2],
+            ...monthly.slice(9, 12), quarters[3],
+            yearly];
     };
 
+    /**
+     * Hauptfunktion zur Berechnung der BWA
+     */
+    const calculateBWA = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const bwaData = aggregateBWAData();
+            if (!bwaData) return;
+
+            // Positionen definieren
+            const positions = [
+                {label: "Erlöse aus Lieferungen und Leistungen", get: d => d.umsatzerloese || 0},
+                {label: "Provisionserlöse", get: d => d.provisionserloese || 0},
+                {label: "Steuerfreie Inland-Einnahmen", get: d => d.steuerfreieInlandEinnahmen || 0},
+                {label: "Steuerfreie Ausland-Einnahmen", get: d => d.steuerfreieAuslandEinnahmen || 0},
+                {label: "Sonstige betriebliche Erträge", get: d => d.sonstigeErtraege || 0},
+                {label: "Erträge aus Vermietung/Verpachtung", get: d => d.vermietung || 0},
+                {label: "Erträge aus Zuschüssen", get: d => d.zuschuesse || 0},
+                {label: "Erträge aus Währungsgewinnen", get: d => d.waehrungsgewinne || 0},
+                {label: "Erträge aus Anlagenabgängen", get: d => d.anlagenabgaenge || 0},
+                {label: "Betriebserlöse", get: d => d.gesamtErloese || 0},
+                {label: "Wareneinsatz", get: d => d.wareneinsatz || 0},
+                {label: "Bezogene Leistungen", get: d => d.fremdleistungen || 0},
+                {label: "Roh-, Hilfs- & Betriebsstoffe", get: d => d.rohHilfsBetriebsstoffe || 0},
+                {label: "Gesamtkosten Material & Fremdleistungen", get: d => d.gesamtWareneinsatz || 0},
+                {label: "Bruttolöhne & Gehälter", get: d => d.bruttoLoehne || 0},
+                {label: "Soziale Abgaben & Arbeitgeberanteile", get: d => d.sozialeAbgaben || 0},
+                {label: "Sonstige Personalkosten", get: d => d.sonstigePersonalkosten || 0},
+                {label: "Werbung & Marketing", get: d => d.werbungMarketing || 0},
+                {label: "Reisekosten", get: d => d.reisekosten || 0},
+                {label: "Versicherungen", get: d => d.versicherungen || 0},
+                {label: "Telefon & Internet", get: d => d.telefonInternet || 0},
+                {label: "Bürokosten", get: d => d.buerokosten || 0},
+                {label: "Fortbildungskosten", get: d => d.fortbildungskosten || 0},
+                {label: "Kfz-Kosten", get: d => d.kfzKosten || 0},
+                {label: "Sonstige betriebliche Aufwendungen", get: d => d.sonstigeAufwendungen || 0},
+                {label: "Abschreibungen Maschinen", get: d => d.abschreibungenMaschinen || 0},
+                {label: "Abschreibungen Büroausstattung", get: d => d.abschreibungenBueromaterial || 0},
+                {label: "Abschreibungen immaterielle Wirtschaftsgüter", get: d => d.abschreibungenImmateriell || 0},
+                {label: "Zinsen auf Bankdarlehen", get: d => d.zinsenBank || 0},
+                {label: "Zinsen auf Gesellschafterdarlehen", get: d => d.zinsenGesellschafter || 0},
+                {label: "Leasingkosten", get: d => d.leasingkosten || 0},
+                {label: "Gesamt Abschreibungen & Zinsen", get: d => d.gesamtAbschreibungenZinsen || 0},
+                {label: "Eigenkapitalveränderungen", get: d => d.eigenkapitalveraenderungen || 0},
+                {label: "Gesellschafterdarlehen", get: d => d.gesellschafterdarlehen || 0},
+                {label: "Ausschüttungen an Gesellschafter", get: d => d.ausschuettungen || 0},
+                {label: "Steuerrückstellungen", get: d => d.steuerrueckstellungen || 0},
+                {label: "Rückstellungen sonstige", get: d => d.rueckstellungenSonstige || 0},
+                {label: "Betriebsergebnis vor Steuern (EBIT)", get: d => d.ebit || 0},
+                {label: "Umsatzsteuer (abzuführen)", get: d => d.umsatzsteuer || 0},
+                {label: "Vorsteuer", get: d => d.vorsteuer || 0},
+                {label: "Nicht abzugsfähige VSt (Bewirtung)", get: d => d.nichtAbzugsfaehigeVSt || 0},
+                {label: "Körperschaftsteuer", get: d => d.koerperschaftsteuer || 0},
+                {label: "Solidaritätszuschlag", get: d => d.solidaritaetszuschlag || 0},
+                {label: "Gewerbesteuer", get: d => d.gewerbesteuer || 0},
+                {label: "Gesamtsteueraufwand", get: d => d.steuerlast || 0},
+                {label: "Jahresüberschuss/-fehlbetrag", get: d => d.gewinnNachSteuern || 0}
+            ];
+
+            // Header-Zeile erstellen
+            const headerRow = buildHeaderRow();
+            const outputRows = [headerRow];
+
+            // Gruppenhierarchie für BWA
+            const bwaGruppen = [
+                {titel: "Betriebserlöse (Einnahmen)", count: 10},
+                {titel: "Materialaufwand & Wareneinsatz", count: 4},
+                {titel: "Betriebsausgaben (Sachkosten)", count: 11},
+                {titel: "Abschreibungen & Zinsen", count: 7},
+                {titel: "Besondere Posten", count: 3},
+                {titel: "Rückstellungen", count: 2},
+                {titel: "Betriebsergebnis vor Steuern (EBIT)", count: 1},
+                {titel: "Steuern & Vorsteuer", count: 7},
+                {titel: "Jahresüberschuss/-fehlbetrag", count: 1}
+            ];
+
+            // Ausgabe mit Gruppenhierarchie erstellen
+            let posIndex = 0;
+            for (let gruppenIndex = 0; gruppenIndex < bwaGruppen.length; gruppenIndex++) {
+                const gruppe = bwaGruppen[gruppenIndex];
+
+                // Gruppenüberschrift
+                outputRows.push([
+                    `${gruppenIndex + 1}. ${gruppe.titel}`,
+                    ...Array(headerRow.length - 1).fill("")
+                ]);
+
+                // Gruppenpositionen
+                for (let i = 0; i < gruppe.count; i++) {
+                    outputRows.push(buildOutputRow(positions[posIndex++], bwaData));
+                }
+
+                // Leerzeile nach jeder Gruppe außer der letzten
+                if (gruppenIndex < bwaGruppen.length - 1) {
+                    outputRows.push(Array(headerRow.length).fill(""));
+                }
+            }
+
+            // BWA-Sheet erstellen oder aktualisieren
+            const bwaSheet = ss.getSheetByName("BWA") || ss.insertSheet("BWA");
+            bwaSheet.clearContents();
+
+            // Daten in das Sheet schreiben
+            const dataRange = bwaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+            dataRange.setValues(outputRows);
+
+            // Formatierungen anwenden
+            // Header formatieren
+            bwaSheet.getRange(1, 1, 1, headerRow.length).setFontWeight("bold").setBackground("#f3f3f3");
+
+            // Gruppenüberschriften formatieren
+            for (let i = 0, rowIndex = 2; i < bwaGruppen.length; i++) {
+                bwaSheet.getRange(rowIndex, 1).setFontWeight("bold");
+                rowIndex += bwaGruppen[i].count + 1; // +1 für die Leerzeile
+            }
+
+            // Währungsformat für alle Zahlenwerte
+            bwaSheet.getRange(2, 2, outputRows.length - 1, headerRow.length - 1).setNumberFormat("#,##0.00 €");
+
+            // Summen-Zeilen hervorheben
+            const summenZeilen = [11, 15, 26, 33, 36, 38, 39, 46];
+            summenZeilen.forEach(row => {
+                bwaSheet.getRange(row, 1, 1, headerRow.length).setBackground("#e6f2ff");
+            });
+
+            // EBIT und Jahresüberschuss hervorheben
+            bwaSheet.getRange(39, 1, 1, headerRow.length).setFontWeight("bold");
+            bwaSheet.getRange(46, 1, 1, headerRow.length).setFontWeight("bold");
+
+            // Spaltenbreiten anpassen
+            bwaSheet.autoResizeColumns(1, headerRow.length);
+
+            // Erfolgsbenachrichtigung
+            SpreadsheetApp.getUi().alert("BWA wurde aktualisiert!");
+
+            // BWA-Sheet aktivieren
+            ss.setActiveSheet(bwaSheet);
+
+        } catch (e) {
+            console.error("Fehler bei der BWA-Berechnung:", e);
+            SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + e.toString());
+        }
+    };
+
+    // Öffentliche API des Moduls
     return {calculateBWA};
 })();
 
-// imports TEST
-// import calculateBilanz from "./calculateBilanz.js";
+// file: src/bilanzCalculator.js
+
+/**
+ * Modul zur Erstellung einer Bilanz nach SKR04
+ * Erstellt eine standardkonforme Bilanz basierend auf den Daten aus anderen Sheets
+ */
+const BilanzCalculator = (() => {
+    /**
+     * Erstellt eine leere Bilanz-Datenstruktur
+     * @returns {Object} Leere Bilanz-Datenstruktur
+     */
+    const createEmptyBilanz = () => ({
+        // Aktiva (Vermögenswerte)
+        aktiva: {
+            // Anlagevermögen
+            sachanlagen: 0,                 // SKR04: 0400-0699, Sachanlagen
+            immaterielleVermoegen: 0,       // SKR04: 0100-0199, Immaterielle Vermögensgegenstände
+            finanzanlagen: 0,               // SKR04: 0700-0899, Finanzanlagen
+            summeAnlagevermoegen: 0,        // Summe Anlagevermögen
+
+            // Umlaufvermögen
+            bankguthaben: 0,                // SKR04: 1200, Bank
+            kasse: 0,                       // SKR04: 1210, Kasse
+            forderungenLuL: 0,              // SKR04: 1300-1370, Forderungen aus Lieferungen und Leistungen
+            vorraete: 0,                    // SKR04: 1400-1590, Vorräte
+            summeUmlaufvermoegen: 0,        // Summe Umlaufvermögen
+
+            // Rechnungsabgrenzung
+            rechnungsabgrenzung: 0,         // SKR04: 1900-1990, Aktiver Rechnungsabgrenzungsposten
+
+            // Gesamtsumme
+            summeAktiva: 0                  // Summe aller Aktiva
+        },
+
+        // Passiva (Kapital und Schulden)
+        passiva: {
+            // Eigenkapital
+            stammkapital: 0,                // SKR04: 2000, Gezeichnetes Kapital
+            kapitalruecklagen: 0,           // SKR04: 2100, Kapitalrücklage
+            gewinnvortrag: 0,               // SKR04: 2970, Gewinnvortrag
+            verlustvortrag: 0,              // SKR04: 2978, Verlustvortrag
+            jahresueberschuss: 0,           // Jahresüberschuss aus BWA
+            summeEigenkapital: 0,           // Summe Eigenkapital
+
+            // Verbindlichkeiten
+            bankdarlehen: 0,                // SKR04: 3150, Verbindlichkeiten gegenüber Kreditinstituten
+            gesellschafterdarlehen: 0,      // SKR04: 3300, Verbindlichkeiten gegenüber Gesellschaftern
+            verbindlichkeitenLuL: 0,        // SKR04: 3200, Verbindlichkeiten aus Lieferungen und Leistungen
+            steuerrueckstellungen: 0,       // SKR04: 3060, Steuerrückstellungen
+            summeVerbindlichkeiten: 0,      // Summe Verbindlichkeiten
+
+            // Rechnungsabgrenzung
+            rechnungsabgrenzung: 0,         // SKR04: 3800-3990, Passiver Rechnungsabgrenzungsposten
+
+            // Gesamtsumme
+            summePassiva: 0                 // Summe aller Passiva
+        }
+    });
+
+    /**
+     * Sammelt Daten aus verschiedenen Sheets für die Bilanz
+     *
+     * @returns {Object} Bilanz-Datenstruktur mit befüllten Werten
+     */
+    const aggregateBilanzData = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const bilanzData = createEmptyBilanz();
+
+            // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
+            const bankSheet = ss.getSheetByName("Bankbewegungen");
+            if (bankSheet) {
+                const lastRow = bankSheet.getLastRow();
+                if (lastRow >= 1) {
+                    const label = bankSheet.getRange(lastRow, 2).getValue().toString().toLowerCase();
+                    if (label === "endsaldo") {
+                        bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(bankSheet.getRange(lastRow, 4).getValue());
+                    }
+                }
+            }
+
+            // 2. Jahresüberschuss aus "BWA" (Letzte Zeile, sofern dort "Jahresüberschuss" vorkommt)
+            const bwaSheet = ss.getSheetByName("BWA");
+            if (bwaSheet) {
+                const data = bwaSheet.getDataRange().getValues();
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const row = data[i];
+                    if (row[0].toString().toLowerCase().includes("jahresüberschuss")) {
+                        // Letzte Spalte enthält den Jahreswert
+                        bilanzData.passiva.jahresueberschuss = Helpers.parseCurrency(row[row.length - 1]);
+                        break;
+                    }
+                }
+            }
+
+            // 3. Stammkapital aus Konfiguration
+            bilanzData.passiva.stammkapital = config.tax.stammkapital || 25000;
+
+            // 4. Suche nach Gesellschafterdarlehen im Gesellschafterkonto-Sheet
+            const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
+            if (gesellschafterSheet) {
+                let darlehenSumme = 0;
+                const data = gesellschafterSheet.getDataRange().getValues();
+
+                // Überschrift überspringen
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
+                    if (row[2] && row[2].toString().toLowerCase() === "gesellschafterdarlehen") {
+                        darlehenSumme += Helpers.parseCurrency(row[3] || 0);
+                    }
+                }
+
+                bilanzData.passiva.gesellschafterdarlehen = darlehenSumme;
+            }
+
+            // 5. Steuerrückstellungen aus BWA oder Ausgaben-Sheet
+            const ausSheet = ss.getSheetByName("Ausgaben");
+            if (ausSheet) {
+                let steuerRueckstellungen = 0;
+                const data = ausSheet.getDataRange().getValues();
+
+                // Überschrift überspringen
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    const category = row[2]?.toString().trim() || "";
+
+                    if (["Gewerbesteuerrückstellungen", "Körperschaftsteuer", "Solidaritätszuschlag", "Sonstige Steuerrückstellungen"].includes(category)) {
+                        steuerRueckstellungen += Helpers.parseCurrency(row[4] || 0);
+                    }
+                }
+
+                bilanzData.passiva.steuerrueckstellungen = steuerRueckstellungen;
+            }
+
+            // 6. Berechnung der Summen
+            bilanzData.aktiva.summeAnlagevermoegen =
+                bilanzData.aktiva.sachanlagen +
+                bilanzData.aktiva.immaterielleVermoegen +
+                bilanzData.aktiva.finanzanlagen;
+
+            bilanzData.aktiva.summeUmlaufvermoegen =
+                bilanzData.aktiva.bankguthaben +
+                bilanzData.aktiva.kasse +
+                bilanzData.aktiva.forderungenLuL +
+                bilanzData.aktiva.vorraete;
+
+            bilanzData.aktiva.summeAktiva =
+                bilanzData.aktiva.summeAnlagevermoegen +
+                bilanzData.aktiva.summeUmlaufvermoegen +
+                bilanzData.aktiva.rechnungsabgrenzung;
+
+            bilanzData.passiva.summeEigenkapital =
+                bilanzData.passiva.stammkapital +
+                bilanzData.passiva.kapitalruecklagen +
+                bilanzData.passiva.gewinnvortrag -
+                bilanzData.passiva.verlustvortrag +
+                bilanzData.passiva.jahresueberschuss;
+
+            bilanzData.passiva.summeVerbindlichkeiten =
+                bilanzData.passiva.bankdarlehen +
+                bilanzData.passiva.gesellschafterdarlehen +
+                bilanzData.passiva.verbindlichkeitenLuL +
+                bilanzData.passiva.steuerrueckstellungen;
+
+            bilanzData.passiva.summePassiva =
+                bilanzData.passiva.summeEigenkapital +
+                bilanzData.passiva.summeVerbindlichkeiten +
+                bilanzData.passiva.rechnungsabgrenzung;
+
+            return bilanzData;
+        } catch (e) {
+            console.error("Fehler bei der Sammlung der Bilanzdaten:", e);
+            SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + e.toString());
+            return null;
+        }
+    };
+
+    /**
+     * Konvertiert einen Zahlenwert in eine Zellenformel oder direkte Zahl
+     * @param {number} value - Der Wert
+     * @param {boolean} useFormula - Ob eine Formel verwendet werden soll
+     * @returns {string|number} - Formel als String oder direkter Wert
+     */
+    const valueOrFormula = (value, useFormula = false) => {
+        if (value === 0 && useFormula) {
+            return "";  // Leere Zelle für 0-Werte bei Formeln
+        }
+        return value;
+    };
+
+    /**
+     * Erstellt ein Array für die Aktiva-Seite der Bilanz
+     * @param {Object} bilanzData - Die Bilanzdaten
+     * @returns {Array} Array mit Zeilen für die Aktiva-Seite
+     */
+    const createAktivaArray = (bilanzData) => {
+        const { aktiva } = bilanzData;
+        const year = config.tax.year || new Date().getFullYear();
+
+        return [
+            [`Bilanz ${year} - Aktiva (Vermögenswerte)`, ""],
+            ["", ""],
+            ["1. Anlagevermögen", ""],
+            ["1.1 Sachanlagen", valueOrFormula(aktiva.sachanlagen)],
+            ["1.2 Immaterielle Vermögensgegenstände", valueOrFormula(aktiva.immaterielleVermoegen)],
+            ["1.3 Finanzanlagen", valueOrFormula(aktiva.finanzanlagen)],
+            ["Summe Anlagevermögen", "=SUM(B4:B6)"],
+            ["", ""],
+            ["2. Umlaufvermögen", ""],
+            ["2.1 Bankguthaben", valueOrFormula(aktiva.bankguthaben)],
+            ["2.2 Kasse", valueOrFormula(aktiva.kasse)],
+            ["2.3 Forderungen aus Lieferungen und Leistungen", valueOrFormula(aktiva.forderungenLuL)],
+            ["2.4 Vorräte", valueOrFormula(aktiva.vorraete)],
+            ["Summe Umlaufvermögen", "=SUM(B10:B13)"],
+            ["", ""],
+            ["3. Rechnungsabgrenzungsposten", valueOrFormula(aktiva.rechnungsabgrenzung)],
+            ["", ""],
+            ["Summe Aktiva", "=B7+B14+B16"]
+        ];
+    };
+
+    /**
+     * Erstellt ein Array für die Passiva-Seite der Bilanz
+     * @param {Object} bilanzData - Die Bilanzdaten
+     * @returns {Array} Array mit Zeilen für die Passiva-Seite
+     */
+    const createPassivaArray = (bilanzData) => {
+        const { passiva } = bilanzData;
+        const year = config.tax.year || new Date().getFullYear();
+
+        return [
+            [`Bilanz ${year} - Passiva (Kapital und Schulden)`, ""],
+            ["", ""],
+            ["1. Eigenkapital", ""],
+            ["1.1 Gezeichnetes Kapital (Stammkapital)", valueOrFormula(passiva.stammkapital)],
+            ["1.2 Kapitalrücklage", valueOrFormula(passiva.kapitalruecklagen)],
+            ["1.3 Gewinnvortrag", valueOrFormula(passiva.gewinnvortrag)],
+            ["1.4 Verlustvortrag (negativ)", valueOrFormula(passiva.verlustvortrag)],
+            ["1.5 Jahresüberschuss/Jahresfehlbetrag", valueOrFormula(passiva.jahresueberschuss)],
+            ["Summe Eigenkapital", "=SUM(F4:F8)"],
+            ["", ""],
+            ["2. Verbindlichkeiten", ""],
+            ["2.1 Verbindlichkeiten gegenüber Kreditinstituten", valueOrFormula(passiva.bankdarlehen)],
+            ["2.2 Verbindlichkeiten gegenüber Gesellschaftern", valueOrFormula(passiva.gesellschafterdarlehen)],
+            ["2.3 Verbindlichkeiten aus Lieferungen und Leistungen", valueOrFormula(passiva.verbindlichkeitenLuL)],
+            ["2.4 Steuerrückstellungen", valueOrFormula(passiva.steuerrueckstellungen)],
+            ["Summe Verbindlichkeiten", "=SUM(F12:F15)"],
+            ["", ""],
+            ["3. Rechnungsabgrenzungsposten", valueOrFormula(passiva.rechnungsabgrenzung)],
+            ["", ""],
+            ["Summe Passiva", "=F9+F16+F18"]
+        ];
+    };
+
+    /**
+     * Hauptfunktion zur Erstellung der Bilanz
+     * Sammelt Daten und erstellt ein Bilanz-Sheet
+     */
+    const calculateBilanz = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const ui = SpreadsheetApp.getUi();
+
+            // Bilanzdaten aggregieren
+            const bilanzData = aggregateBilanzData();
+            if (!bilanzData) return;
+
+            // Bilanz-Arrays erstellen
+            const aktivaArray = createAktivaArray(bilanzData);
+            const passivaArray = createPassivaArray(bilanzData);
+
+            // Prüfen, ob Aktiva = Passiva
+            const aktivaSumme = bilanzData.aktiva.summeAktiva;
+            const passivaSumme = bilanzData.passiva.summePassiva;
+            const differenz = Math.abs(aktivaSumme - passivaSumme);
+
+            if (differenz > 0.01) {
+                // Bei Differenz die Bilanz trotzdem erstellen, aber warnen
+                ui.alert(
+                    "Bilanz ist nicht ausgeglichen",
+                    `Die Bilanzsummen von Aktiva (${aktivaSumme} €) und Passiva (${passivaSumme} €) ` +
+                    `stimmen nicht überein. Differenz: ${differenz.toFixed(2)} €. ` +
+                    `Bitte überprüfen Sie Ihre Buchhaltungsdaten.`,
+                    ui.ButtonSet.OK
+                );
+            }
+
+            // Erstelle oder leere das Blatt "Bilanz"
+            let bilanzSheet = ss.getSheetByName("Bilanz");
+            if (!bilanzSheet) {
+                bilanzSheet = ss.insertSheet("Bilanz");
+            } else {
+                bilanzSheet.clearContents();
+            }
+
+            // Schreibe Aktiva ab Zelle A1 und Passiva ab Zelle E1
+            bilanzSheet.getRange(1, 1, aktivaArray.length, 2).setValues(aktivaArray);
+            bilanzSheet.getRange(1, 5, passivaArray.length, 2).setValues(passivaArray);
+
+            // Formatierung anwenden
+            // Überschriften formatieren
+            bilanzSheet.getRange("A1").setFontWeight("bold").setFontSize(12);
+            bilanzSheet.getRange("E1").setFontWeight("bold").setFontSize(12);
+
+            // Zwischensummen und Gesamtsummen formatieren
+            const summenZeilenAktiva = [7, 14, 18]; // Zeilen mit Summen in Aktiva
+            const summenZeilenPassiva = [9, 16, 20]; // Zeilen mit Summen in Passiva
+
+            summenZeilenAktiva.forEach(row => {
+                bilanzSheet.getRange(row, 1, 1, 2).setFontWeight("bold");
+                if (row === 18) { // Gesamtsumme Aktiva
+                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#e6f2ff");
+                } else {
+                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#f0f0f0");
+                }
+            });
+
+            summenZeilenPassiva.forEach(row => {
+                bilanzSheet.getRange(row, 5, 1, 2).setFontWeight("bold");
+                if (row === 20) { // Gesamtsumme Passiva
+                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#e6f2ff");
+                } else {
+                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#f0f0f0");
+                }
+            });
+
+            // Abschnittsüberschriften formatieren
+            [3, 9, 11, 16].forEach(row => {
+                bilanzSheet.getRange(row, 1).setFontWeight("bold");
+            });
+
+            [3, 11, 17].forEach(row => {
+                bilanzSheet.getRange(row, 5).setFontWeight("bold");
+            });
+
+            // Währungsformat für Beträge anwenden
+            bilanzSheet.getRange("B4:B18").setNumberFormat("#,##0.00 €");
+            bilanzSheet.getRange("F4:F20").setNumberFormat("#,##0.00 €");
+
+            // Spaltenbreiten anpassen
+            bilanzSheet.autoResizeColumns(1, 6);
+
+            // Erfolgsmeldung
+            ui.alert("Die Bilanz wurde erfolgreich erstellt!");
+        } catch (e) {
+            console.error("Fehler bei der Bilanzerstellung:", e);
+            SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + e.toString());
+        }
+    };
+
+    // Öffentliche API des Moduls
+    return {
+        calculateBilanz,
+        // Für Testzwecke könnten hier weitere Funktionen exportiert werden
+        _internal: {
+            createEmptyBilanz,
+            aggregateBilanzData
+        }
+    };
+})();
+
+// file: src/code.js
+// imports
 
 // =================== Globale Funktionen ===================
+/**
+ * Erstellt das Menü in der Google Sheets UI beim Öffnen der Tabelle
+ */
 const onOpen = () => {
     SpreadsheetApp.getUi()
         .createMenu("📂 Buchhaltung")
         .addItem("📥 Dateien importieren", "importDriveFiles")
-        .addItem("🔄 Refresh Active Sheet", "refreshSheet")
+        .addItem("🔄 Aktuelles Blatt aktualisieren", "refreshSheet")
         .addItem("📊 UStVA berechnen", "calculateUStVA")
         .addItem("📈 BWA berechnen", "calculateBWA")
         .addItem("📝 Bilanz erstellen", "calculateBilanz")
         .addToUi();
 };
 
+/**
+ * Wird bei jeder Bearbeitung des Spreadsheets ausgelöst
+ * Fügt Zeitstempel hinzu, wenn bestimmte Blätter bearbeitet werden
+ *
+ * @param {Object} e - Event-Objekt von Google Sheets
+ */
 const onEdit = e => {
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
+
+    // Mapping von Blattname zu Zeitstempel-Spalte
     const mapping = {
         "Einnahmen": 16,
         "Ausgaben": 16,
@@ -1427,25 +2780,81 @@ const onEdit = e => {
     }
 };
 
+/**
+ * Richtet die notwendigen Trigger für das Spreadsheet ein
+ */
 const setupTrigger = () => {
     const triggers = ScriptApp.getProjectTriggers();
-    if (!triggers.some(t => t.getHandlerFunction() === "onOpen"))
+    // Prüfe, ob der onOpen Trigger bereits existiert
+    if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
         SpreadsheetApp.newTrigger("onOpen")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onOpen()
             .create();
+    }
+
+    // Prüfe, ob der onEdit Trigger bereits existiert
+    if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
+        SpreadsheetApp.newTrigger("onEdit")
+            .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+            .onEdit()
+            .create();
+    }
 };
 
+/**
+ * Aktualisiert das aktive Tabellenblatt
+ */
 const refreshSheet = () => RefreshModule.refreshActiveSheet();
+
+/**
+ * Berechnet die Umsatzsteuervoranmeldung
+ */
 const calculateUStVA = () => {
-    RefreshModule.refreshAllSheets();
-    UStVACalculator.calculateUStVA();
+    try {
+        RefreshModule.refreshAllSheets();
+        UStVACalculator.calculateUStVA();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + error.message);
+        console.error("UStVA-Fehler:", error);
+    }
 };
+
+/**
+ * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
+ */
 const calculateBWA = () => {
-    RefreshModule.refreshAllSheets();
-    BWACalculator.calculateBWA();
+    try {
+        RefreshModule.refreshAllSheets();
+        BWACalculator.calculateBWA();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + error.message);
+        console.error("BWA-Fehler:", error);
+    }
 };
+
+/**
+ * Erstellt die Bilanz
+ */
+const calculateBilanz = () => {
+    try {
+        RefreshModule.refreshAllSheets();
+        BilanzCalculator.calculateBilanz(); // Aktualisierter Aufruf
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + error.message);
+        console.error("Bilanz-Fehler:", error);
+    }
+};
+
+/**
+ * Importiert Dateien aus Google Drive und aktualisiert alle Tabellenblätter
+ */
 const importDriveFiles = () => {
-    ImportModule.importDriveFiles();
-    RefreshModule.refreshAllSheets();
+    try {
+        ImportModule.importDriveFiles();
+        RefreshModule.refreshAllSheets();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
+        console.error("Import-Fehler:", error);
+    }
 };

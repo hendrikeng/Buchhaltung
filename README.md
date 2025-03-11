@@ -5,25 +5,26 @@ Eine umfassende Buchhaltungslösung für kleine Unternehmen, die auf Google Shee
 ## Features
 
 - **Dokumenten-Management**: Automatischer Import von Rechnungen aus Google Drive
-- **Steuerliche Auswertungen**: Berechnung von UStVA mit ELSTER-Unterstützung
-- **Betriebswirtschaftliche Auswertung (BWA)**: Monatliche und quartalsweise Auswertungen
-- **Bilanzerstellung**: Automatische Generierung einer einfachen Bilanz
-- **Validierung**: Umfassende Validierung aller Eingaben
+- **Steuerliche Auswertungen**: Berechnung von UStVA nach deutschem Steuerrecht
+- **Betriebswirtschaftliche Auswertung (BWA)**: Monatliche und quartalsweise Auswertungen mit relevanten Kennzahlen
+- **Bilanzerstellung**: Automatische Generierung einer SKR04-konformen Bilanz
+- **Validierung**: Umfassende Validierung aller Eingaben mit detaillierten Fehlermeldungen
+- **Fehlertoleranz**: Robuste Fehlerbehandlung und Logging
 - **Flexibilität**: Unterstützung für verschiedene Steuerszenarien (Holding/Operativ)
 
 ## Module
 
 Die App besteht aus folgenden Modulen:
 
-- **importModule.js**: Import von Dateien aus Google Drive
-- **refreshModule.js**: Aktualisierung der Sheets und Formeln
-- **uStVACalculator.js**: Berechnung der Umsatzsteuervoranmeldung
-- **bWACalculator.js**: Erstellung der Betriebswirtschaftlichen Auswertung
-- **calculateBilanz.js**: Generierung einer einfachen Bilanz
-- **validator.js**: Validierung der Eingaben
-- **helpers.js**: Hilfsfunktionen für Datum, Währung etc.
-- **config.js**: Zentrale Konfigurationsdatei
-- **code.js**: Hauptmodul mit UI-Integration
+- **importModule.js**: Import von Dateien aus Google Drive mit automatischer Kategorisierung
+- **refreshModule.js**: Aktualisierung der Sheets, Formeln und Berechnungen
+- **uStVACalculator.js**: Berechnung der Umsatzsteuervoranmeldung nach aktuellem Steuerrecht
+- **bWACalculator.js**: Erstellung der Betriebswirtschaftlichen Auswertung mit wichtigen Kennzahlen (EBIT, EBITDA)
+- **bilanzCalculator.js**: Generierung einer SKR04-konformen Bilanz mit Aktiva und Passiva
+- **validator.js**: Validierung der Eingaben und Berechnungen
+- **helpers.js**: Hilfsfunktionen für Datum, Währung, MwSt-Berechnungen und mehr
+- **config.js**: Zentrale Konfigurationsdatei mit SKR04-Mapping
+- **code.js**: Hauptmodul mit UI-Integration und Fehlerbehandlung
 
 ## Installation
 
@@ -65,6 +66,8 @@ Für die automatische Dokumentenverarbeitung wird folgende Ordnerstruktur in Goo
         └── [Ausgangsrechnungen als PDF]
 ```
 
+Die App erkennt automatisch Dateinamen mit Datumsangaben in verschiedenen Formaten.
+
 ## Sheet-Struktur
 
 Die folgenden Sheets werden von der App verwendet oder erstellt:
@@ -75,9 +78,10 @@ Die folgenden Sheets werden von der App verwendet oder erstellt:
 - **Bankbewegungen**: Erfassung aller Bankbewegungen
 - **Gesellschafterkonto**: Eingabe von Gesellschafterkonten
 - **Holding Transfers**: Eingabe von Holding-Transfers
-- **UStVA**: Generierte Umsatzsteuervoranmeldung
-- **BWA**: Generierte Betriebswirtschaftliche Auswertung
-- **Bilanz**: Generierte Bilanz
+- **Änderungshistorie**: Protokollierung aller Änderungen und Importe
+- **UStVA**: Generierte Umsatzsteuervoranmeldung (monatlich und quartalsweise)
+- **BWA**: Generierte Betriebswirtschaftliche Auswertung mit Kennzahlen
+- **Bilanz**: Generierte SKR04-konforme Bilanz
 
 ## Konfiguration
 
@@ -86,11 +90,27 @@ Die grundlegende Konfiguration erfolgt in der `config.js` Datei:
 - **Geschäftsjahr**: Das aktuelle Geschäftsjahr
 - **Stammkapital**: Höhe des Stammkapitals
 - **Holding/Operativ**: Art des Unternehmens
-- **Steuersätze**: Konfiguration der Steuersätze
-- **Kategorien**: Einnahmen- und Ausgabenkategorien
-- **Kontenmapping**: SKR04-konforme Konten
+- **Steuersätze**: Konfiguration der Steuersätze (MwSt, Gewerbesteuer, etc.)
+- **Kategorien**: Einnahmen- und Ausgabenkategorien mit Steuertypen
+- **Kontenmapping**: SKR04-konforme Konten für jede Kategorie
+- **BWA-Mapping**: Zuordnung der Kategorien zu BWA-Positionen
 
-Weitere Einstellungen können über das Menü "Einstellungen" im Sheet vorgenommen werden.
+## Funktionen
+
+### Import von Dateien
+- Automatische Erkennung von Rechnungsdaten aus Dateinamen
+- Protokollierung aller Importe in der Änderungshistorie
+- Automatische Erstellung fehlender Ordner
+
+### Berechnungen
+- **UStVA**: Automatische Berechnung von Umsatzsteuer und Vorsteuer nach deutschem Steuerrecht
+- **BWA**: Berechnung wichtiger Kennzahlen wie Rohertrag, EBIT und EBITDA
+- **Bilanz**: Erstellung einer Bilanz mit Anlagevermögen, Umlaufvermögen, Eigenkapital und Verbindlichkeiten
+
+### Validierung
+- Validierung aller Eingaben auf Vollständigkeit und Korrektheit
+- Prüfung auf erlaubte MwSt-Sätze
+- Validierung von Datums- und Zahlenwerten
 
 ## Lizenz
 

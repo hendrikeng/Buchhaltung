@@ -1,26 +1,38 @@
-// imports TEST
+// file: src/code.js
+// imports
 import ImportModule from "./importModule.js";
 import RefreshModule from "./refreshModule.js";
 import UStVACalculator from "./uStVACalculator.js";
 import BWACalculator from "./bWACalculator.js";
-// import calculateBilanz from "./calculateBilanz.js";
+import BilanzCalculator from "./bilanzCalculator.js"; // Aktualisierter Import
 
 // =================== Globale Funktionen ===================
+/**
+ * Erstellt das Menü in der Google Sheets UI beim Öffnen der Tabelle
+ */
 const onOpen = () => {
     SpreadsheetApp.getUi()
         .createMenu("📂 Buchhaltung")
         .addItem("📥 Dateien importieren", "importDriveFiles")
-        .addItem("🔄 Refresh Active Sheet", "refreshSheet")
+        .addItem("🔄 Aktuelles Blatt aktualisieren", "refreshSheet")
         .addItem("📊 UStVA berechnen", "calculateUStVA")
         .addItem("📈 BWA berechnen", "calculateBWA")
         .addItem("📝 Bilanz erstellen", "calculateBilanz")
         .addToUi();
 };
 
+/**
+ * Wird bei jeder Bearbeitung des Spreadsheets ausgelöst
+ * Fügt Zeitstempel hinzu, wenn bestimmte Blätter bearbeitet werden
+ *
+ * @param {Object} e - Event-Objekt von Google Sheets
+ */
 const onEdit = e => {
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
+
+    // Mapping von Blattname zu Zeitstempel-Spalte
     const mapping = {
         "Einnahmen": 16,
         "Ausgaben": 16,
@@ -71,26 +83,81 @@ const onEdit = e => {
     }
 };
 
+/**
+ * Richtet die notwendigen Trigger für das Spreadsheet ein
+ */
 const setupTrigger = () => {
     const triggers = ScriptApp.getProjectTriggers();
-    if (!triggers.some(t => t.getHandlerFunction() === "onOpen"))
+    // Prüfe, ob der onOpen Trigger bereits existiert
+    if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
         SpreadsheetApp.newTrigger("onOpen")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onOpen()
             .create();
+    }
+
+    // Prüfe, ob der onEdit Trigger bereits existiert
+    if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
+        SpreadsheetApp.newTrigger("onEdit")
+            .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+            .onEdit()
+            .create();
+    }
 };
 
+/**
+ * Aktualisiert das aktive Tabellenblatt
+ */
 const refreshSheet = () => RefreshModule.refreshActiveSheet();
+
+/**
+ * Berechnet die Umsatzsteuervoranmeldung
+ */
 const calculateUStVA = () => {
-    RefreshModule.refreshAllSheets();
-    UStVACalculator.calculateUStVA();
-};
-const calculateBWA = () => {
-    RefreshModule.refreshAllSheets();
-    BWACalculator.calculateBWA();
-};
-const importDriveFiles = () => {
-    ImportModule.importDriveFiles();
-    RefreshModule.refreshAllSheets();
+    try {
+        RefreshModule.refreshAllSheets();
+        UStVACalculator.calculateUStVA();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + error.message);
+        console.error("UStVA-Fehler:", error);
+    }
 };
 
+/**
+ * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
+ */
+const calculateBWA = () => {
+    try {
+        RefreshModule.refreshAllSheets();
+        BWACalculator.calculateBWA();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + error.message);
+        console.error("BWA-Fehler:", error);
+    }
+};
+
+/**
+ * Erstellt die Bilanz
+ */
+const calculateBilanz = () => {
+    try {
+        RefreshModule.refreshAllSheets();
+        BilanzCalculator.calculateBilanz(); // Aktualisierter Aufruf
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + error.message);
+        console.error("Bilanz-Fehler:", error);
+    }
+};
+
+/**
+ * Importiert Dateien aus Google Drive und aktualisiert alle Tabellenblätter
+ */
+const importDriveFiles = () => {
+    try {
+        ImportModule.importDriveFiles();
+        RefreshModule.refreshAllSheets();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
+        console.error("Import-Fehler:", error);
+    }
+};
