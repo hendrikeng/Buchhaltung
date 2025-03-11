@@ -1,28 +1,7 @@
 {
   "timeZone": "Europe/Berlin",
   "dependencies": {
-    "libraries": [
-      {
-        "userSymbol": "LodashGS",
-        "libraryId": "1SQ0PlSMwndIuOAgtVJdjxsuXueECtY9OGejVDS37ckSVbMll73EXf2PW",
-        "version": "5"
-      }
-    ]
   },
   "exceptionLogging": "STACKDRIVER",
-  "runtimeVersion": "V8",
-  "sheets": {
-    "macros": [
-      {
-        "menuName": "Buchhaltung aktualisieren",
-        "functionName": "refreshAccounting",
-        "defaultShortcut": "Ctrl+Alt+Shift+1"
-      }
-    ]
-  },
-  "oauthScopes": [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/script.container.ui"
-  ]
+  "runtimeVersion": "V8"
 }
