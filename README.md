@@ -8,7 +8,6 @@ Eine umfassende Buchhaltungslösung für kleine Unternehmen, die auf Google Shee
 - **Steuerliche Auswertungen**: Berechnung von UStVA mit ELSTER-Unterstützung
 - **Betriebswirtschaftliche Auswertung (BWA)**: Monatliche und quartalsweise Auswertungen
 - **Bilanzerstellung**: Automatische Generierung einer einfachen Bilanz
-- **Kontenjournal**: Erstellung von Buchungsjournalen, Kontoblättern und Monatsjournalen
 - **Validierung**: Umfassende Validierung aller Eingaben
 - **Flexibilität**: Unterstützung für verschiedene Steuerszenarien (Holding/Operativ)
 
@@ -21,8 +20,6 @@ Die App besteht aus folgenden Modulen:
 - **uStVACalculator.js**: Berechnung der Umsatzsteuervoranmeldung
 - **bWACalculator.js**: Erstellung der Betriebswirtschaftlichen Auswertung
 - **calculateBilanz.js**: Generierung einer einfachen Bilanz
-- **journalModule.js**: Erstellung von Kontenjournalen und Buchungsberichten
-- **settings.js**: Verwaltung der Anwendungseinstellungen
 - **validator.js**: Validierung der Eingaben
 - **helpers.js**: Hilfsfunktionen für Datum, Währung etc.
 - **config.js**: Zentrale Konfigurationsdatei
@@ -76,14 +73,11 @@ Die folgenden Sheets werden von der App verwendet oder erstellt:
 - **Ausgaben**: Eingabe der Ausgaben
 - **Eigenbelege**: Eingabe von Eigenbelegen
 - **Bankbewegungen**: Erfassung aller Bankbewegungen
+- **Gesellschafterkonto**: Eingabe von Gesellschafterkonten
+- **Holding Transfers**: Eingabe von Holding-Transfers
 - **UStVA**: Generierte Umsatzsteuervoranmeldung
-- **ELSTER-UStVA**: ELSTER-kompatible Umsatzsteuervoranmeldung
 - **BWA**: Generierte Betriebswirtschaftliche Auswertung
 - **Bilanz**: Generierte Bilanz
-- **Kontenjournal**: Generiertes Kontenjournal
-- **Konto [Kontonummer]**: Generierte Kontoblätter
-- **Journal [Monat]**: Generierte Monatsjournale
-- **Einstellungen**: Konfiguration der App
 
 ## Konfiguration
 

@@ -10,9 +10,9 @@ const RefreshModule = (() => {
 
         // Ersetze den Formelteil für Spalte 12:
         Object.entries({
-            7: row => `=E${row}*F${row}/100`,  // Korrigiert, falls MwSt als Prozent (z.B. 19 statt 0.19) gespeichert wird
+            7: row => `=E${row}*F${row}`,
             8: row => `=E${row}+G${row}`,
-            10: row => `=(H${row}-I${row})/(1+F${row}/100)`,  // Korrigiert wie oben
+            10: row => `=(H${row}-I${row})/(1+F${row})`,
             11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
             12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`  // Überflüssiges OR entfernt
         }).forEach(([col, formulaFn]) => {
