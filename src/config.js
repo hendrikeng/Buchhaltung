@@ -20,7 +20,7 @@ const config = {
 
         // Holding-spezifische Steuersätze
         holding: {
-            gewerbesteuer: 16.45,  // Angepasst an lokalen Hebesatz
+            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
             koerperschaftsteuer: 15,
             solidaritaetszuschlag: 5.5,
             gewinnUebertragSteuerfrei: 95,  // % der Beteiligungserträge steuerfrei
@@ -29,7 +29,7 @@ const config = {
 
         // Operative GmbH Steuersätze
         operative: {
-            gewerbesteuer: 16.45,  // Angepasst an lokalen Hebesatz
+            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
             koerperschaftsteuer: 15,
             solidaritaetszuschlag: 5.5,
             gewinnUebertragSteuerfrei: 0,
