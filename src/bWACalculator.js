@@ -1,7 +1,6 @@
 // file: src/bWACalculator.js
 import Helpers from "./helpers.js";
 import config from "./config.js";
-import Validator from "./validator.js";
 
 /**
  * Modul zur Berechnung der Betriebswirtschaftlichen Auswertung (BWA)
@@ -94,11 +93,13 @@ const BWACalculator = (() => {
      */
     const processRevenue = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config.sheets.einnahmen.columns;
+
+            const m = Helpers.getMonthFromRow(row, "einnahmen");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             if (["Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
 
@@ -113,7 +114,7 @@ const BWACalculator = (() => {
             const mapping = config.einnahmen.bwaMapping[category];
             if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
                 bwaData[m][mapping] += amount;
-            } else if (Helpers.parseMwstRate(row[5]) === 0) {
+            } else if (Helpers.parseMwstRate(row[columns.mwstSatz - 1]) === 0) {
                 bwaData[m].steuerfreieInlandEinnahmen += amount;
             } else {
                 bwaData[m].umsatzerloese += amount;
@@ -131,11 +132,13 @@ const BWACalculator = (() => {
      */
     const processExpense = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config.sheets.ausgaben.columns;
+
+            const m = Helpers.getMonthFromRow(row, "ausgaben");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             // Nicht-betriebliche Positionen ignorieren
             if (["Privatentnahme", "Privateinlage", "Holding Transfers",
@@ -217,11 +220,13 @@ const BWACalculator = (() => {
      */
     const processEigen = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config.sheets.eigenbelege.columns;
+
+            const m = Helpers.getMonthFromRow(row, "eigenbelege");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
             const eigenCfg = config.eigenbelege.mapping[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
@@ -256,9 +261,9 @@ const BWACalculator = (() => {
             const bwaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyBWA()]));
 
             // Daten aus den Sheets verarbeiten
-            revenueSheet.getDataRange().getValues().slice(1).forEach(processRevenue);
-            expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
-            if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
+            revenueSheet.getDataRange().getValues().slice(1).forEach(row => processRevenue(row, bwaData));
+            expenseSheet.getDataRange().getValues().slice(1).forEach(row => processExpense(row, bwaData));
+            if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(row => processEigen(row, bwaData));
 
             // Gruppensummen und weitere Berechnungen
             for (let m = 1; m <= 12; m++) {
@@ -511,7 +516,7 @@ const BWACalculator = (() => {
         }
     };
 
-    // Öffentliche API des Moduls
+// Öffentliche API des Moduls
     return {calculateBWA};
 })();
 

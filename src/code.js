@@ -31,25 +31,16 @@ const onEdit = e => {
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
+    const sheetKey = name.toLowerCase();
 
-    // Mapping von Blattname zu Zeitstempel-Spalte
-    const mapping = {
-        "Einnahmen": 16,
-        "Ausgaben": 16,
-        "Eigenbelege": 16,
-        "Bankbewegungen": 11,
-        "Gesellschafterkonto": 12,
-        "Holding Transfers": 6
-    };
-
-    // Prüfen, ob wir dieses Sheet bearbeiten sollen
-    if (!(name in mapping)) return;
+    // Prüfen, ob wir für dieses Sheet eine Konfiguration haben
+    if (!config.sheets[sheetKey] || !config.sheets[sheetKey].columns.zeitstempel) return;
 
     // Header-Zeile ignorieren
     if (range.getRow() === 1) return;
 
-    // Spalte für Zeitstempel
-    const timestampCol = mapping[name];
+    // Spalte für Zeitstempel aus der Konfiguration
+    const timestampCol = config.sheets[sheetKey].columns.zeitstempel;
 
     // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
     if (range.getColumn() === timestampCol ||

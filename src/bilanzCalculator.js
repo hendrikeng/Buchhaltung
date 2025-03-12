@@ -1,7 +1,6 @@
 // file: src/bilanzCalculator.js
 import Helpers from "./helpers.js";
 import config from "./config.js";
-import Validator from "./validator.js";
 
 /**
  * Modul zur Erstellung einer Bilanz nach SKR04
@@ -70,14 +69,21 @@ const BilanzCalculator = (() => {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const bilanzData = createEmptyBilanz();
 
+            // Spalten-Konfigurationen für die verschiedenen Sheets
+            const bankCols = config.sheets.bankbewegungen.columns;
+            const ausgabenCols = config.sheets.ausgaben.columns;
+            const gesellschafterCols = config.sheets.gesellschafterkonto.columns;
+
             // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
             const bankSheet = ss.getSheetByName("Bankbewegungen");
             if (bankSheet) {
                 const lastRow = bankSheet.getLastRow();
                 if (lastRow >= 1) {
-                    const label = bankSheet.getRange(lastRow, 2).getValue().toString().toLowerCase();
+                    const label = bankSheet.getRange(lastRow, bankCols.buchungstext).getValue().toString().toLowerCase();
                     if (label === "endsaldo") {
-                        bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(bankSheet.getRange(lastRow, 4).getValue());
+                        bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(
+                            bankSheet.getRange(lastRow, bankCols.saldo).getValue()
+                        );
                     }
                 }
             }
@@ -109,8 +115,9 @@ const BilanzCalculator = (() => {
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
                     // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
-                    if (row[2] && row[2].toString().toLowerCase() === "gesellschafterdarlehen") {
-                        darlehenSumme += Helpers.parseCurrency(row[3] || 0);
+                    if (row[gesellschafterCols.kategorie - 1] &&
+                        row[gesellschafterCols.kategorie - 1].toString().toLowerCase() === "gesellschafterdarlehen") {
+                        darlehenSumme += Helpers.parseCurrency(row[gesellschafterCols.betrag - 1] || 0);
                     }
                 }
 
@@ -126,10 +133,10 @@ const BilanzCalculator = (() => {
                 // Überschrift überspringen
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
-                    const category = row[2]?.toString().trim() || "";
+                    const category = row[ausgabenCols.kategorie - 1]?.toString().trim() || "";
 
                     if (["Gewerbesteuerrückstellungen", "Körperschaftsteuer", "Solidaritätszuschlag", "Sonstige Steuerrückstellungen"].includes(category)) {
-                        steuerRueckstellungen += Helpers.parseCurrency(row[4] || 0);
+                        steuerRueckstellungen += Helpers.parseCurrency(row[ausgabenCols.nettobetrag - 1] || 0);
                     }
                 }
 

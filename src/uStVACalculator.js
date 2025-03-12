@@ -38,31 +38,35 @@ const UStVACalculator = (() => {
      */
     const processUStVARow = (row, data, isIncome, isEigen = false) => {
         try {
+            // Sheet-Typ bestimmen
+            const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
+            const columns = config.sheets[sheetType].columns;
+
             // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
-            const paymentDate = Helpers.parseDate(row[13]);
+            const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
             if (!paymentDate || paymentDate > new Date()) return;
 
             // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
-            const month = Helpers.getMonthFromRow(row);
+            const month = Helpers.getMonthFromRow(row, sheetType);
             if (!month || month < 1 || month > 12) return;
 
             // Beträge aus der Zeile extrahieren
-            const netto = Helpers.parseCurrency(row[4]);
-            const restNetto = Helpers.parseCurrency(row[10]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+            const netto = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const restNetto = Helpers.parseCurrency(row[columns.steuerbemessung - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
             const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
 
             // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
             if (gezahlt === 0) return;
 
             // MwSt-Satz normalisieren
-            const mwstRate = Helpers.parseMwstRate(row[5]);
+            const mwstRate = Helpers.parseMwstRate(row[columns.mwstSatz - 1]);
             const roundedRate = Math.round(mwstRate);
 
             // Steuer berechnen
             const tax = gezahlt * (mwstRate / 100);
 
             // Kategorie ermitteln
-            const category = row[2]?.toString().trim() || "";
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             // Je nach Typ (Einnahme/Ausgabe/Eigenbeleg) unterschiedlich verarbeiten
             if (isIncome) {
@@ -207,133 +211,134 @@ const UStVACalculator = (() => {
      * Hauptfunktion zur Berechnung der UStVA
      * Sammelt Daten aus allen relevanten Sheets und erstellt ein UStVA-Sheet
      */
+        // Continuing from previous code
     const calculateUStVA = () => {
-        try {
-            const ss = SpreadsheetApp.getActiveSpreadsheet();
-            const ui = SpreadsheetApp.getUi();
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const ui = SpreadsheetApp.getUi();
 
-            // Benötigte Sheets abrufen
-            const revenueSheet = ss.getSheetByName("Einnahmen");
-            const expenseSheet = ss.getSheetByName("Ausgaben");
-            const eigenSheet = ss.getSheetByName("Eigenbelege");
+                // Benötigte Sheets abrufen
+                const revenueSheet = ss.getSheetByName("Einnahmen");
+                const expenseSheet = ss.getSheetByName("Ausgaben");
+                const eigenSheet = ss.getSheetByName("Eigenbelege");
 
-            // Prüfen, ob alle benötigten Sheets vorhanden sind
-            if (!revenueSheet || !expenseSheet) {
-                ui.alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
-                return;
-            }
-
-            // Sheets validieren
-            if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
-                ui.alert("Die UStVA-Berechnung wurde abgebrochen, da Fehler in den Daten gefunden wurden.");
-                return;
-            }
-
-            // Daten aus den Sheets laden
-            const revenueData = revenueSheet.getDataRange().getValues();
-            const expenseData = expenseSheet.getDataRange().getValues();
-            const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
-
-            // Leere UStVA-Datenstruktur für alle Monate erstellen
-            const ustvaData = Object.fromEntries(
-                Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
-            );
-
-            // Helfer-Funktion zum Verarbeiten von Datenzeilen
-            const processRows = (data, isIncome, isEigen = false) => {
-                data.slice(1).forEach(row => { // Ab Zeile 2 (nach Header)
-                    processUStVARow(row, ustvaData, isIncome, isEigen);
-                });
-            };
-
-            // Daten verarbeiten
-            processRows(revenueData, true);         // Einnahmen
-            processRows(expenseData, false);        // Ausgaben
-            if (eigenData.length) {
-                processRows(eigenData, false, true); // Eigenbelege
-            }
-
-            // Ausgabe-Header erstellen
-            const outputRows = [
-                [
-                    "Zeitraum",
-                    "Steuerpflichtige Einnahmen",
-                    "Steuerfreie Inland-Einnahmen",
-                    "Steuerfreie Ausland-Einnahmen",
-                    "Steuerpflichtige Ausgaben",
-                    "Steuerfreie Inland-Ausgaben",
-                    "Steuerfreie Ausland-Ausgaben",
-                    "Eigenbelege steuerpflichtig",
-                    "Eigenbelege steuerfrei",
-                    "Nicht abzugsfähige VSt (Bewirtung)",
-                    "USt 7%",
-                    "USt 19%",
-                    "VSt 7%",
-                    "VSt 19%",
-                    "USt-Zahlung",
-                    "Ergebnis"
-                ]
-            ];
-
-            // Monatliche Daten ausgeben
-            config.common.months.forEach((name, i) => {
-                const month = i + 1;
-                outputRows.push(formatUStVARow(name, ustvaData[month]));
-
-                // Nach jedem Quartal eine Zusammenfassung einfügen
-                if (month % 3 === 0) {
-                    const quartalsNummer = month / 3;
-                    const quartalsStart = month - 2;
-                    outputRows.push(formatUStVARow(
-                        `Quartal ${quartalsNummer}`,
-                        aggregateUStVA(ustvaData, quartalsStart, month)
-                    ));
+                // Prüfen, ob alle benötigten Sheets vorhanden sind
+                if (!revenueSheet || !expenseSheet) {
+                    ui.alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
+                    return;
                 }
-            });
 
-            // Jahresergebnis anfügen
-            outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+                // Sheets validieren
+                if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
+                    ui.alert("Die UStVA-Berechnung wurde abgebrochen, da Fehler in den Daten gefunden wurden.");
+                    return;
+                }
 
-            // UStVA-Sheet erstellen oder aktualisieren
-            const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
-            ustvaSheet.clearContents();
+                // Daten aus den Sheets laden
+                const revenueData = revenueSheet.getDataRange().getValues();
+                const expenseData = expenseSheet.getDataRange().getValues();
+                const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
 
-            // Daten in das Sheet schreiben
-            const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
-            dataRange.setValues(outputRows);
+                // Leere UStVA-Datenstruktur für alle Monate erstellen
+                const ustvaData = Object.fromEntries(
+                    Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
+                );
 
-            // Header formatieren
-            ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+                // Helfer-Funktion zum Verarbeiten von Datenzeilen
+                const processRows = (data, isIncome, isEigen = false) => {
+                    data.slice(1).forEach(row => { // Ab Zeile 2 (nach Header)
+                        processUStVARow(row, ustvaData, isIncome, isEigen);
+                    });
+                };
 
-            // Quartalszellen formatieren
-            for (let i = 0; i < 4; i++) {
-                const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
-                ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+                // Daten verarbeiten
+                processRows(revenueData, true);         // Einnahmen
+                processRows(expenseData, false);        // Ausgaben
+                if (eigenData.length) {
+                    processRows(eigenData, false, true); // Eigenbelege
+                }
+
+                // Ausgabe-Header erstellen
+                const outputRows = [
+                    [
+                        "Zeitraum",
+                        "Steuerpflichtige Einnahmen",
+                        "Steuerfreie Inland-Einnahmen",
+                        "Steuerfreie Ausland-Einnahmen",
+                        "Steuerpflichtige Ausgaben",
+                        "Steuerfreie Inland-Ausgaben",
+                        "Steuerfreie Ausland-Ausgaben",
+                        "Eigenbelege steuerpflichtig",
+                        "Eigenbelege steuerfrei",
+                        "Nicht abzugsfähige VSt (Bewirtung)",
+                        "USt 7%",
+                        "USt 19%",
+                        "VSt 7%",
+                        "VSt 19%",
+                        "USt-Zahlung",
+                        "Ergebnis"
+                    ]
+                ];
+
+                // Monatliche Daten ausgeben
+                config.common.months.forEach((name, i) => {
+                    const month = i + 1;
+                    outputRows.push(formatUStVARow(name, ustvaData[month]));
+
+                    // Nach jedem Quartal eine Zusammenfassung einfügen
+                    if (month % 3 === 0) {
+                        const quartalsNummer = month / 3;
+                        const quartalsStart = month - 2;
+                        outputRows.push(formatUStVARow(
+                            `Quartal ${quartalsNummer}`,
+                            aggregateUStVA(ustvaData, quartalsStart, month)
+                        ));
+                    }
+                });
+
+                // Jahresergebnis anfügen
+                outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+
+                // UStVA-Sheet erstellen oder aktualisieren
+                const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
+                ustvaSheet.clearContents();
+
+                // Daten in das Sheet schreiben
+                const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+                dataRange.setValues(outputRows);
+
+                // Header formatieren
+                ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+
+                // Quartalszellen formatieren
+                for (let i = 0; i < 4; i++) {
+                    const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
+                    ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+                }
+
+                // Jahreszeile formatieren
+                ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
+                    .setBackground("#d9e6f2")
+                    .setFontWeight("bold");
+
+                // Zahlenformate anwenden
+                // Währungsformat für Beträge (Spalten 2-16)
+                ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
+
+                // Spaltenbreiten anpassen
+                ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+
+                // UStVA-Sheet aktivieren
+                ss.setActiveSheet(ustvaSheet);
+
+                ui.alert("UStVA wurde erfolgreich aktualisiert!");
+            } catch (e) {
+                console.error("Fehler bei der UStVA-Berechnung:", e);
+                SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
             }
+        };
 
-            // Jahreszeile formatieren
-            ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
-                .setBackground("#d9e6f2")
-                .setFontWeight("bold");
-
-            // Zahlenformate anwenden
-            // Währungsformat für Beträge (Spalten 2-16)
-            ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
-
-            // Spaltenbreiten anpassen
-            ustvaSheet.autoResizeColumns(1, outputRows[0].length);
-
-            // UStVA-Sheet aktivieren
-            ss.setActiveSheet(ustvaSheet);
-
-            ui.alert("UStVA wurde erfolgreich aktualisiert!");
-        } catch (e) {
-            console.error("Fehler bei der UStVA-Berechnung:", e);
-            SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
-        }
-    };
-
-    // Öffentliche API des Moduls
+// Öffentliche API des Moduls
     return {
         calculateUStVA,
         // Für Testzwecke könnten hier weitere Funktionen exportiert werden

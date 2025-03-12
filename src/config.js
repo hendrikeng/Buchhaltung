@@ -123,8 +123,8 @@ const config = {
                 kontoHaben: 8,         // H: Gegenkonto (Haben)
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
-                anmerkung: 11,         // K: Anmerkung
-                matchInfo: 12          // L: Match-Information zu Einnahmen/Ausgaben
+                matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
+                anmerkung: 12,         // L: Anmerkung
             }
         },
 

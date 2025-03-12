@@ -5,7 +5,7 @@
  * Konfiguration für die Buchhaltungsanwendung
  * Unterstützt die Buchhaltung für Holding und operative GmbH nach SKR04
  */
-const config = {
+const config$1 = {
     // Allgemeine Einstellungen
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
@@ -126,8 +126,8 @@ const config = {
                 kontoHaben: 8,         // H: Gegenkonto (Haben)
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
-                anmerkung: 11,         // K: Anmerkung
-                matchInfo: 12          // L: Match-Information zu Einnahmen/Ausgaben
+                matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
+                anmerkung: 12,         // L: Anmerkung
             }
         },
 
@@ -456,16 +456,16 @@ const config = {
 };
 
 // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-config.bank.category = [
-    ...Object.keys(config.einnahmen.categories),
-    ...Object.keys(config.ausgaben.categories),
-    ...config.gesellschafterkonto.category,
-    ...config.holdingTransfers.category,
-    ...config.eigenbelege.category
+config$1.bank.category = [
+    ...Object.keys(config$1.einnahmen.categories),
+    ...Object.keys(config$1.ausgaben.categories),
+    ...config$1.gesellschafterkonto.category,
+    ...config$1.holdingTransfers.category,
+    ...config$1.eigenbelege.category
 ];
 
 // Duplikate aus den Kategorien entfernen
-config.bank.category = [...new Set(config.bank.category)];
+config$1.bank.category = [...new Set(config$1.bank.category)];
 
 // src/helpers.js
 
@@ -531,7 +531,7 @@ const Helpers = {
     parseMwstRate(value) {
         if (value === null || value === undefined || value === "") {
             // Verwende den Standard-MwSt-Satz aus der Konfiguration oder fallback auf 19%
-            return config?.tax?.defaultMwst || 19;
+            return config$1?.tax?.defaultMwst || 19;
         }
 
         if (typeof value === "number") {
@@ -549,7 +549,7 @@ const Helpers = {
 
         // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
         if (isNaN(rate)) {
-            return config?.tax?.defaultMwst || 19;
+            return config$1?.tax?.defaultMwst || 19;
         }
 
         // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
@@ -686,7 +686,7 @@ const Helpers = {
 
         if (sheetName) {
             // Spaltenkonfiguration aus dem Sheetnamen bestimmen
-            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
+            const sheetConfig = config$1.sheets[sheetName.toLowerCase()]?.columns;
             if (sheetConfig && sheetConfig.zeitstempel) {
                 timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
             } else {
@@ -705,7 +705,7 @@ const Helpers = {
         const d = this.parseDate(row[timestampColumn]);
 
         // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
-        const targetYear = config?.tax?.year || new Date().getFullYear();
+        const targetYear = config$1?.tax?.year || new Date().getFullYear();
 
         // Wenn kein Datum oder das Jahr nicht übereinstimmt
         if (!d || d.getFullYear() !== targetYear) return 0;
@@ -795,11 +795,11 @@ const ImportModule = (() => {
 
         // Konfiguration für das richtige Sheet auswählen
         const sheetConfig = type === "Einnahme"
-            ? config.sheets.einnahmen.columns
-            : config.sheets.ausgaben.columns;
+            ? config$1.sheets.einnahmen.columns
+            : config$1.sheets.ausgaben.columns;
 
         // Konfiguration für das Änderungshistorie-Sheet
-        const historyConfig = config.sheets.aenderungshistorie.columns;
+        const historyConfig = config$1.sheets.aenderungshistorie.columns;
 
         while (files.hasNext()) {
             const file = files.next();
@@ -884,7 +884,7 @@ const ImportModule = (() => {
 
             // Header-Zeile für Änderungshistorie initialisieren, falls nötig
             if (history.getLastRow() === 0) {
-                const historyConfig = config.sheets.aenderungshistorie.columns;
+                const historyConfig = config$1.sheets.aenderungshistorie.columns;
                 const headerRow = ["", "", "", ""];
                 headerRow[historyConfig.datum - 1] = "Datum";
                 headerRow[historyConfig.typ - 1] = "Rechnungstyp";
@@ -898,7 +898,7 @@ const ImportModule = (() => {
             // Bereits importierte Dateien aus der Änderungshistorie erfassen
             const historyData = history.getDataRange().getValues();
             const existingFiles = new Set();
-            const historyConfig = config.sheets.aenderungshistorie.columns;
+            const historyConfig = config$1.sheets.aenderungshistorie.columns;
 
             // Überschriftenzeile überspringen und alle Dateinamen sammeln
             for (let i = 1; i < historyData.length; i++) {
@@ -1063,10 +1063,12 @@ const Validator = (() => {
      * Validiert eine Einnahmen- oder Ausgaben-Zeile
      * @param {Array} row - Die zu validierende Zeile
      * @param {number} rowIndex - Der Index der Zeile (für Fehlermeldungen)
+     * @param {string} sheetType - Der Typ des Sheets ("einnahmen" oder "ausgaben")
      * @returns {Array<string>} - Array mit Warnungen
      */
-    const validateRevenueAndExpenses = (row, rowIndex) => {
+    const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
         const warnings = [];
+        const columns = config$1.sheets[sheetType].columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1082,14 +1084,14 @@ const Validator = (() => {
 
         // Grundlegende Validierungsregeln
         const baseRules = [
-            {check: r => isEmpty(r[0]), message: "Rechnungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Rechnungsnummer fehlt."},
-            {check: r => isEmpty(r[2]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[3]), message: "Kunde fehlt."},
-            {check: r => isInvalidNumber(r[4]), message: "Nettobetrag fehlt oder ungültig."},
+            {check: r => isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
+            {check: r => isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
+            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
+            {check: r => isInvalidNumber(r[columns.nettobetrag - 1]), message: "Nettobetrag fehlt oder ungültig."},
             {
                 check: r => {
-                    const mwstStr = r[5] == null ? "" : r[5].toString().trim();
+                    const mwstStr = r[columns.mwstSatz - 1] == null ? "" : r[columns.mwstSatz - 1].toString().trim();
                     if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
 
                     // MwSt-Satz extrahieren und normalisieren
@@ -1097,47 +1099,53 @@ const Validator = (() => {
                     if (isNaN(mwst)) return true;
 
                     // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
-                    const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                    const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
                     return !allowedRates.includes(Math.round(mwst));
                 },
-                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config?.tax?.allowedMwst?.join('%, ')}% oder leer.`
+                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config$1?.tax?.allowedMwst?.join('%, ')}% oder leer.`
             }
         ];
 
         // Status-abhängige Regeln
-        const status = row[11] ? row[11].toString().trim().toLowerCase() : "";
+        const status = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
 
         // Regeln für offene Zahlungen
         const openPaymentRules = [
-            {check: r => !isEmpty(r[12]), message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'},
-            {check: r => !isEmpty(r[13]), message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'}
+            {
+                check: r => !isEmpty(r[columns.zahlungsart - 1]),
+                message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'
+            },
+            {
+                check: r => !isEmpty(r[columns.zahlungsdatum - 1]),
+                message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'
+            }
         ];
 
         // Regeln für bezahlte Zahlungen
         const paidPaymentRules = [
             {
-                check: r => isEmpty(r[12]),
+                check: r => isEmpty(r[columns.zahlungsart - 1]),
                 message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
-                check: r => isEmpty(r[13]),
+                check: r => isEmpty(r[columns.zahlungsdatum - 1]),
                 message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
                 check: r => {
-                    if (isEmpty(r[13])) return false; // Wird schon durch andere Regel geprüft
+                    if (isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
 
-                    const paymentDate = Helpers.parseDate(r[13]);
+                    const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                     return paymentDate ? paymentDate > new Date() : false;
                 },
                 message: "Zahlungsdatum darf nicht in der Zukunft liegen."
             },
             {
                 check: r => {
-                    if (isEmpty(r[13]) || isEmpty(r[0])) return false;
+                    if (isEmpty(r[columns.zahlungsdatum - 1]) || isEmpty(r[columns.datum - 1])) return false;
 
-                    const paymentDate = Helpers.parseDate(r[13]);
-                    const invoiceDate = Helpers.parseDate(r[0]);
+                    const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
+                    const invoiceDate = Helpers.parseDate(r[columns.datum - 1]);
                     return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
                 },
                 message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
@@ -1164,6 +1172,7 @@ const Validator = (() => {
 
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
+        const columns = config$1.sheets.bankbewegungen.columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1179,29 +1188,29 @@ const Validator = (() => {
 
         // Regeln für Header- und Footer-Zeilen
         const headerFooterRules = [
-            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
+            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
             {
-                check: r => !isEmpty(r[2]) && !isNaN(parseFloat(r[2].toString().trim())),
+                check: r => !isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
                 message: "Betrag darf nicht gesetzt sein."
             },
-            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
-            {check: r => !isEmpty(r[4]), message: "Typ darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[5]), message: "Kategorie darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[6]), message: "Konto (Soll) darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[7]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
+            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => !isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
+            {check: r => !isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
         ];
 
         // Regeln für Datenzeilen
         const dataRowRules = [
-            {check: r => isEmpty(r[0]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[1]), message: "Buchungstext fehlt."},
-            {check: r => isEmpty(r[2]) || isInvalidNumber(r[2]), message: "Betrag fehlt oder ungültig."},
-            {check: r => isEmpty(r[3]) || isInvalidNumber(r[3]), message: "Saldo fehlt oder ungültig."},
-            {check: r => isEmpty(r[4]), message: "Typ fehlt."},
-            {check: r => isEmpty(r[5]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[6]), message: "Konto (Soll) fehlt."},
-            {check: r => isEmpty(r[7]), message: "Gegenkonto (Haben) fehlt."}
+            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+            {check: r => isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
+            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
+            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
+            {check: r => isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
         ];
 
         // Zeilen validieren
@@ -1243,7 +1252,7 @@ const Validator = (() => {
             const revenueWarnings = revData.length > 1
                 ? revData.slice(1).reduce((acc, row, i) => {
                     if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2));
+                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "einnahmen"));
                     }
                     return acc;
                 }, [])
@@ -1253,7 +1262,7 @@ const Validator = (() => {
             const expenseWarnings = expData.length > 1
                 ? expData.slice(1).reduce((acc, row, i) => {
                     if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2));
+                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "ausgaben"));
                     }
                     return acc;
                 }, [])
@@ -1331,7 +1340,7 @@ const Validator = (() => {
 
             case 'mwst':
                 const mwst = Helpers.parseMwstRate(value);
-                const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
                 return {
                     isValid: allowedRates.includes(Math.round(mwst)),
                     message: allowedRates.includes(Math.round(mwst))
@@ -1387,11 +1396,11 @@ const RefreshModule = (() => {
             // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
             let columns;
             if (name === "Einnahmen") {
-                columns = config.sheets.einnahmen.columns;
+                columns = config$1.sheets.einnahmen.columns;
             } else if (name === "Ausgaben") {
-                columns = config.sheets.ausgaben.columns;
+                columns = config$1.sheets.ausgaben.columns;
             } else if (name === "Eigenbelege") {
-                columns = config.sheets.eigenbelege.columns;
+                columns = config$1.sheets.eigenbelege.columns;
             } else {
                 return false; // Unbekanntes Sheet
             }
@@ -1440,23 +1449,23 @@ const RefreshModule = (() => {
             if (name === "Einnahmen") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config.einnahmen.categories)
+                    Object.keys(config$1.einnahmen.categories)
                 );
             } else if (name === "Ausgaben") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config.ausgaben.categories)
+                    Object.keys(config$1.ausgaben.categories)
                 );
             } else if (name === "Eigenbelege") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    config.eigenbelege.category
+                    config$1.eigenbelege.category
                 );
 
                 // Für Eigenbelege: Status-Dropdown hinzufügen
                 Validator.validateDropdown(
                     sheet, 2, columns.status, numRows, 1,
-                    config.eigenbelege.status
+                    config$1.eigenbelege.status
                 );
 
                 // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
@@ -1470,7 +1479,7 @@ const RefreshModule = (() => {
             // Zahlungsart-Dropdown für alle Blätter
             Validator.validateDropdown(
                 sheet, 2, columns.zahlungsart, numRows, 1,
-                config.common.paymentType
+                config$1.common.paymentType
             );
 
             // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
@@ -1507,56 +1516,69 @@ const RefreshModule = (() => {
             const numDataRows = lastRow - firstDataRow + 1;
             const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
+            // Bankbewegungen-Konfiguration für Spalten holen
+            const columns = config$1.sheets.bankbewegungen.columns;
+
+            // Konfigurationen für Spalten in den verschiedenen Sheets
+            const einnahmenCols = config$1.sheets.einnahmen.columns;
+            const ausgabenCols = config$1.sheets.ausgaben.columns;
+
+            // Spaltenbuchstaben aus den Indizes generieren
+            const columnLetters = {};
+            Object.entries(columns).forEach(([key, index]) => {
+                columnLetters[key] = Helpers.getColumnLetter(index);
+            });
+
             // Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
             if (transRows > 0) {
-                sheet.getRange(firstDataRow, 4, transRows, 1).setFormulas(
+                sheet.getRange(firstDataRow, columns.saldo, transRows, 1).setFormulas(
                     Array.from({length: transRows}, (_, i) =>
-                        [`=D${firstDataRow + i - 1}+C${firstDataRow + i}`]
+                        [`=${columnLetters.saldo}${firstDataRow + i - 1}+${columnLetters.betrag}${firstDataRow + i}`]
                     )
                 );
             }
 
             // Transaktionstyp basierend auf dem Betrag setzen (Einnahme/Ausgabe)
-            const amounts = sheet.getRange(firstDataRow, 3, numDataRows, 1).getValues();
+            const amounts = sheet.getRange(firstDataRow, columns.betrag, numDataRows, 1).getValues();
             const typeValues = amounts.map(([val]) => {
                 const amt = parseFloat(val) || 0;
                 return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
             });
-            sheet.getRange(firstDataRow, 5, numDataRows, 1).setValues(typeValues);
+            sheet.getRange(firstDataRow, columns.transaktionstyp, numDataRows, 1).setValues(typeValues);
 
             // Dropdown-Validierungen für Typ, Kategorie und Konten
             Validator.validateDropdown(
-                sheet, firstDataRow, 5, numDataRows, 1,
-                config.bank.type
+                sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
+                config$1.bank.type
             );
 
             Validator.validateDropdown(
-                sheet, firstDataRow, 6, numDataRows, 1,
-                config.bank.category
+                sheet, firstDataRow, columns.kategorie, numDataRows, 1,
+                config$1.bank.category
             );
 
             // Konten für Dropdown-Validierung sammeln
-            const allowedKontoSoll = Object.values(config.einnahmen.kontoMapping)
-                .concat(Object.values(config.ausgaben.kontoMapping))
+            const allowedKontoSoll = Object.values(config$1.einnahmen.kontoMapping)
+                .concat(Object.values(config$1.ausgaben.kontoMapping))
                 .map(m => m.soll);
 
-            const allowedGegenkonto = Object.values(config.einnahmen.kontoMapping)
-                .concat(Object.values(config.ausgaben.kontoMapping))
+            const allowedGegenkonto = Object.values(config$1.einnahmen.kontoMapping)
+                .concat(Object.values(config$1.ausgaben.kontoMapping))
                 .map(m => m.gegen);
 
             // Dropdown-Validierungen für Konten setzen
             Validator.validateDropdown(
-                sheet, firstDataRow, 7, numDataRows, 1,
+                sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
                 allowedKontoSoll
             );
 
             Validator.validateDropdown(
-                sheet, firstDataRow, 8, numDataRows, 1,
+                sheet, firstDataRow, columns.kontoHaben, numDataRows, 1,
                 allowedGegenkonto
             );
 
             // Bedingte Formatierung für Transaktionstyp-Spalte
-            Helpers.setConditionalFormattingForColumn(sheet, "E", [
+            Helpers.setConditionalFormattingForColumn(sheet, columnLetters.transaktionstyp, [
                 {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
                 {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
             ]);
@@ -1566,25 +1588,25 @@ const RefreshModule = (() => {
             // Daten aus Einnahmen-Sheet
             const einnahmenSheet = ss.getSheetByName("Einnahmen");
             let einnahmenData = [];
+
             if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
                 const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
-                // Jetzt auch Beträge (E) und bezahlte Beträge (I) laden
-                einnahmenData = einnahmenSheet.getRange(2, 2, numEinnahmenRows, 8).getDisplayValues();
-                // B (0), E (3), I (7) Spaltenindizes nach 0-basierter Nummerierung
+                // Die relevanten Spalten laden basierend auf der Konfiguration
+                einnahmenData = einnahmenSheet.getRange(2, einnahmenCols.rechnungsnummer, numEinnahmenRows, 8).getDisplayValues();
             }
 
             // Daten aus Ausgaben-Sheet
             const ausgabenSheet = ss.getSheetByName("Ausgaben");
             let ausgabenData = [];
+
             if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
                 const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
-                // Jetzt auch Beträge (E) und bezahlte Beträge (I) laden
-                ausgabenData = ausgabenSheet.getRange(2, 2, numAusgabenRows, 8).getDisplayValues();
-                // B (0), E (3), I (7) Spaltenindizes nach 0-basierter Nummerierung
+                // Die relevanten Spalten laden basierend auf der Konfiguration
+                ausgabenData = ausgabenSheet.getRange(2, ausgabenCols.rechnungsnummer, numAusgabenRows, 8).getDisplayValues();
             }
 
             // Bankbewegungen Daten für Verarbeitung holen
-            const bankData = sheet.getRange(firstDataRow, 1, numDataRows, 12).getDisplayValues();
+            const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
 
             // Cache für schnellere Suche
             const einnahmenMap = createReferenceMap(einnahmenData);
@@ -1596,11 +1618,11 @@ const RefreshModule = (() => {
                 const row = bankData[i];
 
                 // Prüfe, ob es sich um die Endsaldo-Zeile handelt
-                const label = row[1] ? row[1].toString().trim().toLowerCase() : "";
+                const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
                 if (rowIndex === lastRow && label === "endsaldo") continue;
 
-                const tranType = row[4]; // Spalte E: Einnahme/Ausgabe
-                const refNumber = row[8]; // Spalte I: Referenznummer
+                const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
+                const refNumber = row[columns.referenz - 1];       // Referenznummer
 
                 // Nur prüfen, wenn Referenz nicht leer ist
                 if (refNumber && refNumber.trim() !== "") {
@@ -1610,7 +1632,7 @@ const RefreshModule = (() => {
                     const refTrimmed = refNumber.toString().trim();
 
                     // Betrag für den Vergleich (als absoluter Wert)
-                    const betragValue = Math.abs(parseFloat(row[2]) || 0);
+                    const betragValue = Math.abs(parseFloat(row[columns.betrag - 1]) || 0);
 
                     // In Abhängigkeit vom Typ im entsprechenden Sheet suchen
                     if (tranType === "Einnahme") {
@@ -1635,11 +1657,11 @@ const RefreshModule = (() => {
                                     matchResult.matchType === "Teilzahlung") &&
                                 tranType === "Einnahme") {
                                 // Bankbewegungsdatum holen (aus Spalte A)
-                                const zahlungsDatum = row[0];
+                                const zahlungsDatum = row[columns.datum - 1];
                                 if (zahlungsDatum) {
                                     // Zahldatum im Einnahmen-Sheet aktualisieren (nur wenn leer)
                                     const einnahmenRow = matchResult.row;
-                                    const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, 14); // Spalte N für Zahldatum
+                                    const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
                                     const aktuellDatum = zahldatumRange.getValue();
 
                                     if (!aktuellDatum || aktuellDatum === "") {
@@ -1672,11 +1694,11 @@ const RefreshModule = (() => {
                                     matchResult.matchType === "Teilzahlung") &&
                                 ausgabenSheet) {
                                 // Bankbewegungsdatum holen (aus Spalte A)
-                                const zahlungsDatum = row[0];
+                                const zahlungsDatum = row[columns.datum - 1];
                                 if (zahlungsDatum) {
                                     // Zahldatum im Ausgaben-Sheet aktualisieren (nur wenn leer)
                                     const ausgabenRow = matchResult.row;
-                                    const zahldatumRange = ausgabenSheet.getRange(ausgabenRow, 14); // Spalte N für Zahldatum
+                                    const zahldatumRange = ausgabenSheet.getRange(ausgabenRow, ausgabenCols.zahlungsdatum);
                                     const aktuellDatum = zahldatumRange.getValue();
 
                                     if (!aktuellDatum || aktuellDatum === "") {
@@ -1717,13 +1739,13 @@ const RefreshModule = (() => {
                                 // Bei Gutschriften auch im Einnahmen-Sheet aktualisieren - hier als negative Zahlung
                                 if (einnahmenSheet) {
                                     // Bankbewegungsdatum holen (aus Spalte A)
-                                    const gutschriftDatum = row[0];
+                                    const gutschriftDatum = row[columns.datum - 1];
                                     if (gutschriftDatum) {
                                         // Gutschriftdatum im Einnahmen-Sheet aktualisieren und "G-" vor die Referenz setzen
                                         const einnahmenRow = gutschriftMatch.row;
 
                                         // Zahldatum aktualisieren (nur wenn leer)
-                                        const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, 14); // Spalte N für Zahldatum
+                                        const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
                                         const aktuellDatum = zahldatumRange.getValue();
 
                                         if (!aktuellDatum || aktuellDatum === "") {
@@ -1732,7 +1754,7 @@ const RefreshModule = (() => {
                                         }
 
                                         // Optional: Die Referenz mit "G-" kennzeichnen, um Gutschrift zu markieren
-                                        const refRange = einnahmenSheet.getRange(einnahmenRow, 2); // Spalte B für Referenz
+                                        const refRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.rechnungsnummer);
                                         const currentRef = refRange.getValue();
                                         if (currentRef && !currentRef.toString().startsWith("G-")) {
                                             refRange.setValue("G-" + currentRef);
@@ -1762,37 +1784,37 @@ const RefreshModule = (() => {
                         }
                     }
 
-                    // Ergebnis in Spalte L speichern
-                    row[11] = matchFound ? matchInfo : "";
+                    // Ergebnis in Spalte matchInfo speichern
+                    row[columns.matchInfo - 1] = matchFound ? matchInfo : "";
                 } else {
-                    row[11] = ""; // Leere Spalte L
+                    row[columns.matchInfo - 1] = ""; // Leere Spalte matchInfo
                 }
 
                 // Kontonummern basierend auf Kategorie setzen
-                const category = row[5] || "";
+                const category = row[columns.kategorie - 1] || "";
                 let mapping = null;
 
                 if (tranType === "Einnahme") {
-                    mapping = config.einnahmen.kontoMapping[category];
+                    mapping = config$1.einnahmen.kontoMapping[category];
                 } else if (tranType === "Ausgabe") {
-                    mapping = config.ausgaben.kontoMapping[category];
+                    mapping = config$1.ausgaben.kontoMapping[category];
                 }
 
                 if (!mapping) {
                     mapping = {soll: "Manuell prüfen", gegen: "Manuell prüfen"};
                 }
 
-                row[6] = mapping.soll;
-                row[7] = mapping.gegen;
+                row[columns.kontoSoll - 1] = mapping.soll;
+                row[columns.kontoHaben - 1] = mapping.gegen;
             }
 
-            // Zuerst nur Spalte L aktualisieren (für bessere Performance und Fehlerbehandlung)
-            const matchColumn = bankData.map(row => [row[11]]);
-            sheet.getRange(firstDataRow, 12, numDataRows, 1).setValues(matchColumn);
+            // Zuerst nur Spalte matchInfo aktualisieren (für bessere Performance und Fehlerbehandlung)
+            const matchColumn = bankData.map(row => [row[columns.matchInfo - 1]]);
+            sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchColumn);
 
             // Dann die restlichen Daten zurückschreiben
-            sheet.getRange(firstDataRow, 1, numDataRows, 11).setValues(
-                bankData.map(row => row.slice(0, 11))
+            sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo - 1).setValues(
+                bankData.map(row => row.slice(0, columns.matchInfo - 1))
             );
 
             // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
@@ -1807,14 +1829,14 @@ const RefreshModule = (() => {
             for (let i = 0; i < bankData.length; i++) {
                 try {
                     const rowIndex = firstDataRow + i;
-                    const matchInfo = bankData[i][11]; // Spalte L mit Match-Info
+                    const matchInfo = bankData[i][columns.matchInfo - 1]; // Spalte mit Match-Info
 
                     // Nur formatieren, wenn die Zeile existiert und eine Match-Info hat
                     if (rowIndex <= sheet.getLastRow() && matchInfo && matchInfo.trim() !== "") {
                         console.log(`Versuche Formatierung für Zeile ${rowIndex}, Match: "${matchInfo}"`);
 
                         // Zuerst den Hintergrund zurücksetzen
-                        const rowRange = sheet.getRange(rowIndex, 1, 1, 12);
+                        const rowRange = sheet.getRange(rowIndex, 1, 1, columns.matchInfo);
                         rowRange.setBackground(null);
 
                         // Kurze Pause, um die Sheets-API nicht zu überlasten
@@ -1859,7 +1881,7 @@ const RefreshModule = (() => {
             console.log("Zeilenformatierung abgeschlossen");
 
             // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
-            Helpers.setConditionalFormattingForColumn(sheet, "L", [
+            Helpers.setConditionalFormattingForColumn(sheet, columnLetters.matchInfo, [
                 // Grundlegende Match-Typen
                 {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
                 {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
@@ -1877,7 +1899,7 @@ const RefreshModule = (() => {
             ]);
 
             // Endsaldo-Zeile aktualisieren
-            const lastRowText = sheet.getRange(lastRow, 2).getDisplayValue().toString().trim().toLowerCase();
+            const lastRowText = sheet.getRange(lastRow, columns.buchungstext).getDisplayValue().toString().trim().toLowerCase();
             const formattedDate = Utilities.formatDate(
                 new Date(),
                 Session.getScriptTimeZone(),
@@ -1885,23 +1907,16 @@ const RefreshModule = (() => {
             );
 
             if (lastRowText === "endsaldo") {
-                sheet.getRange(lastRow, 1).setValue(formattedDate);
-                sheet.getRange(lastRow, 4).setFormula(`=D${lastRow - 1}`);
+                sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
+                sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
             } else {
-                sheet.appendRow([
-                    formattedDate,
-                    "Endsaldo",
-                    "",
-                    sheet.getRange(lastRow, 4).getValue(),
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    ""
-                ]);
+                // Erstelle eine neue Endsaldo-Zeile mit den richtigen Spalten
+                const newRow = Array(sheet.getLastColumn()).fill("");
+                newRow[columns.datum - 1] = formattedDate;
+                newRow[columns.buchungstext - 1] = "Endsaldo";
+                newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
+
+                sheet.appendRow(newRow);
             }
 
             // Spaltenbreiten anpassen
@@ -1928,8 +1943,14 @@ const RefreshModule = (() => {
      */
     function createReferenceMap(data) {
         const map = {};
+
+        // Da die Indizes bei data[] sich auf die Spalten im Range beziehen (nicht auf das komplette Sheet),
+        // müssen wir wissen, welche Spalten in welcher Reihenfolge geladen wurden
+        // In der aktuellen Implementation werden diese Spalten geladen:
+        // Rechnungsnummer(0), Nettobetrag(3), MwSt-Satz(4), Bezahlt(7)
+
         for (let i = 0; i < data.length; i++) {
-            const ref = data[i][0]; // Referenz in Spalte B (Index 0)
+            const ref = data[i][0]; // Referenz (erste Spalte im geladenen Range)
             if (ref && ref.trim() !== "") {
                 // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
                 let key = ref.trim();
@@ -1938,7 +1959,7 @@ const RefreshModule = (() => {
                     key = key.substring(2); // Entferne "G-" Prefix für den Schlüssel
                 }
 
-                // Netto-Betrag aus Spalte E (Index 3)
+                // Netto-Betrag aus dritter Spalte im geladenen Range
                 let betrag = 0;
                 if (data[i][3] !== undefined && data[i][3] !== null && data[i][3] !== "") {
                     // Betragsstring säubern
@@ -1949,7 +1970,7 @@ const RefreshModule = (() => {
                     betrag = Math.abs(betrag);
                 }
 
-                // MwSt-Satz aus Spalte F (Index 4)
+                // MwSt-Satz aus vierter Spalte im geladenen Range
                 let mwstRate = 0;
                 if (data[i][4] !== undefined && data[i][4] !== null && data[i][4] !== "") {
                     // MwSt-Satz säubern und parsen
@@ -1965,7 +1986,7 @@ const RefreshModule = (() => {
                     }
                 }
 
-                // Bezahlter Betrag aus Spalte I (Index 7)
+                // Bezahlter Betrag aus achter Spalte im geladenen Range
                 let bezahlt = 0;
                 if (data[i][7] !== undefined && data[i][7] !== null && data[i][7] !== "") {
                     // Betragsstring säubern
@@ -1979,7 +2000,7 @@ const RefreshModule = (() => {
                 // Speichere auch den Zeilen-Index und die Beträge
                 map[key] = {
                     ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
-                    row: i + 2,
+                    row: i + 2,      // +2 weil wir bei Zeile 2 beginnen (erste Zeile ist Header)
                     betrag: betrag,
                     mwstRate: mwstRate,
                     bezahlt: bezahlt,
@@ -2001,16 +2022,21 @@ const RefreshModule = (() => {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const bankSheet = ss.getSheetByName("Bankbewegungen");
 
+        // Konfigurationen für Spaltenindizes aus config
+        const bankCols = config$1.sheets.bankbewegungen.columns;
+        const einnahmenCols = config$1.sheets.einnahmen.columns;
+        const ausgabenCols = config$1.sheets.ausgaben.columns;
+
         // Map zum Speichern der zugeordneten Referenzen und ihrer Bankbewegungsinformationen
         const bankZuordnungen = {};
 
         if (bankSheet && bankSheet.getLastRow() > 2) {
-            const bankData = bankSheet.getRange(3, 1, bankSheet.getLastRow() - 2, 12).getDisplayValues();
+            const bankData = bankSheet.getRange(3, 1, bankSheet.getLastRow() - 2, bankCols.matchInfo).getDisplayValues();
 
             for (const row of bankData) {
-                const matchInfo = row[11]; // Spalte L: Match-Info
-                const transTyp = row[4];   // Spalte E: Einnahme/Ausgabe
-                const bankDatum = row[0];  // Spalte A: Datum
+                const matchInfo = row[bankCols.matchInfo - 1]; // Match-Info
+                const transTyp = row[bankCols.transaktionstyp - 1]; // Einnahme/Ausgabe
+                const bankDatum = row[bankCols.datum - 1]; // Datum
 
                 if (matchInfo && matchInfo.trim() !== "") {
                     // Spezialfall: Gutschriften zu Einnahmen
@@ -2081,15 +2107,15 @@ const RefreshModule = (() => {
             const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
 
             // Hole Werte aus dem Einnahmen-Sheet
-            const einnahmenData = einnahmenSheet.getRange(2, 1, numEinnahmenRows, 14).getValues();
+            const einnahmenData = einnahmenSheet.getRange(2, 1, numEinnahmenRows, einnahmenCols.zahlungsdatum).getValues();
 
             // Für jede Zeile prüfen
             for (let i = 0; i < einnahmenData.length; i++) {
                 const row = i + 2; // Aktuelle Zeile im Sheet
-                const nettoBetrag = parseFloat(einnahmenData[i][4]) || 0; // Spalte E
-                const bezahltBetrag = parseFloat(einnahmenData[i][8]) || 0; // Spalte I
-                const zahlungsDatum = einnahmenData[i][13]; // Spalte N
-                const referenz = einnahmenData[i][1]; // Spalte B
+                const nettoBetrag = parseFloat(einnahmenData[i][einnahmenCols.nettobetrag - 1]) || 0;
+                const bezahltBetrag = parseFloat(einnahmenData[i][einnahmenCols.bezahlt - 1]) || 0;
+                const zahlungsDatum = einnahmenData[i][einnahmenCols.zahlungsdatum - 1];
+                const referenz = einnahmenData[i][einnahmenCols.rechnungsnummer - 1];
 
                 // Prüfe, ob es eine Gutschrift ist
                 const isGutschrift = referenz && referenz.toString().startsWith("G-");
@@ -2099,7 +2125,7 @@ const RefreshModule = (() => {
                 const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
 
                 // Zeilenbereich für die Formatierung
-                const rowRange = einnahmenSheet.getRange(row, 1, 1, 14);
+                const rowRange = einnahmenSheet.getRange(row, 1, 1, einnahmenCols.zahlungsdatum);
 
                 // Status basierend auf Zahlung setzen
                 if (Math.abs(bezahltBetrag) >= Math.abs(nettoBetrag) * 0.999) { // 99.9% bezahlt wegen Rundungsfehlern
@@ -2131,7 +2157,7 @@ const RefreshModule = (() => {
                     rowRange.setBackground(null);
                 }
 
-                // Optional: Wenn eine Bankzuordnung existiert, in Spalte O einen Hinweis setzen
+                // Optional: Wenn eine Bankzuordnung existiert, in Spalte Bank-Abgleich einen Hinweis setzen
                 if (hatBankzuordnung) {
                     const zuordnungsInfo = bankZuordnungen[zuordnungsKey];
                     let infoText = "✓ Bank: " + zuordnungsInfo.bankDatum;
@@ -2141,22 +2167,22 @@ const RefreshModule = (() => {
                         infoText += " + " + zuordnungsInfo.additional.length + " weitere";
                     }
 
-                    // Titelzeile für Spalte O setzen, falls noch nicht vorhanden
-                    if (einnahmenSheet.getRange(1, 15).getValue() === "") {
-                        einnahmenSheet.getRange(1, 15).setValue("Bank-Abgleich");
+                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+                    if (einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).getValue() === "") {
+                        einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).setValue("Bank-Abgleich");
                     }
 
-                    einnahmenSheet.getRange(row, 15).setValue(infoText);
+                    einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).setValue(infoText);
                 } else {
-                    // Titelzeile für Spalte O setzen, falls noch nicht vorhanden
-                    if (einnahmenSheet.getRange(1, 15).getValue() === "") {
-                        einnahmenSheet.getRange(1, 15).setValue("Bank-Abgleich");
+                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+                    if (einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).getValue() === "") {
+                        einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).setValue("Bank-Abgleich");
                     }
 
                     // Setze die Zelle leer, falls keine Zuordnung existiert
-                    const currentValue = einnahmenSheet.getRange(row, 15).getValue();
+                    const currentValue = einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).getValue();
                     if (currentValue && currentValue.toString().startsWith("✓ Bank:")) {
-                        einnahmenSheet.getRange(row, 15).setValue("");
+                        einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).setValue("");
                     }
                 }
             }
@@ -2167,21 +2193,21 @@ const RefreshModule = (() => {
             const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
 
             // Hole Werte aus dem Ausgaben-Sheet
-            const ausgabenData = ausgabenSheet.getRange(2, 1, numAusgabenRows, 14).getValues();
+            const ausgabenData = ausgabenSheet.getRange(2, 1, numAusgabenRows, ausgabenCols.zahlungsdatum).getValues();
 
             // Für jede Zeile prüfen
             for (let i = 0; i < ausgabenData.length; i++) {
                 const row = i + 2; // Aktuelle Zeile im Sheet
-                const nettoBetrag = parseFloat(ausgabenData[i][4]) || 0; // Spalte E
-                const bezahltBetrag = parseFloat(ausgabenData[i][8]) || 0; // Spalte I
-                const zahlungsDatum = ausgabenData[i][13]; // Spalte N
+                const nettoBetrag = parseFloat(ausgabenData[i][ausgabenCols.nettobetrag - 1]) || 0;
+                const bezahltBetrag = parseFloat(ausgabenData[i][ausgabenCols.bezahlt - 1]) || 0;
+                const zahlungsDatum = ausgabenData[i][ausgabenCols.zahlungsdatum - 1];
 
                 // Prüfe, ob diese Ausgabe im Banking-Sheet zugeordnet wurde
                 const zuordnungsKey = `ausgabe#${row}`;
                 const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
 
                 // Zeilenbereich für die Formatierung
-                const rowRange = ausgabenSheet.getRange(row, 1, 1, 14);
+                const rowRange = ausgabenSheet.getRange(row, 1, 1, ausgabenCols.zahlungsdatum);
 
                 // Status basierend auf Zahlung setzen
                 if (Math.abs(bezahltBetrag) >= Math.abs(nettoBetrag) * 0.999) { // 99.9% bezahlt wegen Rundungsfehlern
@@ -2210,7 +2236,7 @@ const RefreshModule = (() => {
                     rowRange.setBackground(null);
                 }
 
-                // Optional: Wenn eine Bankzuordnung existiert, in Spalte O einen Hinweis setzen
+                // Optional: Wenn eine Bankzuordnung existiert, in Spalte Bank-Abgleich einen Hinweis setzen
                 if (hatBankzuordnung) {
                     const zuordnungsInfo = bankZuordnungen[zuordnungsKey];
                     let infoText = "✓ Bank: " + zuordnungsInfo.bankDatum;
@@ -2220,22 +2246,22 @@ const RefreshModule = (() => {
                         infoText += " + " + zuordnungsInfo.additional.length + " weitere";
                     }
 
-                    // Titelzeile für Spalte O setzen, falls noch nicht vorhanden
-                    if (ausgabenSheet.getRange(1, 15).getValue() === "") {
-                        ausgabenSheet.getRange(1, 15).setValue("Bank-Abgleich");
+                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+                    if (ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).getValue() === "") {
+                        ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).setValue("Bank-Abgleich");
                     }
 
-                    ausgabenSheet.getRange(row, 15).setValue(infoText);
+                    ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).setValue(infoText);
                 } else {
-                    // Titelzeile für Spalte O setzen, falls noch nicht vorhanden
-                    if (ausgabenSheet.getRange(1, 15).getValue() === "") {
-                        ausgabenSheet.getRange(1, 15).setValue("Bank-Abgleich");
+                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+                    if (ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).getValue() === "") {
+                        ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).setValue("Bank-Abgleich");
                     }
 
                     // Setze die Zelle leer, falls keine Zuordnung existiert
-                    const currentValue = ausgabenSheet.getRange(row, 15).getValue();
+                    const currentValue = ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).getValue();
                     if (currentValue && currentValue.toString().startsWith("✓ Bank:")) {
-                        ausgabenSheet.getRange(row, 15).setValue("");
+                        ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).setValue("");
                     }
                 }
             }
@@ -2441,36 +2467,40 @@ const UStVACalculator = (() => {
      */
     const processUStVARow = (row, data, isIncome, isEigen = false) => {
         try {
+            // Sheet-Typ bestimmen
+            const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
+            const columns = config$1.sheets[sheetType].columns;
+
             // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
-            const paymentDate = Helpers.parseDate(row[13]);
+            const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
             if (!paymentDate || paymentDate > new Date()) return;
 
             // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
-            const month = Helpers.getMonthFromRow(row);
+            const month = Helpers.getMonthFromRow(row, sheetType);
             if (!month || month < 1 || month > 12) return;
 
             // Beträge aus der Zeile extrahieren
-            const netto = Helpers.parseCurrency(row[4]);
-            const restNetto = Helpers.parseCurrency(row[10]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+            const netto = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const restNetto = Helpers.parseCurrency(row[columns.steuerbemessung - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
             const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
 
             // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
             if (gezahlt === 0) return;
 
             // MwSt-Satz normalisieren
-            const mwstRate = Helpers.parseMwstRate(row[5]);
+            const mwstRate = Helpers.parseMwstRate(row[columns.mwstSatz - 1]);
             const roundedRate = Math.round(mwstRate);
 
             // Steuer berechnen
             const tax = gezahlt * (mwstRate / 100);
 
             // Kategorie ermitteln
-            const category = row[2]?.toString().trim() || "";
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             // Je nach Typ (Einnahme/Ausgabe/Eigenbeleg) unterschiedlich verarbeiten
             if (isIncome) {
                 // EINNAHMEN
-                const catCfg = config.einnahmen.categories[category] ?? {};
+                const catCfg = config$1.einnahmen.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2493,7 +2523,7 @@ const UStVACalculator = (() => {
                 }
             } else if (isEigen) {
                 // EIGENBELEGE
-                const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
                 const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei") {
@@ -2521,7 +2551,7 @@ const UStVACalculator = (() => {
                 }
             } else {
                 // AUSGABEN
-                const catCfg = config.ausgaben.categories[category] ?? {};
+                const catCfg = config$1.ausgaben.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2610,133 +2640,134 @@ const UStVACalculator = (() => {
      * Hauptfunktion zur Berechnung der UStVA
      * Sammelt Daten aus allen relevanten Sheets und erstellt ein UStVA-Sheet
      */
+        // Continuing from previous code
     const calculateUStVA = () => {
-        try {
-            const ss = SpreadsheetApp.getActiveSpreadsheet();
-            const ui = SpreadsheetApp.getUi();
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const ui = SpreadsheetApp.getUi();
 
-            // Benötigte Sheets abrufen
-            const revenueSheet = ss.getSheetByName("Einnahmen");
-            const expenseSheet = ss.getSheetByName("Ausgaben");
-            const eigenSheet = ss.getSheetByName("Eigenbelege");
+                // Benötigte Sheets abrufen
+                const revenueSheet = ss.getSheetByName("Einnahmen");
+                const expenseSheet = ss.getSheetByName("Ausgaben");
+                const eigenSheet = ss.getSheetByName("Eigenbelege");
 
-            // Prüfen, ob alle benötigten Sheets vorhanden sind
-            if (!revenueSheet || !expenseSheet) {
-                ui.alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
-                return;
-            }
-
-            // Sheets validieren
-            if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
-                ui.alert("Die UStVA-Berechnung wurde abgebrochen, da Fehler in den Daten gefunden wurden.");
-                return;
-            }
-
-            // Daten aus den Sheets laden
-            const revenueData = revenueSheet.getDataRange().getValues();
-            const expenseData = expenseSheet.getDataRange().getValues();
-            const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
-
-            // Leere UStVA-Datenstruktur für alle Monate erstellen
-            const ustvaData = Object.fromEntries(
-                Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
-            );
-
-            // Helfer-Funktion zum Verarbeiten von Datenzeilen
-            const processRows = (data, isIncome, isEigen = false) => {
-                data.slice(1).forEach(row => { // Ab Zeile 2 (nach Header)
-                    processUStVARow(row, ustvaData, isIncome, isEigen);
-                });
-            };
-
-            // Daten verarbeiten
-            processRows(revenueData, true);         // Einnahmen
-            processRows(expenseData, false);        // Ausgaben
-            if (eigenData.length) {
-                processRows(eigenData, false, true); // Eigenbelege
-            }
-
-            // Ausgabe-Header erstellen
-            const outputRows = [
-                [
-                    "Zeitraum",
-                    "Steuerpflichtige Einnahmen",
-                    "Steuerfreie Inland-Einnahmen",
-                    "Steuerfreie Ausland-Einnahmen",
-                    "Steuerpflichtige Ausgaben",
-                    "Steuerfreie Inland-Ausgaben",
-                    "Steuerfreie Ausland-Ausgaben",
-                    "Eigenbelege steuerpflichtig",
-                    "Eigenbelege steuerfrei",
-                    "Nicht abzugsfähige VSt (Bewirtung)",
-                    "USt 7%",
-                    "USt 19%",
-                    "VSt 7%",
-                    "VSt 19%",
-                    "USt-Zahlung",
-                    "Ergebnis"
-                ]
-            ];
-
-            // Monatliche Daten ausgeben
-            config.common.months.forEach((name, i) => {
-                const month = i + 1;
-                outputRows.push(formatUStVARow(name, ustvaData[month]));
-
-                // Nach jedem Quartal eine Zusammenfassung einfügen
-                if (month % 3 === 0) {
-                    const quartalsNummer = month / 3;
-                    const quartalsStart = month - 2;
-                    outputRows.push(formatUStVARow(
-                        `Quartal ${quartalsNummer}`,
-                        aggregateUStVA(ustvaData, quartalsStart, month)
-                    ));
+                // Prüfen, ob alle benötigten Sheets vorhanden sind
+                if (!revenueSheet || !expenseSheet) {
+                    ui.alert("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben' wurde nicht gefunden.");
+                    return;
                 }
-            });
 
-            // Jahresergebnis anfügen
-            outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+                // Sheets validieren
+                if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
+                    ui.alert("Die UStVA-Berechnung wurde abgebrochen, da Fehler in den Daten gefunden wurden.");
+                    return;
+                }
 
-            // UStVA-Sheet erstellen oder aktualisieren
-            const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
-            ustvaSheet.clearContents();
+                // Daten aus den Sheets laden
+                const revenueData = revenueSheet.getDataRange().getValues();
+                const expenseData = expenseSheet.getDataRange().getValues();
+                const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
 
-            // Daten in das Sheet schreiben
-            const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
-            dataRange.setValues(outputRows);
+                // Leere UStVA-Datenstruktur für alle Monate erstellen
+                const ustvaData = Object.fromEntries(
+                    Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
+                );
 
-            // Header formatieren
-            ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+                // Helfer-Funktion zum Verarbeiten von Datenzeilen
+                const processRows = (data, isIncome, isEigen = false) => {
+                    data.slice(1).forEach(row => { // Ab Zeile 2 (nach Header)
+                        processUStVARow(row, ustvaData, isIncome, isEigen);
+                    });
+                };
 
-            // Quartalszellen formatieren
-            for (let i = 0; i < 4; i++) {
-                const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
-                ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+                // Daten verarbeiten
+                processRows(revenueData, true);         // Einnahmen
+                processRows(expenseData, false);        // Ausgaben
+                if (eigenData.length) {
+                    processRows(eigenData, false, true); // Eigenbelege
+                }
+
+                // Ausgabe-Header erstellen
+                const outputRows = [
+                    [
+                        "Zeitraum",
+                        "Steuerpflichtige Einnahmen",
+                        "Steuerfreie Inland-Einnahmen",
+                        "Steuerfreie Ausland-Einnahmen",
+                        "Steuerpflichtige Ausgaben",
+                        "Steuerfreie Inland-Ausgaben",
+                        "Steuerfreie Ausland-Ausgaben",
+                        "Eigenbelege steuerpflichtig",
+                        "Eigenbelege steuerfrei",
+                        "Nicht abzugsfähige VSt (Bewirtung)",
+                        "USt 7%",
+                        "USt 19%",
+                        "VSt 7%",
+                        "VSt 19%",
+                        "USt-Zahlung",
+                        "Ergebnis"
+                    ]
+                ];
+
+                // Monatliche Daten ausgeben
+                config$1.common.months.forEach((name, i) => {
+                    const month = i + 1;
+                    outputRows.push(formatUStVARow(name, ustvaData[month]));
+
+                    // Nach jedem Quartal eine Zusammenfassung einfügen
+                    if (month % 3 === 0) {
+                        const quartalsNummer = month / 3;
+                        const quartalsStart = month - 2;
+                        outputRows.push(formatUStVARow(
+                            `Quartal ${quartalsNummer}`,
+                            aggregateUStVA(ustvaData, quartalsStart, month)
+                        ));
+                    }
+                });
+
+                // Jahresergebnis anfügen
+                outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+
+                // UStVA-Sheet erstellen oder aktualisieren
+                const ustvaSheet = ss.getSheetByName("UStVA") || ss.insertSheet("UStVA");
+                ustvaSheet.clearContents();
+
+                // Daten in das Sheet schreiben
+                const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+                dataRange.setValues(outputRows);
+
+                // Header formatieren
+                ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+
+                // Quartalszellen formatieren
+                for (let i = 0; i < 4; i++) {
+                    const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
+                    ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+                }
+
+                // Jahreszeile formatieren
+                ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
+                    .setBackground("#d9e6f2")
+                    .setFontWeight("bold");
+
+                // Zahlenformate anwenden
+                // Währungsformat für Beträge (Spalten 2-16)
+                ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
+
+                // Spaltenbreiten anpassen
+                ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+
+                // UStVA-Sheet aktivieren
+                ss.setActiveSheet(ustvaSheet);
+
+                ui.alert("UStVA wurde erfolgreich aktualisiert!");
+            } catch (e) {
+                console.error("Fehler bei der UStVA-Berechnung:", e);
+                SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
             }
+        };
 
-            // Jahreszeile formatieren
-            ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
-                .setBackground("#d9e6f2")
-                .setFontWeight("bold");
-
-            // Zahlenformate anwenden
-            // Währungsformat für Beträge (Spalten 2-16)
-            ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
-
-            // Spaltenbreiten anpassen
-            ustvaSheet.autoResizeColumns(1, outputRows[0].length);
-
-            // UStVA-Sheet aktivieren
-            ss.setActiveSheet(ustvaSheet);
-
-            ui.alert("UStVA wurde erfolgreich aktualisiert!");
-        } catch (e) {
-            console.error("Fehler bei der UStVA-Berechnung:", e);
-            SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
-        }
-    };
-
-    // Öffentliche API des Moduls
+// Öffentliche API des Moduls
     return {
         calculateUStVA,
         // Für Testzwecke könnten hier weitere Funktionen exportiert werden
@@ -2842,11 +2873,13 @@ const BWACalculator = (() => {
      */
     const processRevenue = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config$1.sheets.einnahmen.columns;
+
+            const m = Helpers.getMonthFromRow(row, "einnahmen");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             if (["Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
 
@@ -2858,10 +2891,10 @@ const BWACalculator = (() => {
             if (category === "Erträge aus Anlagenabgängen") return void (bwaData[m].anlagenabgaenge += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config.einnahmen.bwaMapping[category];
+            const mapping = config$1.einnahmen.bwaMapping[category];
             if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
                 bwaData[m][mapping] += amount;
-            } else if (Helpers.parseMwstRate(row[5]) === 0) {
+            } else if (Helpers.parseMwstRate(row[columns.mwstSatz - 1]) === 0) {
                 bwaData[m].steuerfreieInlandEinnahmen += amount;
             } else {
                 bwaData[m].umsatzerloese += amount;
@@ -2879,11 +2912,13 @@ const BWACalculator = (() => {
      */
     const processExpense = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config$1.sheets.ausgaben.columns;
+
+            const m = Helpers.getMonthFromRow(row, "ausgaben");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
 
             // Nicht-betriebliche Positionen ignorieren
             if (["Privatentnahme", "Privateinlage", "Holding Transfers",
@@ -2899,7 +2934,7 @@ const BWACalculator = (() => {
             if (category === "Fortbildungskosten") return void (bwaData[m].fortbildungskosten += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config.ausgaben.bwaMapping[category];
+            const mapping = config$1.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
                     bwaData[m].wareneinsatz += amount;
@@ -2965,12 +3000,14 @@ const BWACalculator = (() => {
      */
     const processEigen = (row, bwaData) => {
         try {
-            const m = Helpers.getMonthFromRow(row);
+            const columns = config$1.sheets.eigenbelege.columns;
+
+            const m = Helpers.getMonthFromRow(row, "eigenbelege");
             if (!m) return;
 
-            const amount = Helpers.parseCurrency(row[4]);
-            const category = row[2]?.toString().trim() || "";
-            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+            const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+            const category = row[columns.kategorie - 1]?.toString().trim() || "";
+            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
             if (taxType === "steuerfrei") {
@@ -3004,9 +3041,9 @@ const BWACalculator = (() => {
             const bwaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyBWA()]));
 
             // Daten aus den Sheets verarbeiten
-            revenueSheet.getDataRange().getValues().slice(1).forEach(processRevenue);
-            expenseSheet.getDataRange().getValues().slice(1).forEach(processExpense);
-            if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(processEigen);
+            revenueSheet.getDataRange().getValues().slice(1).forEach(row => processRevenue(row, bwaData));
+            expenseSheet.getDataRange().getValues().slice(1).forEach(row => processExpense(row, bwaData));
+            if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(row => processEigen(row, bwaData));
 
             // Gruppensummen und weitere Berechnungen
             for (let m = 1; m <= 12; m++) {
@@ -3041,10 +3078,10 @@ const BWACalculator = (() => {
                     d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
 
                 // Steuern berechnen
-                const taxConfig = config.tax.isHolding ? config.tax.holding : config.tax.operative;
+                const taxConfig = config$1.tax.isHolding ? config$1.tax.holding : config$1.tax.operative;
 
                 // Für Holdings gelten spezielle Steuersätze wegen Beteiligungsprivileg
-                const steuerfaktor = config.tax.isHolding
+                const steuerfaktor = config$1.tax.isHolding
                     ? taxConfig.gewinnUebertragSteuerpflichtig / 100
                     : 1;
 
@@ -3075,7 +3112,7 @@ const BWACalculator = (() => {
         const headers = ["Kategorie"];
         for (let q = 0; q < 4; q++) {
             for (let m = q * 3; m < q * 3 + 3; m++) {
-                headers.push(`${config.common.months[m]} (€)`);
+                headers.push(`${config$1.common.months[m]} (€)`);
             }
             headers.push(`Q${q + 1} (€)`);
         }
@@ -3259,7 +3296,7 @@ const BWACalculator = (() => {
         }
     };
 
-    // Öffentliche API des Moduls
+// Öffentliche API des Moduls
     return {calculateBWA};
 })();
 
@@ -3332,14 +3369,21 @@ const BilanzCalculator = (() => {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const bilanzData = createEmptyBilanz();
 
+            // Spalten-Konfigurationen für die verschiedenen Sheets
+            const bankCols = config$1.sheets.bankbewegungen.columns;
+            const ausgabenCols = config$1.sheets.ausgaben.columns;
+            const gesellschafterCols = config$1.sheets.gesellschafterkonto.columns;
+
             // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
             const bankSheet = ss.getSheetByName("Bankbewegungen");
             if (bankSheet) {
                 const lastRow = bankSheet.getLastRow();
                 if (lastRow >= 1) {
-                    const label = bankSheet.getRange(lastRow, 2).getValue().toString().toLowerCase();
+                    const label = bankSheet.getRange(lastRow, bankCols.buchungstext).getValue().toString().toLowerCase();
                     if (label === "endsaldo") {
-                        bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(bankSheet.getRange(lastRow, 4).getValue());
+                        bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(
+                            bankSheet.getRange(lastRow, bankCols.saldo).getValue()
+                        );
                     }
                 }
             }
@@ -3359,7 +3403,7 @@ const BilanzCalculator = (() => {
             }
 
             // 3. Stammkapital aus Konfiguration
-            bilanzData.passiva.stammkapital = config.tax.stammkapital || 25000;
+            bilanzData.passiva.stammkapital = config$1.tax.stammkapital || 25000;
 
             // 4. Suche nach Gesellschafterdarlehen im Gesellschafterkonto-Sheet
             const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
@@ -3371,8 +3415,9 @@ const BilanzCalculator = (() => {
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
                     // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
-                    if (row[2] && row[2].toString().toLowerCase() === "gesellschafterdarlehen") {
-                        darlehenSumme += Helpers.parseCurrency(row[3] || 0);
+                    if (row[gesellschafterCols.kategorie - 1] &&
+                        row[gesellschafterCols.kategorie - 1].toString().toLowerCase() === "gesellschafterdarlehen") {
+                        darlehenSumme += Helpers.parseCurrency(row[gesellschafterCols.betrag - 1] || 0);
                     }
                 }
 
@@ -3388,10 +3433,10 @@ const BilanzCalculator = (() => {
                 // Überschrift überspringen
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
-                    const category = row[2]?.toString().trim() || "";
+                    const category = row[ausgabenCols.kategorie - 1]?.toString().trim() || "";
 
                     if (["Gewerbesteuerrückstellungen", "Körperschaftsteuer", "Solidaritätszuschlag", "Sonstige Steuerrückstellungen"].includes(category)) {
-                        steuerRueckstellungen += Helpers.parseCurrency(row[4] || 0);
+                        steuerRueckstellungen += Helpers.parseCurrency(row[ausgabenCols.nettobetrag - 1] || 0);
                     }
                 }
 
@@ -3461,7 +3506,7 @@ const BilanzCalculator = (() => {
      */
     const createAktivaArray = (bilanzData) => {
         const { aktiva } = bilanzData;
-        const year = config.tax.year || new Date().getFullYear();
+        const year = config$1.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Aktiva (Vermögenswerte)`, ""],
@@ -3492,7 +3537,7 @@ const BilanzCalculator = (() => {
      */
     const createPassivaArray = (bilanzData) => {
         const { passiva } = bilanzData;
-        const year = config.tax.year || new Date().getFullYear();
+        const year = config$1.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Passiva (Kapital und Schulden)`, ""],
@@ -3653,25 +3698,16 @@ const onEdit = e => {
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
+    const sheetKey = name.toLowerCase();
 
-    // Mapping von Blattname zu Zeitstempel-Spalte
-    const mapping = {
-        "Einnahmen": 16,
-        "Ausgaben": 16,
-        "Eigenbelege": 16,
-        "Bankbewegungen": 11,
-        "Gesellschafterkonto": 12,
-        "Holding Transfers": 6
-    };
-
-    // Prüfen, ob wir dieses Sheet bearbeiten sollen
-    if (!(name in mapping)) return;
+    // Prüfen, ob wir für dieses Sheet eine Konfiguration haben
+    if (!config.sheets[sheetKey] || !config.sheets[sheetKey].columns.zeitstempel) return;
 
     // Header-Zeile ignorieren
     if (range.getRow() === 1) return;
 
-    // Spalte für Zeitstempel
-    const timestampCol = mapping[name];
+    // Spalte für Zeitstempel aus der Konfiguration
+    const timestampCol = config.sheets[sheetKey].columns.zeitstempel;
 
     // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
     if (range.getColumn() === timestampCol ||
