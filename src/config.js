@@ -124,7 +124,7 @@ const config = {
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
                 matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
-                anmerkung: 12,         // L: Anmerkung
+                zeitstempel: 12,       // L: Zeitstempel der letzten Änderung
             }
         },
 

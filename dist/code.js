@@ -5,7 +5,7 @@
  * Konfiguration für die Buchhaltungsanwendung
  * Unterstützt die Buchhaltung für Holding und operative GmbH nach SKR04
  */
-const config$1 = {
+const config = {
     // Allgemeine Einstellungen
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
@@ -127,7 +127,7 @@ const config$1 = {
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
                 matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
-                anmerkung: 12,         // L: Anmerkung
+                zeitstempel: 12,       // L: Zeitstempel der letzten Änderung
             }
         },
 
@@ -456,16 +456,16 @@ const config$1 = {
 };
 
 // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-config$1.bank.category = [
-    ...Object.keys(config$1.einnahmen.categories),
-    ...Object.keys(config$1.ausgaben.categories),
-    ...config$1.gesellschafterkonto.category,
-    ...config$1.holdingTransfers.category,
-    ...config$1.eigenbelege.category
+config.bank.category = [
+    ...Object.keys(config.einnahmen.categories),
+    ...Object.keys(config.ausgaben.categories),
+    ...config.gesellschafterkonto.category,
+    ...config.holdingTransfers.category,
+    ...config.eigenbelege.category
 ];
 
 // Duplikate aus den Kategorien entfernen
-config$1.bank.category = [...new Set(config$1.bank.category)];
+config.bank.category = [...new Set(config.bank.category)];
 
 // src/helpers.js
 
@@ -531,7 +531,7 @@ const Helpers = {
     parseMwstRate(value) {
         if (value === null || value === undefined || value === "") {
             // Verwende den Standard-MwSt-Satz aus der Konfiguration oder fallback auf 19%
-            return config$1?.tax?.defaultMwst || 19;
+            return config?.tax?.defaultMwst || 19;
         }
 
         if (typeof value === "number") {
@@ -549,7 +549,7 @@ const Helpers = {
 
         // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
         if (isNaN(rate)) {
-            return config$1?.tax?.defaultMwst || 19;
+            return config?.tax?.defaultMwst || 19;
         }
 
         // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
@@ -686,7 +686,7 @@ const Helpers = {
 
         if (sheetName) {
             // Spaltenkonfiguration aus dem Sheetnamen bestimmen
-            const sheetConfig = config$1.sheets[sheetName.toLowerCase()]?.columns;
+            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
             if (sheetConfig && sheetConfig.zeitstempel) {
                 timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
             } else {
@@ -705,7 +705,7 @@ const Helpers = {
         const d = this.parseDate(row[timestampColumn]);
 
         // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
-        const targetYear = config$1?.tax?.year || new Date().getFullYear();
+        const targetYear = config?.tax?.year || new Date().getFullYear();
 
         // Wenn kein Datum oder das Jahr nicht übereinstimmt
         if (!d || d.getFullYear() !== targetYear) return 0;
@@ -795,11 +795,11 @@ const ImportModule = (() => {
 
         // Konfiguration für das richtige Sheet auswählen
         const sheetConfig = type === "Einnahme"
-            ? config$1.sheets.einnahmen.columns
-            : config$1.sheets.ausgaben.columns;
+            ? config.sheets.einnahmen.columns
+            : config.sheets.ausgaben.columns;
 
         // Konfiguration für das Änderungshistorie-Sheet
-        const historyConfig = config$1.sheets.aenderungshistorie.columns;
+        const historyConfig = config.sheets.aenderungshistorie.columns;
 
         while (files.hasNext()) {
             const file = files.next();
@@ -884,7 +884,7 @@ const ImportModule = (() => {
 
             // Header-Zeile für Änderungshistorie initialisieren, falls nötig
             if (history.getLastRow() === 0) {
-                const historyConfig = config$1.sheets.aenderungshistorie.columns;
+                const historyConfig = config.sheets.aenderungshistorie.columns;
                 const headerRow = ["", "", "", ""];
                 headerRow[historyConfig.datum - 1] = "Datum";
                 headerRow[historyConfig.typ - 1] = "Rechnungstyp";
@@ -898,7 +898,7 @@ const ImportModule = (() => {
             // Bereits importierte Dateien aus der Änderungshistorie erfassen
             const historyData = history.getDataRange().getValues();
             const existingFiles = new Set();
-            const historyConfig = config$1.sheets.aenderungshistorie.columns;
+            const historyConfig = config.sheets.aenderungshistorie.columns;
 
             // Überschriftenzeile überspringen und alle Dateinamen sammeln
             for (let i = 1; i < historyData.length; i++) {
@@ -1068,7 +1068,7 @@ const Validator = (() => {
      */
     const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
         const warnings = [];
-        const columns = config$1.sheets[sheetType].columns;
+        const columns = config.sheets[sheetType].columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1099,10 +1099,10 @@ const Validator = (() => {
                     if (isNaN(mwst)) return true;
 
                     // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
-                    const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
+                    const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
                     return !allowedRates.includes(Math.round(mwst));
                 },
-                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config$1?.tax?.allowedMwst?.join('%, ')}% oder leer.`
+                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config?.tax?.allowedMwst?.join('%, ')}% oder leer.`
             }
         ];
 
@@ -1172,7 +1172,7 @@ const Validator = (() => {
 
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
-        const columns = config$1.sheets.bankbewegungen.columns;
+        const columns = config.sheets.bankbewegungen.columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1340,7 +1340,7 @@ const Validator = (() => {
 
             case 'mwst':
                 const mwst = Helpers.parseMwstRate(value);
-                const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
+                const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
                 return {
                     isValid: allowedRates.includes(Math.round(mwst)),
                     message: allowedRates.includes(Math.round(mwst))
@@ -1396,11 +1396,11 @@ const RefreshModule = (() => {
             // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
             let columns;
             if (name === "Einnahmen") {
-                columns = config$1.sheets.einnahmen.columns;
+                columns = config.sheets.einnahmen.columns;
             } else if (name === "Ausgaben") {
-                columns = config$1.sheets.ausgaben.columns;
+                columns = config.sheets.ausgaben.columns;
             } else if (name === "Eigenbelege") {
-                columns = config$1.sheets.eigenbelege.columns;
+                columns = config.sheets.eigenbelege.columns;
             } else {
                 return false; // Unbekanntes Sheet
             }
@@ -1449,23 +1449,23 @@ const RefreshModule = (() => {
             if (name === "Einnahmen") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config$1.einnahmen.categories)
+                    Object.keys(config.einnahmen.categories)
                 );
             } else if (name === "Ausgaben") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config$1.ausgaben.categories)
+                    Object.keys(config.ausgaben.categories)
                 );
             } else if (name === "Eigenbelege") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    config$1.eigenbelege.category
+                    config.eigenbelege.category
                 );
 
                 // Für Eigenbelege: Status-Dropdown hinzufügen
                 Validator.validateDropdown(
                     sheet, 2, columns.status, numRows, 1,
-                    config$1.eigenbelege.status
+                    config.eigenbelege.status
                 );
 
                 // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
@@ -1479,7 +1479,7 @@ const RefreshModule = (() => {
             // Zahlungsart-Dropdown für alle Blätter
             Validator.validateDropdown(
                 sheet, 2, columns.zahlungsart, numRows, 1,
-                config$1.common.paymentType
+                config.common.paymentType
             );
 
             // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
@@ -1517,11 +1517,11 @@ const RefreshModule = (() => {
             const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
             // Bankbewegungen-Konfiguration für Spalten holen
-            const columns = config$1.sheets.bankbewegungen.columns;
+            const columns = config.sheets.bankbewegungen.columns;
 
             // Konfigurationen für Spalten in den verschiedenen Sheets
-            const einnahmenCols = config$1.sheets.einnahmen.columns;
-            const ausgabenCols = config$1.sheets.ausgaben.columns;
+            const einnahmenCols = config.sheets.einnahmen.columns;
+            const ausgabenCols = config.sheets.ausgaben.columns;
 
             // Spaltenbuchstaben aus den Indizes generieren
             const columnLetters = {};
@@ -1549,21 +1549,21 @@ const RefreshModule = (() => {
             // Dropdown-Validierungen für Typ, Kategorie und Konten
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-                config$1.bank.type
+                config.bank.type
             );
 
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-                config$1.bank.category
+                config.bank.category
             );
 
             // Konten für Dropdown-Validierung sammeln
-            const allowedKontoSoll = Object.values(config$1.einnahmen.kontoMapping)
-                .concat(Object.values(config$1.ausgaben.kontoMapping))
+            const allowedKontoSoll = Object.values(config.einnahmen.kontoMapping)
+                .concat(Object.values(config.ausgaben.kontoMapping))
                 .map(m => m.soll);
 
-            const allowedGegenkonto = Object.values(config$1.einnahmen.kontoMapping)
-                .concat(Object.values(config$1.ausgaben.kontoMapping))
+            const allowedGegenkonto = Object.values(config.einnahmen.kontoMapping)
+                .concat(Object.values(config.ausgaben.kontoMapping))
                 .map(m => m.gegen);
 
             // Dropdown-Validierungen für Konten setzen
@@ -1795,9 +1795,9 @@ const RefreshModule = (() => {
                 let mapping = null;
 
                 if (tranType === "Einnahme") {
-                    mapping = config$1.einnahmen.kontoMapping[category];
+                    mapping = config.einnahmen.kontoMapping[category];
                 } else if (tranType === "Ausgabe") {
-                    mapping = config$1.ausgaben.kontoMapping[category];
+                    mapping = config.ausgaben.kontoMapping[category];
                 }
 
                 if (!mapping) {
@@ -2023,9 +2023,9 @@ const RefreshModule = (() => {
         const bankSheet = ss.getSheetByName("Bankbewegungen");
 
         // Konfigurationen für Spaltenindizes aus config
-        const bankCols = config$1.sheets.bankbewegungen.columns;
-        const einnahmenCols = config$1.sheets.einnahmen.columns;
-        const ausgabenCols = config$1.sheets.ausgaben.columns;
+        const bankCols = config.sheets.bankbewegungen.columns;
+        const einnahmenCols = config.sheets.einnahmen.columns;
+        const ausgabenCols = config.sheets.ausgaben.columns;
 
         // Map zum Speichern der zugeordneten Referenzen und ihrer Bankbewegungsinformationen
         const bankZuordnungen = {};
@@ -2469,7 +2469,7 @@ const UStVACalculator = (() => {
         try {
             // Sheet-Typ bestimmen
             const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
-            const columns = config$1.sheets[sheetType].columns;
+            const columns = config.sheets[sheetType].columns;
 
             // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
             const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
@@ -2500,7 +2500,7 @@ const UStVACalculator = (() => {
             // Je nach Typ (Einnahme/Ausgabe/Eigenbeleg) unterschiedlich verarbeiten
             if (isIncome) {
                 // EINNAHMEN
-                const catCfg = config$1.einnahmen.categories[category] ?? {};
+                const catCfg = config.einnahmen.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2523,7 +2523,7 @@ const UStVACalculator = (() => {
                 }
             } else if (isEigen) {
                 // EIGENBELEGE
-                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+                const eigenCfg = config.eigenbelege.mapping[category] ?? {};
                 const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei") {
@@ -2551,7 +2551,7 @@ const UStVACalculator = (() => {
                 }
             } else {
                 // AUSGABEN
-                const catCfg = config$1.ausgaben.categories[category] ?? {};
+                const catCfg = config.ausgaben.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2710,7 +2710,7 @@ const UStVACalculator = (() => {
                 ];
 
                 // Monatliche Daten ausgeben
-                config$1.common.months.forEach((name, i) => {
+                config.common.months.forEach((name, i) => {
                     const month = i + 1;
                     outputRows.push(formatUStVARow(name, ustvaData[month]));
 
@@ -2873,7 +2873,7 @@ const BWACalculator = (() => {
      */
     const processRevenue = (row, bwaData) => {
         try {
-            const columns = config$1.sheets.einnahmen.columns;
+            const columns = config.sheets.einnahmen.columns;
 
             const m = Helpers.getMonthFromRow(row, "einnahmen");
             if (!m) return;
@@ -2891,7 +2891,7 @@ const BWACalculator = (() => {
             if (category === "Erträge aus Anlagenabgängen") return void (bwaData[m].anlagenabgaenge += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config$1.einnahmen.bwaMapping[category];
+            const mapping = config.einnahmen.bwaMapping[category];
             if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
                 bwaData[m][mapping] += amount;
             } else if (Helpers.parseMwstRate(row[columns.mwstSatz - 1]) === 0) {
@@ -2912,7 +2912,7 @@ const BWACalculator = (() => {
      */
     const processExpense = (row, bwaData) => {
         try {
-            const columns = config$1.sheets.ausgaben.columns;
+            const columns = config.sheets.ausgaben.columns;
 
             const m = Helpers.getMonthFromRow(row, "ausgaben");
             if (!m) return;
@@ -2934,7 +2934,7 @@ const BWACalculator = (() => {
             if (category === "Fortbildungskosten") return void (bwaData[m].fortbildungskosten += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config$1.ausgaben.bwaMapping[category];
+            const mapping = config.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
                     bwaData[m].wareneinsatz += amount;
@@ -3000,14 +3000,14 @@ const BWACalculator = (() => {
      */
     const processEigen = (row, bwaData) => {
         try {
-            const columns = config$1.sheets.eigenbelege.columns;
+            const columns = config.sheets.eigenbelege.columns;
 
             const m = Helpers.getMonthFromRow(row, "eigenbelege");
             if (!m) return;
 
             const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
             const category = row[columns.kategorie - 1]?.toString().trim() || "";
-            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
             if (taxType === "steuerfrei") {
@@ -3078,10 +3078,10 @@ const BWACalculator = (() => {
                     d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
 
                 // Steuern berechnen
-                const taxConfig = config$1.tax.isHolding ? config$1.tax.holding : config$1.tax.operative;
+                const taxConfig = config.tax.isHolding ? config.tax.holding : config.tax.operative;
 
                 // Für Holdings gelten spezielle Steuersätze wegen Beteiligungsprivileg
-                const steuerfaktor = config$1.tax.isHolding
+                const steuerfaktor = config.tax.isHolding
                     ? taxConfig.gewinnUebertragSteuerpflichtig / 100
                     : 1;
 
@@ -3112,7 +3112,7 @@ const BWACalculator = (() => {
         const headers = ["Kategorie"];
         for (let q = 0; q < 4; q++) {
             for (let m = q * 3; m < q * 3 + 3; m++) {
-                headers.push(`${config$1.common.months[m]} (€)`);
+                headers.push(`${config.common.months[m]} (€)`);
             }
             headers.push(`Q${q + 1} (€)`);
         }
@@ -3370,9 +3370,9 @@ const BilanzCalculator = (() => {
             const bilanzData = createEmptyBilanz();
 
             // Spalten-Konfigurationen für die verschiedenen Sheets
-            const bankCols = config$1.sheets.bankbewegungen.columns;
-            const ausgabenCols = config$1.sheets.ausgaben.columns;
-            const gesellschafterCols = config$1.sheets.gesellschafterkonto.columns;
+            const bankCols = config.sheets.bankbewegungen.columns;
+            const ausgabenCols = config.sheets.ausgaben.columns;
+            const gesellschafterCols = config.sheets.gesellschafterkonto.columns;
 
             // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
             const bankSheet = ss.getSheetByName("Bankbewegungen");
@@ -3403,7 +3403,7 @@ const BilanzCalculator = (() => {
             }
 
             // 3. Stammkapital aus Konfiguration
-            bilanzData.passiva.stammkapital = config$1.tax.stammkapital || 25000;
+            bilanzData.passiva.stammkapital = config.tax.stammkapital || 25000;
 
             // 4. Suche nach Gesellschafterdarlehen im Gesellschafterkonto-Sheet
             const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
@@ -3506,7 +3506,7 @@ const BilanzCalculator = (() => {
      */
     const createAktivaArray = (bilanzData) => {
         const { aktiva } = bilanzData;
-        const year = config$1.tax.year || new Date().getFullYear();
+        const year = config.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Aktiva (Vermögenswerte)`, ""],
@@ -3537,7 +3537,7 @@ const BilanzCalculator = (() => {
      */
     const createPassivaArray = (bilanzData) => {
         const { passiva } = bilanzData;
-        const year = config$1.tax.year || new Date().getFullYear();
+        const year = config.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Passiva (Kapital und Schulden)`, ""],
@@ -3748,7 +3748,7 @@ const setupTrigger = () => {
     const triggers = ScriptApp.getProjectTriggers();
     // Prüfe, ob der onOpen Trigger bereits existiert
     if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
-        SpreadsheetApp.newTrigger("onOpen")
+        ScriptApp.newTrigger("onOpen")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onOpen()
             .create();
@@ -3756,10 +3756,25 @@ const setupTrigger = () => {
 
     // Prüfe, ob der onEdit Trigger bereits existiert
     if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
-        SpreadsheetApp.newTrigger("onEdit")
+        ScriptApp.newTrigger("onEdit")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onEdit()
             .create();
+    }
+};
+
+/**
+ * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
+ * @param {Function} fn - Die auszuführende Funktion
+ * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
+ */
+const executeWithErrorHandling = (fn, errorMessage) => {
+    try {
+        RefreshModule.refreshAllSheets();
+        fn();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
+        console.error(`${errorMessage}:`, error);
     }
 };
 
@@ -3772,39 +3787,30 @@ const refreshSheet = () => RefreshModule.refreshActiveSheet();
  * Berechnet die Umsatzsteuervoranmeldung
  */
 const calculateUStVA = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        UStVACalculator.calculateUStVA();
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + error.message);
-        console.error("UStVA-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        UStVACalculator.calculateUStVA,
+        "Fehler bei der UStVA-Berechnung"
+    );
 };
 
 /**
  * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
  */
 const calculateBWA = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        BWACalculator.calculateBWA();
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + error.message);
-        console.error("BWA-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        BWACalculator.calculateBWA,
+        "Fehler bei der BWA-Berechnung"
+    );
 };
 
 /**
  * Erstellt die Bilanz
  */
 const calculateBilanz = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        BilanzCalculator.calculateBilanz(); // Aktualisierter Aufruf
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + error.message);
-        console.error("Bilanz-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        BilanzCalculator.calculateBilanz,
+        "Fehler bei der Bilanzerstellung"
+    );
 };
 
 /**

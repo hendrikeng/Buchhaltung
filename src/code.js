@@ -4,7 +4,8 @@ import ImportModule from "./importModule.js";
 import RefreshModule from "./refreshModule.js";
 import UStVACalculator from "./uStVACalculator.js";
 import BWACalculator from "./bWACalculator.js";
-import BilanzCalculator from "./bilanzCalculator.js"; // Aktualisierter Import
+import BilanzCalculator from "./bilanzCalculator.js";
+import config from "./config.js";
 
 // =================== Globale Funktionen ===================
 /**
@@ -81,7 +82,7 @@ const setupTrigger = () => {
     const triggers = ScriptApp.getProjectTriggers();
     // Prüfe, ob der onOpen Trigger bereits existiert
     if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
-        SpreadsheetApp.newTrigger("onOpen")
+        ScriptApp.newTrigger("onOpen")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onOpen()
             .create();
@@ -89,10 +90,25 @@ const setupTrigger = () => {
 
     // Prüfe, ob der onEdit Trigger bereits existiert
     if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
-        SpreadsheetApp.newTrigger("onEdit")
+        ScriptApp.newTrigger("onEdit")
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onEdit()
             .create();
+    }
+};
+
+/**
+ * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
+ * @param {Function} fn - Die auszuführende Funktion
+ * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
+ */
+const executeWithErrorHandling = (fn, errorMessage) => {
+    try {
+        RefreshModule.refreshAllSheets();
+        fn();
+    } catch (error) {
+        SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
+        console.error(`${errorMessage}:`, error);
     }
 };
 
@@ -105,39 +121,30 @@ const refreshSheet = () => RefreshModule.refreshActiveSheet();
  * Berechnet die Umsatzsteuervoranmeldung
  */
 const calculateUStVA = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        UStVACalculator.calculateUStVA();
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + error.message);
-        console.error("UStVA-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        UStVACalculator.calculateUStVA,
+        "Fehler bei der UStVA-Berechnung"
+    );
 };
 
 /**
  * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
  */
 const calculateBWA = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        BWACalculator.calculateBWA();
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + error.message);
-        console.error("BWA-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        BWACalculator.calculateBWA,
+        "Fehler bei der BWA-Berechnung"
+    );
 };
 
 /**
  * Erstellt die Bilanz
  */
 const calculateBilanz = () => {
-    try {
-        RefreshModule.refreshAllSheets();
-        BilanzCalculator.calculateBilanz(); // Aktualisierter Aufruf
-    } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + error.message);
-        console.error("Bilanz-Fehler:", error);
-    }
+    executeWithErrorHandling(
+        BilanzCalculator.calculateBilanz,
+        "Fehler bei der Bilanzerstellung"
+    );
 };
 
 /**
