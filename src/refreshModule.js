@@ -495,6 +495,22 @@ const RefreshModule = (() => {
                     betrag = Math.abs(betrag);
                 }
 
+                // MwSt-Satz aus Spalte F (Index 4)
+                let mwstRate = 0;
+                if (data[i][4] !== undefined && data[i][4] !== null && data[i][4] !== "") {
+                    // MwSt-Satz säubern und parsen
+                    const mwstStr = data[i][4].toString().replace(/[^0-9.,-]/g, "").replace(",", ".");
+                    mwstRate = parseFloat(mwstStr) || 0;
+
+                    // Wenn der Wert > 1 ist, nehmen wir an, dass es sich um einen Prozentsatz handelt
+                    if (mwstRate > 1) {
+                        mwstRate = mwstRate;
+                    } else {
+                        // Ansonsten als Dezimalwert interpretieren und in Prozent umrechnen
+                        mwstRate = mwstRate * 100;
+                    }
+                }
+
                 // Bezahlter Betrag aus Spalte I (Index 7)
                 let bezahlt = 0;
                 if (data[i][7] !== undefined && data[i][7] !== null && data[i][7] !== "") {
@@ -511,8 +527,9 @@ const RefreshModule = (() => {
                     ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
                     row: i + 2,
                     betrag: betrag,
+                    mwstRate: mwstRate,
                     bezahlt: bezahlt,
-                    offen: betrag - bezahlt,
+                    offen: betrag * (1 + mwstRate/100) - bezahlt,
                     isGutschrift: isGutschrift
                 };
             }
@@ -624,7 +641,7 @@ const RefreshModule = (() => {
                 const isGutschrift = referenz && referenz.toString().startsWith("G-");
 
                 // Prüfe, ob diese Einnahme im Banking-Sheet zugeordnet wurde
-                const zuordnungsKey = isGutschrift ? `gutschrift#${row}` : `einnahme#${row}`;
+                const zuordnungsKey = `einnahme#${row}`;
                 const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
 
                 // Zeilenbereich für die Formatierung
@@ -785,23 +802,26 @@ const RefreshModule = (() => {
 
             // Wenn ein Betrag angegeben ist und die Beträge nicht übereinstimmen
             if (betrag !== null) {
-                const matchBetrag = Math.abs(match.betrag);
+                const matchNetto = Math.abs(match.betrag);
+                const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
+                // Bruttobetrag berechnen (Netto + MwSt)
+                const matchBrutto = matchNetto * (1 + matchMwstRate);
                 const matchBezahlt = Math.abs(match.bezahlt);
 
                 // Beträge mit Toleranz vergleichen (1 Cent Unterschied erlauben)
-                if (Math.abs(betrag - matchBetrag) <= 0.01) {
-                    // Vollständige Zahlung (betrag = netto-Betrag)
+                if (Math.abs(betrag - matchBrutto) <= 0.01) {
+                    // Vollständige Zahlung (betrag = brutto-Betrag)
                     match.matchType = "Vollständige Zahlung";
                     return match;
                 }
                 // Prüfen, ob es sich um eine bereits vollständig bezahlte Position handelt
-                else if (Math.abs(matchBezahlt - matchBetrag) <= 0.01 && matchBezahlt > 0) {
+                else if (Math.abs(matchBezahlt - matchBrutto) <= 0.01 && matchBezahlt > 0) {
                     // Position ist bereits vollständig bezahlt
                     match.matchType = "Vollständige Zahlung";
                     return match;
                 }
                 // Prüfen, ob es sich um eine Teilzahlung handelt (nur wenn der Betrag kleiner als der Rechnungsbetrag ist)
-                else if (betrag < matchBetrag) {
+                else if (betrag < matchBrutto) {
                     match.matchType = "Teilzahlung";
                     return match;
                 }
@@ -809,7 +829,7 @@ const RefreshModule = (() => {
                 else {
                     // Nur zur Sicherheit, da es ungewöhnlich ist, wenn der Bankbetrag größer als der Rechnungsbetrag ist
                     match.matchType = "Unsichere Zahlung";
-                    match.betragsDifferenz = Math.abs(betrag - matchBetrag).toFixed(2);
+                    match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
                     return match;
                 }
             } else {
@@ -826,30 +846,33 @@ const RefreshModule = (() => {
 
                 // Nur Betragsvergleich wenn nötig
                 if (betrag !== null) {
-                    const matchBetrag = Math.abs(match.betrag);
+                    const matchNetto = Math.abs(match.betrag);
+                    const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
+                    // Bruttobetrag berechnen (Netto + MwSt)
+                    const matchBrutto = matchNetto * (1 + matchMwstRate);
                     const matchBezahlt = Math.abs(match.bezahlt);
 
                     // Beträge stimmen mit Toleranz überein
-                    if (Math.abs(betrag - matchBetrag) <= 0.01) {
+                    if (Math.abs(betrag - matchBrutto) <= 0.01) {
                         match.matchType = "Vollständige Zahlung";
                         return match;
                     }
 
                     // Wenn Position bereits vollständig bezahlt ist
-                    if (Math.abs(matchBezahlt - matchBetrag) <= 0.01 && matchBezahlt > 0) {
+                    if (Math.abs(matchBezahlt - matchBrutto) <= 0.01 && matchBezahlt > 0) {
                         match.matchType = "Vollständige Zahlung";
                         return match;
                     }
 
                     // Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
-                    if (betrag < matchBetrag) {
+                    if (betrag < matchBrutto) {
                         match.matchType = "Teilzahlung";
                         return match;
                     }
 
                     // Beträge weichen stark ab
                     match.matchType = "Unsichere Zahlung";
-                    match.betragsDifferenz = Math.abs(betrag - matchBetrag).toFixed(2);
+                    match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
                     return match;
                 } else {
                     // Ohne Betragsvergleich
