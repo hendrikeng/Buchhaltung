@@ -7,7 +7,8 @@ const config = {
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
         months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        currentYear: new Date().getFullYear()
+        currentYear: new Date().getFullYear(),
+        version: "1.0.0"
     },
 
     // Steuerliche Einstellungen
@@ -37,7 +38,7 @@ const config = {
         }
     },
 
-    // Sheet-Struktur Konfiguration
+    // Sheet-Struktur Konfiguration - mit konstanten Spaltendefinitionen
     sheets: {
         // Konfiguration für das Einnahmen-Sheet
         einnahmen: {
@@ -123,8 +124,8 @@ const config = {
                 kontoHaben: 8,         // H: Gegenkonto (Haben)
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
-                matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
-                zeitstempel: 12,       // L: Zeitstempel der letzten Änderung
+                matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
+                anmerkung: 12,         // L: Anmerkung
             }
         },
 
@@ -338,9 +339,6 @@ const config = {
 
     // Bankbewegungen-Konfiguration
     bank: {
-        // Kombinierte Liste aller Kategorien (automatisch generiert)
-        category: [], // Wird dynamisch befüllt
-
         // Typen von Bankbewegungen
         type: ["Einnahme", "Ausgabe", "Interne Buchung"],
 
@@ -450,18 +448,26 @@ const config = {
         "8999": "Gewinn- und Verlustkonto"
     },
 
+    /**
+     * Initialisierungsfunktion für abgeleitete Daten
+     * Wird automatisch beim Import aufgerufen
+     */
+    initialize() {
+        // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
+        this.bank.category = [
+            ...Object.keys(this.einnahmen.categories),
+            ...Object.keys(this.ausgaben.categories),
+            ...this.gesellschafterkonto.category,
+            ...this.holdingTransfers.category,
+            ...this.eigenbelege.category
+        ];
+
+        // Duplikate aus den Kategorien entfernen
+        this.bank.category = [...new Set(this.bank.category)];
+
+        return this;
+    }
 };
 
-// Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-config.bank.category = [
-    ...Object.keys(config.einnahmen.categories),
-    ...Object.keys(config.ausgaben.categories),
-    ...config.gesellschafterkonto.category,
-    ...config.holdingTransfers.category,
-    ...config.eigenbelege.category
-];
-
-// Duplikate aus den Kategorien entfernen
-config.bank.category = [...new Set(config.bank.category)];
-
-export default config;
+// Initialisierung ausführen und exportieren
+export default config.initialize();
