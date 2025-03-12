@@ -1589,6 +1589,69 @@ const RefreshModule = (() => {
                 bankData.map(row => row.slice(0, 11))
             );
 
+            // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
+            console.log("Daten wurden zurückgeschrieben, warte 1 Sekunde vor der Formatierung...");
+            Utilities.sleep(1000);
+
+            // Log zur Überprüfung
+            console.log("Beginne mit Zeilenformatierung für " + bankData.length + " Zeilen");
+
+            // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
+            // Wir verarbeiten jede Zeile einzeln, um Probleme zu isolieren
+            for (let i = 0; i < bankData.length; i++) {
+                try {
+                    const rowIndex = firstDataRow + i;
+                    const matchInfo = bankData[i][11]; // Spalte L mit Match-Info
+
+                    // Nur formatieren, wenn die Zeile existiert und eine Match-Info hat
+                    if (rowIndex <= sheet.getLastRow() && matchInfo && matchInfo.trim() !== "") {
+                        console.log(`Versuche Formatierung für Zeile ${rowIndex}, Match: "${matchInfo}"`);
+
+                        // Zuerst den Hintergrund zurücksetzen
+                        const rowRange = sheet.getRange(rowIndex, 1, 1, 12);
+                        rowRange.setBackground(null);
+
+                        // Kurze Pause, um die Sheets-API nicht zu überlasten
+                        if (i % 5 === 0) Utilities.sleep(100);
+
+                        // Dann die neue Farbe anwenden, je nach Match-Typ
+                        if (matchInfo.includes("Einnahme")) {
+                            if (matchInfo.includes("Vollständige Zahlung")) {
+                                console.log(`Setze Grün für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#C6EFCE"); // Kräftiges Grün
+                            } else if (matchInfo.includes("Teilzahlung")) {
+                                console.log(`Setze Orange für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#FCE4D6"); // Helles Orange
+                            } else {
+                                console.log(`Setze Hellgrün für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#EAF1DD"); // Helles Grün
+                            }
+                        } else if (matchInfo.includes("Ausgabe")) {
+                            if (matchInfo.includes("Vollständige Zahlung")) {
+                                console.log(`Setze Rot für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#FFC7CE"); // Helles Rot
+                            } else if (matchInfo.includes("Teilzahlung")) {
+                                console.log(`Setze Orange für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#FCE4D6"); // Helles Orange
+                            } else {
+                                console.log(`Setze Rosa für Zeile ${rowIndex}`);
+                                rowRange.setBackground("#FFCCCC"); // Helles Rosa
+                            }
+                        } else if (matchInfo.includes("Gutschrift")) {
+                            console.log(`Setze Lila für Zeile ${rowIndex}`);
+                            rowRange.setBackground("#E6E0FF"); // Helles Lila
+                        } else if (matchInfo.includes("Gesellschaftskonto") || matchInfo.includes("Holding")) {
+                            console.log(`Setze Gelb für Zeile ${rowIndex}`);
+                            rowRange.setBackground("#FFEB9C"); // Helles Gelb
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Fehler beim Formatieren von Zeile ${firstDataRow + i}:`, err);
+                }
+            }
+
+            console.log("Zeilenformatierung abgeschlossen");
+
             // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
             Helpers.setConditionalFormattingForColumn(sheet, "L", [
                 // Grundlegende Match-Typen
@@ -1637,6 +1700,10 @@ const RefreshModule = (() => {
 
             // Spaltenbreiten anpassen
             sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+            // Verzögerung vor dem Aufruf von markPaidInvoices
+            console.log("Warte 1 Sekunde vor dem Markieren der bezahlten Rechnungen...");
+            Utilities.sleep(1000);
 
             // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
             markPaidInvoices(einnahmenSheet, ausgabenSheet);
@@ -1834,28 +1901,28 @@ const RefreshModule = (() => {
                     if (zahlungsDatum) {
                         if (isGutschrift) {
                             // Gutschriften in Lila markieren
-                            rowRange.setBackgroundColor("#E6E0FF"); // Helles Lila
+                            rowRange.setBackground("#E6E0FF"); // Helles Lila
                         } else if (hatBankzuordnung) {
                             // Bezahlte Rechnungen mit Bank-Zuordnung in kräftigerem Grün markieren
-                            rowRange.setBackgroundColor("#C6EFCE"); // Kräftigeres Grün
+                            rowRange.setBackground("#C6EFCE"); // Kräftigeres Grün
                         } else {
                             // Bezahlte Rechnungen ohne Bank-Zuordnung in hellerem Grün markieren
-                            rowRange.setBackgroundColor("#EAF1DD"); // Helles Grün
+                            rowRange.setBackground("#EAF1DD"); // Helles Grün
                         }
                     } else {
                         // Bezahlt aber kein Datum - in Orange markieren
-                        rowRange.setBackgroundColor("#FCE4D6"); // Helles Orange
+                        rowRange.setBackground("#FCE4D6"); // Helles Orange
                     }
                 } else if (bezahltBetrag > 0) {
                     // Teilzahlung
                     if (hatBankzuordnung) {
-                        rowRange.setBackgroundColor("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
+                        rowRange.setBackground("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
                     } else {
-                        rowRange.setBackgroundColor("#FCE4D6"); // Helles Orange für normale Teilzahlungen
+                        rowRange.setBackground("#FCE4D6"); // Helles Orange für normale Teilzahlungen
                     }
                 } else {
                     // Unbezahlt - keine spezielle Farbe
-                    rowRange.setBackgroundColor(null);
+                    rowRange.setBackground(null);
                 }
 
                 // Optional: Wenn eine Bankzuordnung existiert, in Spalte O einen Hinweis setzen
@@ -1916,25 +1983,25 @@ const RefreshModule = (() => {
                     if (zahlungsDatum) {
                         if (hatBankzuordnung) {
                             // Bezahlte Ausgaben mit Bank-Zuordnung in kräftigerem Grün markieren
-                            rowRange.setBackgroundColor("#C6EFCE"); // Kräftigeres Grün
+                            rowRange.setBackground("#C6EFCE"); // Kräftigeres Grün
                         } else {
                             // Bezahlte Ausgaben ohne Bank-Zuordnung in hellerem Grün markieren
-                            rowRange.setBackgroundColor("#EAF1DD"); // Helles Grün
+                            rowRange.setBackground("#EAF1DD"); // Helles Grün
                         }
                     } else {
                         // Bezahlt aber kein Datum - in Orange markieren
-                        rowRange.setBackgroundColor("#FCE4D6"); // Helles Orange
+                        rowRange.setBackground("#FCE4D6"); // Helles Orange
                     }
                 } else if (bezahltBetrag > 0) {
                     // Teilzahlung
                     if (hatBankzuordnung) {
-                        rowRange.setBackgroundColor("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
+                        rowRange.setBackground("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
                     } else {
-                        rowRange.setBackgroundColor("#FCE4D6"); // Helles Orange für normale Teilzahlungen
+                        rowRange.setBackground("#FCE4D6"); // Helles Orange für normale Teilzahlungen
                     }
                 } else {
                     // Unbezahlt - keine spezielle Farbe
-                    rowRange.setBackgroundColor(null);
+                    rowRange.setBackground(null);
                 }
 
                 // Optional: Wenn eine Bankzuordnung existiert, in Spalte O einen Hinweis setzen
@@ -1981,38 +2048,48 @@ const RefreshModule = (() => {
         if (refMap[reference]) {
             const match = refMap[reference];
 
-            // Wenn ein Betrag angegeben ist und die Beträge nicht übereinstimmen
+            // Wenn ein Betrag angegeben ist
             if (betrag !== null) {
                 const matchNetto = Math.abs(match.betrag);
                 const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
+
                 // Bruttobetrag berechnen (Netto + MwSt)
                 const matchBrutto = matchNetto * (1 + matchMwstRate);
                 const matchBezahlt = Math.abs(match.bezahlt);
 
-                // Beträge mit Toleranz vergleichen (1 Cent Unterschied erlauben)
-                if (Math.abs(betrag - matchBrutto) <= 0.01) {
-                    // Vollständige Zahlung (betrag = brutto-Betrag)
+                // Beträge mit größerer Toleranz vergleichen (2 Cent Unterschied erlauben)
+                const tolerance = 0.02;
+
+                // Fall 1: Betrag entspricht genau dem Bruttobetrag (Vollständige Zahlung)
+                if (Math.abs(betrag - matchBrutto) <= tolerance) {
                     match.matchType = "Vollständige Zahlung";
                     return match;
                 }
-                // Prüfen, ob es sich um eine bereits vollständig bezahlte Position handelt
-                else if (Math.abs(matchBezahlt - matchBrutto) <= 0.01 && matchBezahlt > 0) {
-                    // Position ist bereits vollständig bezahlt
+
+                // Fall 2: Position ist bereits vollständig bezahlt
+                if (Math.abs(matchBezahlt - matchBrutto) <= tolerance && matchBezahlt > 0) {
                     match.matchType = "Vollständige Zahlung";
                     return match;
                 }
-                // Prüfen, ob es sich um eine Teilzahlung handelt (nur wenn der Betrag kleiner als der Rechnungsbetrag ist)
-                else if (betrag < matchBrutto) {
+
+                // Fall 3: Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
+                // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
+                if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
                     match.matchType = "Teilzahlung";
                     return match;
                 }
-                // Bei allen anderen Fällen (Beträge weichen ab)
-                else {
-                    // Nur zur Sicherheit, da es ungewöhnlich ist, wenn der Bankbetrag größer als der Rechnungsbetrag ist
-                    match.matchType = "Unsichere Zahlung";
-                    match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
+
+                // Fall 4: Betrag ist größer als Bruttobetrag, aber vermutlich trotzdem die richtige Zahlung
+                // (z.B. wegen Rundungen oder kleinen Gebühren)
+                if (betrag > matchBrutto && (betrag - matchBrutto) <= tolerance) {
+                    match.matchType = "Vollständige Zahlung";
                     return match;
                 }
+
+                // Fall 5: Bei allen anderen Fällen (Beträge weichen stärker ab)
+                match.matchType = "Unsichere Zahlung";
+                match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
+                return match;
             } else {
                 // Ohne Betragsvergleich
                 match.matchType = "Referenz-Match";
@@ -2029,29 +2106,34 @@ const RefreshModule = (() => {
                 if (betrag !== null) {
                     const matchNetto = Math.abs(match.betrag);
                     const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
+
                     // Bruttobetrag berechnen (Netto + MwSt)
                     const matchBrutto = matchNetto * (1 + matchMwstRate);
                     const matchBezahlt = Math.abs(match.bezahlt);
 
+                    // Größere Toleranz für Teilweise Übereinstimmungen
+                    const tolerance = 0.02;
+
                     // Beträge stimmen mit Toleranz überein
-                    if (Math.abs(betrag - matchBrutto) <= 0.01) {
+                    if (Math.abs(betrag - matchBrutto) <= tolerance) {
                         match.matchType = "Vollständige Zahlung";
                         return match;
                     }
 
                     // Wenn Position bereits vollständig bezahlt ist
-                    if (Math.abs(matchBezahlt - matchBrutto) <= 0.01 && matchBezahlt > 0) {
+                    if (Math.abs(matchBezahlt - matchBrutto) <= tolerance && matchBezahlt > 0) {
                         match.matchType = "Vollständige Zahlung";
                         return match;
                     }
 
-                    // Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
-                    if (betrag < matchBrutto) {
+                    // Teilzahlung mit größerer Toleranz für nicht-exakte Referenzen
+                    // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
+                    if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
                         match.matchType = "Teilzahlung";
                         return match;
                     }
 
-                    // Beträge weichen stark ab
+                    // Bei allen anderen Fällen: Unsichere Zahlung
                     match.matchType = "Unsichere Zahlung";
                     match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
                     return match;
