@@ -20,23 +20,46 @@ const RefreshModule = (() => {
             const numRows = lastRow - 1;
             const name = sheet.getName();
 
-            // Formeln für verschiedene Spalten setzen (ORIGINAL-FORMELN BEIBEHALTEN)
-            const formulas = {
-                // MwSt-Betrag (G) - KORRIGIERT: Originalformel verwenden
-                7: row => `=E${row}*F${row}`,
+            // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
+            let columns;
+            if (name === "Einnahmen") {
+                columns = config.sheets.einnahmen.columns;
+            } else if (name === "Ausgaben") {
+                columns = config.sheets.ausgaben.columns;
+            } else if (name === "Eigenbelege") {
+                columns = config.sheets.eigenbelege.columns;
+            } else {
+                return false; // Unbekanntes Sheet
+            }
 
-                // Brutto-Betrag (H)
-                8: row => `=E${row}+G${row}`,
+            // Spaltenbuchstaben aus den Indizes generieren
+            const columnLetters = {};
+            Object.entries(columns).forEach(([key, index]) => {
+                columnLetters[key] = Helpers.getColumnLetter(index);
+            });
 
-                // Steuerbemessungsgrundlage - für Teilzahlungen (J)
-                10: row => `=(H${row}-I${row})/(1+F${row})`,
+            // Formeln für verschiedene Spalten setzen (mit konfigurierten Spaltenbuchstaben)
+            const formulas = {};
 
-                // Quartal (K)
-                11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
+            // MwSt-Betrag
+            formulas[columns.mwstBetrag] = row =>
+                `=${columnLetters.nettobetrag}${row}*${columnLetters.mwstSatz}${row}`;
 
-                // Zahlungsstatus (L)
-                12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`
-            };
+            // Brutto-Betrag
+            formulas[columns.bruttoBetrag] = row =>
+                `=${columnLetters.nettobetrag}${row}+${columnLetters.mwstBetrag}${row}`;
+
+            // Steuerbemessungsgrundlage - für Teilzahlungen
+            formulas[columns.steuerbemessung] = row =>
+                `=(${columnLetters.bruttoBetrag}${row}-${columnLetters.bezahlt}${row})/(1+${columnLetters.mwstSatz}${row})`;
+
+            // Quartal
+            formulas[columns.quartal] = row =>
+                `=IF(${columnLetters.datum}${row}="";"";ROUNDUP(MONTH(${columnLetters.datum}${row})/3;0))`;
+
+            // Zahlungsstatus
+            formulas[columns.zahlungsstatus] = row =>
+                `=IF(VALUE(${columnLetters.bezahlt}${row})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${row})>=VALUE(${columnLetters.bruttoBetrag}${row});"Bezahlt";"Teilbezahlt"))`;
 
             // Formeln für jede Spalte anwenden
             Object.entries(formulas).forEach(([col, formulaFn]) => {
@@ -44,36 +67,36 @@ const RefreshModule = (() => {
                 sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulasArray);
             });
 
-            // Bezahlter Betrag (I) - Leerzeichen durch 0 ersetzen für Berechnungen
-            const col9Range = sheet.getRange(2, 9, numRows, 1);
-            const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
-            col9Range.setValues(col9Values.map(val => [val]));
+            // Bezahlter Betrag - Leerzeichen durch 0 ersetzen für Berechnungen
+            const bezahltRange = sheet.getRange(2, columns.bezahlt, numRows, 1);
+            const bezahltValues = bezahltRange.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
+            bezahltRange.setValues(bezahltValues.map(val => [val]));
 
             // Dropdown-Validierungen je nach Sheet-Typ setzen
             if (name === "Einnahmen") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     Object.keys(config.einnahmen.categories)
                 );
             } else if (name === "Ausgaben") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     Object.keys(config.ausgaben.categories)
                 );
             } else if (name === "Eigenbelege") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     config.eigenbelege.category
                 );
 
                 // Für Eigenbelege: Status-Dropdown hinzufügen
                 Validator.validateDropdown(
-                    sheet, 2, 12, numRows, 1,
+                    sheet, 2, columns.status, numRows, 1,
                     config.eigenbelege.status
                 );
 
                 // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
-                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
                     {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
                     {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
@@ -82,13 +105,13 @@ const RefreshModule = (() => {
 
             // Zahlungsart-Dropdown für alle Blätter
             Validator.validateDropdown(
-                sheet, 2, 13, numRows, 1,
+                sheet, 2, columns.zahlungsart, numRows, 1,
                 config.common.paymentType
             );
 
             // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
             if (name !== "Eigenbelege") {
-                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
                     {value: "Teilbezahlt", background: "#FFEB9C", fontColor: "#9C6500"},
                     {value: "Bezahlt", background: "#C6EFCE", fontColor: "#006100"}

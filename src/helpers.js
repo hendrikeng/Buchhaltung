@@ -207,13 +207,34 @@ const Helpers = {
     /**
      * Extrahiert den Monat aus einem Datum in einer Zeile
      * @param {Array} row - Die Zeile mit dem Datum
-     * @param {number} colIndex - Der Index der Spalte mit dem Datum (0-basiert)
+     * @param {string} sheetName - Der Name des Sheets (für Spaltenkonfiguration)
      * @returns {number} - Die Monatsnummer (1-12) oder 0 bei Fehler
      */
-    getMonthFromRow(row, colIndex = 13) {
-        if (!row || row.length <= colIndex) return 0;
+    getMonthFromRow(row, sheetName = null) {
+        if (!row) return 0;
 
-        const d = this.parseDate(row[colIndex]);
+        // Spalte für Zeitstempel basierend auf Sheet-Typ bestimmen
+        let timestampColumn;
+
+        if (sheetName) {
+            // Spaltenkonfiguration aus dem Sheetnamen bestimmen
+            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
+            if (sheetConfig && sheetConfig.zeitstempel) {
+                timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
+            } else {
+                // Fallback auf Standardposition, falls keine Konfiguration gefunden
+                timestampColumn = 15; // Standard: Spalte P (16. Spalte, 0-basiert: 15)
+            }
+        } else {
+            // Wenn kein Sheetname angegeben, Fallback auf Position 13
+            // (entspricht dem ursprünglichen Wert im Code)
+            timestampColumn = 13;
+        }
+
+        // Sicherstellen, dass die Zeile lang genug ist
+        if (row.length <= timestampColumn) return 0;
+
+        const d = this.parseDate(row[timestampColumn]);
 
         // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
         const targetYear = config?.tax?.year || new Date().getFullYear();
@@ -263,6 +284,21 @@ const Helpers = {
         const timestamp = new Date().getTime();
         const random = Math.floor(Math.random() * 10000);
         return `${prefix}${timestamp}${random}`;
+    },
+
+    /**
+     * Konvertiert einen Spaltenindex (1-basiert) in einen Spaltenbuchstaben (A, B, C, ...)
+     * @param {number} columnIndex - 1-basierter Spaltenindex
+     * @returns {string} - Spaltenbuchstabe(n)
+     */
+    getColumnLetter(columnIndex) {
+        let letter = '';
+        while (columnIndex > 0) {
+            const modulo = (columnIndex - 1) % 26;
+            letter = String.fromCharCode(65 + modulo) + letter;
+            columnIndex = Math.floor((columnIndex - modulo) / 26);
+        }
+        return letter;
     }
 };
 

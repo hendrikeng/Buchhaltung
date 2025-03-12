@@ -1,5 +1,6 @@
 // file: src/importModule.js
 import Helpers from "./helpers.js";
+import config from "./config.js";
 
 /**
  * Modul für den Import von Dateien aus Google Drive in die Buchhaltungstabelle
@@ -22,6 +23,14 @@ const ImportModule = (() => {
         const timestamp = new Date();
         let importedCount = 0;
 
+        // Konfiguration für das richtige Sheet auswählen
+        const sheetConfig = type === "Einnahme"
+            ? config.sheets.einnahmen.columns
+            : config.sheets.ausgaben.columns;
+
+        // Konfiguration für das Änderungshistorie-Sheet
+        const historyConfig = config.sheets.aenderungshistorie.columns;
+
         while (files.hasNext()) {
             const file = files.next();
             const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
@@ -32,29 +41,27 @@ const ImportModule = (() => {
             // Prüfe, ob die Datei bereits importiert wurde
             if (!existingFiles.has(fileName)) {
                 // Neue Zeile für das Hauptsheet erstellen
-                newMainRows.push([
-                    invoiceDate,        // Datum
-                    invoiceName,        // Beschreibung
-                    "", "", "", "",     // Leere Felder für manuelle Eingabe
-                    "",                 // Zahlungsart
-                    "",                 // Betrag netto
-                    "",                 // MwSt-Betrag
-                    "",                 // Betrag brutto
-                    "",                 // Kontonummer
-                    "",                 // Gegenkonto
-                    "", "", "",         // Zusätzliche leere Felder
-                    timestamp,          // Zeitstempel
-                    fileName,           // Dateiname zur Referenz
-                    fileUrl             // Link zur Originaldatei
-                ]);
+                const row = Array(mainSheet.getLastColumn()).fill("");
+
+                // Daten in die richtigen Spalten setzen (0-basiert)
+                row[sheetConfig.datum - 1] = invoiceDate;                  // Datum
+                row[sheetConfig.rechnungsnummer - 1] = invoiceName;        // Rechnungsnummer
+                row[sheetConfig.zeitstempel - 1] = timestamp;              // Zeitstempel
+                row[sheetConfig.dateiname - 1] = fileName;                 // Dateiname
+                row[sheetConfig.dateilink - 1] = fileUrl;                  // Link zur Originaldatei
+
+                newMainRows.push(row);
 
                 // Protokolliere den Import in der Änderungshistorie
-                newHistoryRows.push([
-                    timestamp,          // Zeitstempel
-                    type,               // Typ (Einnahme/Ausgabe)
-                    fileName,           // Dateiname
-                    fileUrl             // Link zur Datei
-                ]);
+                const historyRow = Array(historySheet.getLastColumn()).fill("");
+
+                // Daten in die richtigen Historie-Spalten setzen (0-basiert)
+                historyRow[historyConfig.datum - 1] = timestamp;           // Zeitstempel
+                historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe)
+                historyRow[historyConfig.dateiname - 1] = fileName;        // Dateiname
+                historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
+
+                newHistoryRows.push(historyRow);
 
                 existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
                 importedCount++;
@@ -107,17 +114,25 @@ const ImportModule = (() => {
 
             // Header-Zeile für Änderungshistorie initialisieren, falls nötig
             if (history.getLastRow() === 0) {
-                history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+                const historyConfig = config.sheets.aenderungshistorie.columns;
+                const headerRow = ["", "", "", ""];
+                headerRow[historyConfig.datum - 1] = "Datum";
+                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
+                headerRow[historyConfig.dateiname - 1] = "Dateiname";
+                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
+
+                history.appendRow(headerRow);
                 history.getRange(1, 1, 1, 4).setFontWeight("bold");
             }
 
             // Bereits importierte Dateien aus der Änderungshistorie erfassen
             const historyData = history.getDataRange().getValues();
             const existingFiles = new Set();
+            const historyConfig = config.sheets.aenderungshistorie.columns;
 
-            // Überschriftenzeile überspringen und alle Dateinamen sammeln (Spalte C)
+            // Überschriftenzeile überspringen und alle Dateinamen sammeln
             for (let i = 1; i < historyData.length; i++) {
-                existingFiles.add(historyData[i][2]); // Dateiname steht in Spalte C (Index 2)
+                existingFiles.add(historyData[i][historyConfig.dateiname - 1]); // Dateiname aus der entsprechenden Spalte
             }
 
             // Auf übergeordneten Ordner zugreifen

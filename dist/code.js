@@ -40,6 +40,138 @@ const config = {
         }
     },
 
+    // Sheet-Struktur Konfiguration
+    sheets: {
+        // Konfiguration für das Einnahmen-Sheet
+        einnahmen: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Kunde
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Ausgaben-Sheet (identisch zu Einnahmen)
+        ausgaben: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Lieferant
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Eigenbelege-Sheet
+        eigenbelege: {
+            columns: {
+                datum: 1,              // A: Belegdatum
+                belegnummer: 2,        // B: Belegnummer
+                kategorie: 3,          // C: Kategorie
+                beschreibung: 4,       // D: Beschreibung
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                status: 12,            // L: Status (Offen/Erstattet/Gebucht)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Erstattungsdatum
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Bankbewegungen-Sheet
+        bankbewegungen: {
+            columns: {
+                datum: 1,              // A: Buchungsdatum
+                buchungstext: 2,       // B: Buchungstext
+                betrag: 3,             // C: Betrag
+                saldo: 4,              // D: Saldo (berechnet)
+                transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
+                kategorie: 6,          // F: Kategorie
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                referenz: 9,           // I: Referenznummer
+                verwendungszweck: 10,  // J: Verwendungszweck
+                anmerkung: 11,         // K: Anmerkung
+                matchInfo: 12          // L: Match-Information zu Einnahmen/Ausgaben
+            }
+        },
+
+        // Konfiguration für das Gesellschafterkonto-Sheet
+        gesellschafterkonto: {
+            columns: {
+                datum: 1,              // A: Datum
+                beschreibung: 2,       // B: Beschreibung
+                kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
+                betrag: 4,             // D: Betrag
+                gesellschafter: 5,     // E: Gesellschafter
+                anmerkung: 6,          // F: Anmerkung
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                buchungsdatum: 9,      // I: Buchungsdatum
+                beleg: 10,             // J: Beleg/Referenz
+                saldo: 11,             // K: Saldo (berechnet)
+                zeitstempel: 12        // L: Zeitstempel der letzten Änderung
+            }
+        },
+
+        // Konfiguration für das Holding Transfers-Sheet
+        holdingTransfers: {
+            columns: {
+                datum: 1,              // A: Datum
+                beschreibung: 2,       // B: Beschreibung
+                kategorie: 3,          // C: Kategorie (Gewinnübertrag/Kapitalrückführung)
+                betrag: 4,             // D: Betrag
+                anmerkung: 5,          // E: Anmerkung
+                zeitstempel: 6         // F: Zeitstempel der letzten Änderung
+            }
+        },
+
+        // Konfiguration für das Änderungshistorie-Sheet
+        aenderungshistorie: {
+            columns: {
+                datum: 1,              // A: Datum/Zeitstempel
+                typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
+                dateiname: 3,          // C: Dateiname
+                dateilink: 4           // D: Link zur Datei
+            }
+        }
+    },
+
     // Einnahmen-Konfiguration
     einnahmen: {
         // Kategorien mit Steuertyp
@@ -319,7 +451,8 @@ const config = {
         "8000": "Eröffnungsbilanzkonto",
         "8400": "Abschlussbilanzkonto",
         "8999": "Gewinn- und Verlustkonto"
-    }
+    },
+
 };
 
 // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
@@ -542,13 +675,34 @@ const Helpers = {
     /**
      * Extrahiert den Monat aus einem Datum in einer Zeile
      * @param {Array} row - Die Zeile mit dem Datum
-     * @param {number} colIndex - Der Index der Spalte mit dem Datum (0-basiert)
+     * @param {string} sheetName - Der Name des Sheets (für Spaltenkonfiguration)
      * @returns {number} - Die Monatsnummer (1-12) oder 0 bei Fehler
      */
-    getMonthFromRow(row, colIndex = 13) {
-        if (!row || row.length <= colIndex) return 0;
+    getMonthFromRow(row, sheetName = null) {
+        if (!row) return 0;
 
-        const d = this.parseDate(row[colIndex]);
+        // Spalte für Zeitstempel basierend auf Sheet-Typ bestimmen
+        let timestampColumn;
+
+        if (sheetName) {
+            // Spaltenkonfiguration aus dem Sheetnamen bestimmen
+            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
+            if (sheetConfig && sheetConfig.zeitstempel) {
+                timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
+            } else {
+                // Fallback auf Standardposition, falls keine Konfiguration gefunden
+                timestampColumn = 15; // Standard: Spalte P (16. Spalte, 0-basiert: 15)
+            }
+        } else {
+            // Wenn kein Sheetname angegeben, Fallback auf Position 13
+            // (entspricht dem ursprünglichen Wert im Code)
+            timestampColumn = 13;
+        }
+
+        // Sicherstellen, dass die Zeile lang genug ist
+        if (row.length <= timestampColumn) return 0;
+
+        const d = this.parseDate(row[timestampColumn]);
 
         // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
         const targetYear = config?.tax?.year || new Date().getFullYear();
@@ -598,6 +752,21 @@ const Helpers = {
         const timestamp = new Date().getTime();
         const random = Math.floor(Math.random() * 10000);
         return `${prefix}${timestamp}${random}`;
+    },
+
+    /**
+     * Konvertiert einen Spaltenindex (1-basiert) in einen Spaltenbuchstaben (A, B, C, ...)
+     * @param {number} columnIndex - 1-basierter Spaltenindex
+     * @returns {string} - Spaltenbuchstabe(n)
+     */
+    getColumnLetter(columnIndex) {
+        let letter = '';
+        while (columnIndex > 0) {
+            const modulo = (columnIndex - 1) % 26;
+            letter = String.fromCharCode(65 + modulo) + letter;
+            columnIndex = Math.floor((columnIndex - modulo) / 26);
+        }
+        return letter;
     }
 };
 
@@ -624,6 +793,14 @@ const ImportModule = (() => {
         const timestamp = new Date();
         let importedCount = 0;
 
+        // Konfiguration für das richtige Sheet auswählen
+        const sheetConfig = type === "Einnahme"
+            ? config.sheets.einnahmen.columns
+            : config.sheets.ausgaben.columns;
+
+        // Konfiguration für das Änderungshistorie-Sheet
+        const historyConfig = config.sheets.aenderungshistorie.columns;
+
         while (files.hasNext()) {
             const file = files.next();
             const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
@@ -634,29 +811,27 @@ const ImportModule = (() => {
             // Prüfe, ob die Datei bereits importiert wurde
             if (!existingFiles.has(fileName)) {
                 // Neue Zeile für das Hauptsheet erstellen
-                newMainRows.push([
-                    invoiceDate,        // Datum
-                    invoiceName,        // Beschreibung
-                    "", "", "", "",     // Leere Felder für manuelle Eingabe
-                    "",                 // Zahlungsart
-                    "",                 // Betrag netto
-                    "",                 // MwSt-Betrag
-                    "",                 // Betrag brutto
-                    "",                 // Kontonummer
-                    "",                 // Gegenkonto
-                    "", "", "",         // Zusätzliche leere Felder
-                    timestamp,          // Zeitstempel
-                    fileName,           // Dateiname zur Referenz
-                    fileUrl             // Link zur Originaldatei
-                ]);
+                const row = Array(mainSheet.getLastColumn()).fill("");
+
+                // Daten in die richtigen Spalten setzen (0-basiert)
+                row[sheetConfig.datum - 1] = invoiceDate;                  // Datum
+                row[sheetConfig.rechnungsnummer - 1] = invoiceName;        // Rechnungsnummer
+                row[sheetConfig.zeitstempel - 1] = timestamp;              // Zeitstempel
+                row[sheetConfig.dateiname - 1] = fileName;                 // Dateiname
+                row[sheetConfig.dateilink - 1] = fileUrl;                  // Link zur Originaldatei
+
+                newMainRows.push(row);
 
                 // Protokolliere den Import in der Änderungshistorie
-                newHistoryRows.push([
-                    timestamp,          // Zeitstempel
-                    type,               // Typ (Einnahme/Ausgabe)
-                    fileName,           // Dateiname
-                    fileUrl             // Link zur Datei
-                ]);
+                const historyRow = Array(historySheet.getLastColumn()).fill("");
+
+                // Daten in die richtigen Historie-Spalten setzen (0-basiert)
+                historyRow[historyConfig.datum - 1] = timestamp;           // Zeitstempel
+                historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe)
+                historyRow[historyConfig.dateiname - 1] = fileName;        // Dateiname
+                historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
+
+                newHistoryRows.push(historyRow);
 
                 existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
                 importedCount++;
@@ -709,17 +884,25 @@ const ImportModule = (() => {
 
             // Header-Zeile für Änderungshistorie initialisieren, falls nötig
             if (history.getLastRow() === 0) {
-                history.appendRow(["Datum", "Rechnungstyp", "Dateiname", "Link zur Datei"]);
+                const historyConfig = config.sheets.aenderungshistorie.columns;
+                const headerRow = ["", "", "", ""];
+                headerRow[historyConfig.datum - 1] = "Datum";
+                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
+                headerRow[historyConfig.dateiname - 1] = "Dateiname";
+                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
+
+                history.appendRow(headerRow);
                 history.getRange(1, 1, 1, 4).setFontWeight("bold");
             }
 
             // Bereits importierte Dateien aus der Änderungshistorie erfassen
             const historyData = history.getDataRange().getValues();
             const existingFiles = new Set();
+            const historyConfig = config.sheets.aenderungshistorie.columns;
 
-            // Überschriftenzeile überspringen und alle Dateinamen sammeln (Spalte C)
+            // Überschriftenzeile überspringen und alle Dateinamen sammeln
             for (let i = 1; i < historyData.length; i++) {
-                existingFiles.add(historyData[i][2]); // Dateiname steht in Spalte C (Index 2)
+                existingFiles.add(historyData[i][historyConfig.dateiname - 1]); // Dateiname aus der entsprechenden Spalte
             }
 
             // Auf übergeordneten Ordner zugreifen
@@ -1201,23 +1384,46 @@ const RefreshModule = (() => {
             const numRows = lastRow - 1;
             const name = sheet.getName();
 
-            // Formeln für verschiedene Spalten setzen (ORIGINAL-FORMELN BEIBEHALTEN)
-            const formulas = {
-                // MwSt-Betrag (G) - KORRIGIERT: Originalformel verwenden
-                7: row => `=E${row}*F${row}`,
+            // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
+            let columns;
+            if (name === "Einnahmen") {
+                columns = config.sheets.einnahmen.columns;
+            } else if (name === "Ausgaben") {
+                columns = config.sheets.ausgaben.columns;
+            } else if (name === "Eigenbelege") {
+                columns = config.sheets.eigenbelege.columns;
+            } else {
+                return false; // Unbekanntes Sheet
+            }
 
-                // Brutto-Betrag (H)
-                8: row => `=E${row}+G${row}`,
+            // Spaltenbuchstaben aus den Indizes generieren
+            const columnLetters = {};
+            Object.entries(columns).forEach(([key, index]) => {
+                columnLetters[key] = Helpers.getColumnLetter(index);
+            });
 
-                // Steuerbemessungsgrundlage - für Teilzahlungen (J)
-                10: row => `=(H${row}-I${row})/(1+F${row})`,
+            // Formeln für verschiedene Spalten setzen (mit konfigurierten Spaltenbuchstaben)
+            const formulas = {};
 
-                // Quartal (K)
-                11: row => `=IF(A${row}="";"";ROUNDUP(MONTH(A${row})/3;0))`,
+            // MwSt-Betrag
+            formulas[columns.mwstBetrag] = row =>
+                `=${columnLetters.nettobetrag}${row}*${columnLetters.mwstSatz}${row}`;
 
-                // Zahlungsstatus (L)
-                12: row => `=IF(VALUE(I${row})=0;"Offen";IF(VALUE(I${row})>=VALUE(H${row});"Bezahlt";"Teilbezahlt"))`
-            };
+            // Brutto-Betrag
+            formulas[columns.bruttoBetrag] = row =>
+                `=${columnLetters.nettobetrag}${row}+${columnLetters.mwstBetrag}${row}`;
+
+            // Steuerbemessungsgrundlage - für Teilzahlungen
+            formulas[columns.steuerbemessung] = row =>
+                `=(${columnLetters.bruttoBetrag}${row}-${columnLetters.bezahlt}${row})/(1+${columnLetters.mwstSatz}${row})`;
+
+            // Quartal
+            formulas[columns.quartal] = row =>
+                `=IF(${columnLetters.datum}${row}="";"";ROUNDUP(MONTH(${columnLetters.datum}${row})/3;0))`;
+
+            // Zahlungsstatus
+            formulas[columns.zahlungsstatus] = row =>
+                `=IF(VALUE(${columnLetters.bezahlt}${row})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${row})>=VALUE(${columnLetters.bruttoBetrag}${row});"Bezahlt";"Teilbezahlt"))`;
 
             // Formeln für jede Spalte anwenden
             Object.entries(formulas).forEach(([col, formulaFn]) => {
@@ -1225,36 +1431,36 @@ const RefreshModule = (() => {
                 sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulasArray);
             });
 
-            // Bezahlter Betrag (I) - Leerzeichen durch 0 ersetzen für Berechnungen
-            const col9Range = sheet.getRange(2, 9, numRows, 1);
-            const col9Values = col9Range.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
-            col9Range.setValues(col9Values.map(val => [val]));
+            // Bezahlter Betrag - Leerzeichen durch 0 ersetzen für Berechnungen
+            const bezahltRange = sheet.getRange(2, columns.bezahlt, numRows, 1);
+            const bezahltValues = bezahltRange.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
+            bezahltRange.setValues(bezahltValues.map(val => [val]));
 
             // Dropdown-Validierungen je nach Sheet-Typ setzen
             if (name === "Einnahmen") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     Object.keys(config.einnahmen.categories)
                 );
             } else if (name === "Ausgaben") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     Object.keys(config.ausgaben.categories)
                 );
             } else if (name === "Eigenbelege") {
                 Validator.validateDropdown(
-                    sheet, 2, 3, numRows, 1,
+                    sheet, 2, columns.kategorie, numRows, 1,
                     config.eigenbelege.category
                 );
 
                 // Für Eigenbelege: Status-Dropdown hinzufügen
                 Validator.validateDropdown(
-                    sheet, 2, 12, numRows, 1,
+                    sheet, 2, columns.status, numRows, 1,
                     config.eigenbelege.status
                 );
 
                 // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
-                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
                     {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
                     {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
@@ -1263,13 +1469,13 @@ const RefreshModule = (() => {
 
             // Zahlungsart-Dropdown für alle Blätter
             Validator.validateDropdown(
-                sheet, 2, 13, numRows, 1,
+                sheet, 2, columns.zahlungsart, numRows, 1,
                 config.common.paymentType
             );
 
             // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
             if (name !== "Eigenbelege") {
-                Helpers.setConditionalFormattingForColumn(sheet, "L", [
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
                     {value: "Teilbezahlt", background: "#FFEB9C", fontColor: "#9C6500"},
                     {value: "Bezahlt", background: "#C6EFCE", fontColor: "#006100"}

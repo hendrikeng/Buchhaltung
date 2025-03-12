@@ -37,6 +37,138 @@ const config = {
         }
     },
 
+    // Sheet-Struktur Konfiguration
+    sheets: {
+        // Konfiguration für das Einnahmen-Sheet
+        einnahmen: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Kunde
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Ausgaben-Sheet (identisch zu Einnahmen)
+        ausgaben: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Lieferant
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Eigenbelege-Sheet
+        eigenbelege: {
+            columns: {
+                datum: 1,              // A: Belegdatum
+                belegnummer: 2,        // B: Belegnummer
+                kategorie: 3,          // C: Kategorie
+                beschreibung: 4,       // D: Beschreibung
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                status: 12,            // L: Status (Offen/Erstattet/Gebucht)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Erstattungsdatum
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            }
+        },
+
+        // Konfiguration für das Bankbewegungen-Sheet
+        bankbewegungen: {
+            columns: {
+                datum: 1,              // A: Buchungsdatum
+                buchungstext: 2,       // B: Buchungstext
+                betrag: 3,             // C: Betrag
+                saldo: 4,              // D: Saldo (berechnet)
+                transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
+                kategorie: 6,          // F: Kategorie
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                referenz: 9,           // I: Referenznummer
+                verwendungszweck: 10,  // J: Verwendungszweck
+                anmerkung: 11,         // K: Anmerkung
+                matchInfo: 12          // L: Match-Information zu Einnahmen/Ausgaben
+            }
+        },
+
+        // Konfiguration für das Gesellschafterkonto-Sheet
+        gesellschafterkonto: {
+            columns: {
+                datum: 1,              // A: Datum
+                beschreibung: 2,       // B: Beschreibung
+                kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
+                betrag: 4,             // D: Betrag
+                gesellschafter: 5,     // E: Gesellschafter
+                anmerkung: 6,          // F: Anmerkung
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                buchungsdatum: 9,      // I: Buchungsdatum
+                beleg: 10,             // J: Beleg/Referenz
+                saldo: 11,             // K: Saldo (berechnet)
+                zeitstempel: 12        // L: Zeitstempel der letzten Änderung
+            }
+        },
+
+        // Konfiguration für das Holding Transfers-Sheet
+        holdingTransfers: {
+            columns: {
+                datum: 1,              // A: Datum
+                beschreibung: 2,       // B: Beschreibung
+                kategorie: 3,          // C: Kategorie (Gewinnübertrag/Kapitalrückführung)
+                betrag: 4,             // D: Betrag
+                anmerkung: 5,          // E: Anmerkung
+                zeitstempel: 6         // F: Zeitstempel der letzten Änderung
+            }
+        },
+
+        // Konfiguration für das Änderungshistorie-Sheet
+        aenderungshistorie: {
+            columns: {
+                datum: 1,              // A: Datum/Zeitstempel
+                typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
+                dateiname: 3,          // C: Dateiname
+                dateilink: 4           // D: Link zur Datei
+            }
+        }
+    },
+
     // Einnahmen-Konfiguration
     einnahmen: {
         // Kategorien mit Steuertyp
@@ -316,7 +448,8 @@ const config = {
         "8000": "Eröffnungsbilanzkonto",
         "8400": "Abschlussbilanzkonto",
         "8999": "Gewinn- und Verlustkonto"
-    }
+    },
+
 };
 
 // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
