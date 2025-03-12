@@ -10,7 +10,8 @@ const config = {
     common: {
         paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
         months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        currentYear: new Date().getFullYear()
+        currentYear: new Date().getFullYear(),
+        version: "1.0.0"
     },
 
     // Steuerliche Einstellungen
@@ -40,7 +41,7 @@ const config = {
         }
     },
 
-    // Sheet-Struktur Konfiguration
+    // Sheet-Struktur Konfiguration - mit konstanten Spaltendefinitionen
     sheets: {
         // Konfiguration für das Einnahmen-Sheet
         einnahmen: {
@@ -126,8 +127,8 @@ const config = {
                 kontoHaben: 8,         // H: Gegenkonto (Haben)
                 referenz: 9,           // I: Referenznummer
                 verwendungszweck: 10,  // J: Verwendungszweck
-                matchInfo: 11,          // K: Match-Information zu Einnahmen/Ausgaben
-                zeitstempel: 12,       // L: Zeitstempel der letzten Änderung
+                matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
+                anmerkung: 12,         // L: Anmerkung
             }
         },
 
@@ -341,9 +342,6 @@ const config = {
 
     // Bankbewegungen-Konfiguration
     bank: {
-        // Kombinierte Liste aller Kategorien (automatisch generiert)
-        category: [], // Wird dynamisch befüllt
-
         // Typen von Bankbewegungen
         type: ["Einnahme", "Ausgabe", "Interne Buchung"],
 
@@ -453,19 +451,29 @@ const config = {
         "8999": "Gewinn- und Verlustkonto"
     },
 
+    /**
+     * Initialisierungsfunktion für abgeleitete Daten
+     * Wird automatisch beim Import aufgerufen
+     */
+    initialize() {
+        // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
+        this.bank.category = [
+            ...Object.keys(this.einnahmen.categories),
+            ...Object.keys(this.ausgaben.categories),
+            ...this.gesellschafterkonto.category,
+            ...this.holdingTransfers.category,
+            ...this.eigenbelege.category
+        ];
+
+        // Duplikate aus den Kategorien entfernen
+        this.bank.category = [...new Set(this.bank.category)];
+
+        return this;
+    }
 };
 
-// Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-config.bank.category = [
-    ...Object.keys(config.einnahmen.categories),
-    ...Object.keys(config.ausgaben.categories),
-    ...config.gesellschafterkonto.category,
-    ...config.holdingTransfers.category,
-    ...config.eigenbelege.category
-];
-
-// Duplikate aus den Kategorien entfernen
-config.bank.category = [...new Set(config.bank.category)];
+// Initialisierung ausführen und exportieren
+var config$1 = config.initialize();
 
 // src/helpers.js
 
@@ -474,28 +482,63 @@ config.bank.category = [...new Set(config.bank.category)];
  */
 const Helpers = {
     /**
+     * Cache für häufig verwendete Berechnungen
+     * Verbessert die Performance bei wiederholten Aufrufen
+     */
+    _cache: {
+        dates: new Map(),
+        currency: new Map(),
+        mwstRates: new Map(),
+        columnLetters: new Map()
+    },
+
+    /**
+     * Cache leeren
+     */
+    clearCache() {
+        this._cache.dates.clear();
+        this._cache.currency.clear();
+        this._cache.mwstRates.clear();
+        this._cache.columnLetters.clear();
+    },
+
+    /**
      * Konvertiert verschiedene Datumsformate in ein gültiges Date-Objekt
      * @param {Date|string} value - Das zu parsende Datum
      * @returns {Date|null} - Das geparste Datum oder null bei ungültigem Format
      */
     parseDate(value) {
-        // Wenn bereits ein Date-Objekt
-        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+        // Cache-Lookup für häufig verwendete Werte
+        const cacheKey = value instanceof Date
+            ? value.getTime().toString()
+            : value ? value.toString() : '';
 
+        if (this._cache.dates.has(cacheKey)) {
+            return this._cache.dates.get(cacheKey);
+        }
+
+        let result = null;
+
+        // Wenn bereits ein Date-Objekt
+        if (value instanceof Date) {
+            result = isNaN(value.getTime()) ? null : value;
+        }
         // Wenn String
-        if (typeof value === "string") {
+        else if (typeof value === "string") {
             // Deutsche Datumsformate (DD.MM.YYYY) unterstützen
             if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(value)) {
                 const [day, month, year] = value.split('.').map(Number);
                 const date = new Date(year, month - 1, day);
-                return isNaN(date.getTime()) ? null : date;
+                result = isNaN(date.getTime()) ? null : date;
+            } else {
+                const d = new Date(value);
+                result = isNaN(d.getTime()) ? null : d;
             }
-
-            const d = new Date(value);
-            return isNaN(d.getTime()) ? null : d;
         }
 
-        return null;
+        // Ergebnis cachen
+        this._cache.dates.set(cacheKey, result);
+        return result;
     },
 
     /**
@@ -507,20 +550,33 @@ const Helpers = {
         if (value === null || value === undefined || value === "") return 0;
         if (typeof value === "number") return value;
 
+        // Cache-Lookup für String-Werte
+        const stringValue = value.toString();
+        if (this._cache.currency.has(stringValue)) {
+            return this._cache.currency.get(stringValue);
+        }
+
         // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
-        const str = value.toString()
+        const str = stringValue
             .replace(/[^\d,.-]/g, "")
             .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
 
         // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
         const parts = str.split('.');
+        let result;
+
         if (parts.length > 2) {
             const last = parts.pop();
-            return parseFloat(parts.join('') + '.' + last);
+            result = parseFloat(parts.join('') + '.' + last);
+        } else {
+            result = parseFloat(str);
         }
 
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : num;
+        result = isNaN(result) ? 0 : result;
+
+        // Ergebnis cachen
+        this._cache.currency.set(stringValue, result);
+        return result;
     },
 
     /**
@@ -529,31 +585,44 @@ const Helpers = {
      * @returns {number} - Der normalisierte MwSt-Satz (0-100)
      */
     parseMwstRate(value) {
+        const defaultMwst = config$1?.tax?.defaultMwst || 19;
+
         if (value === null || value === undefined || value === "") {
-            // Verwende den Standard-MwSt-Satz aus der Konfiguration oder fallback auf 19%
-            return config?.tax?.defaultMwst || 19;
+            return defaultMwst;
         }
+
+        // Cache-Lookup für häufig verwendete Werte
+        const cacheKey = value.toString();
+        if (this._cache.mwstRates.has(cacheKey)) {
+            return this._cache.mwstRates.get(cacheKey);
+        }
+
+        let result;
 
         if (typeof value === "number") {
             // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
-            return value < 1 ? value * 100 : value;
-        }
-
-        // String-Wert parsen und bereinigen
-        const rate = parseFloat(
-            value.toString()
+            result = value < 1 ? value * 100 : value;
+        } else {
+            // String-Wert parsen und bereinigen
+            const rateStr = value.toString()
                 .replace(/%/g, "")
                 .replace(/,/g, ".")
-                .trim()
-        );
+                .trim();
 
-        // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
-        if (isNaN(rate)) {
-            return config?.tax?.defaultMwst || 19;
+            const rate = parseFloat(rateStr);
+
+            // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
+            if (isNaN(rate)) {
+                result = defaultMwst;
+            } else {
+                // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
+                result = rate < 1 ? rate * 100 : rate;
+            }
         }
 
-        // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
-        return rate < 1 ? rate * 100 : rate;
+        // Ergebnis cachen
+        this._cache.mwstRates.set(cacheKey, result);
+        return result;
     },
 
     /**
@@ -582,60 +651,59 @@ const Helpers = {
     extractDateFromFilename(filename) {
         if (!filename) return "";
 
+        // Cache-Lookup
+        if (this._cache.dates.has(`filename_${filename}`)) {
+            return this._cache.dates.get(`filename_${filename}`);
+        }
+
         const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+        let result = "";
 
         // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
 
         // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
         let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
         if (match?.[1]) {
-            return match[1];
-        }
-
-        // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
-        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
-        if (match?.[1]) {
-            const dateParts = match[1].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
+            result = match[1];
+        } else {
+            // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+            match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+            if (match?.[1]) {
+                const dateParts = match[1].split(/[-_.\/]/);
+                if (dateParts.length === 3) {
+                    const [year, month, day] = dateParts;
+                    result = `${day}.${month}.${year}`;
+                }
+            } else {
+                // 3. Format: YYYY-MM-DD am Anfang oder Ende
+                match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+                if (match?.[2]) {
+                    const dateParts = match[2].split(/[-_.\/]/);
+                    if (dateParts.length === 3) {
+                        const [year, month, day] = dateParts;
+                        result = `${day}.${month}.${year}`;
+                    }
+                } else {
+                    // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
+                    match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+                    if (match) {
+                        const [_, day, month, year] = match;
+                        result = `${day}.${month}.${year}`;
+                    }
+                }
             }
         }
 
-        // 3. Format: YYYY-MM-DD am Anfang oder Ende
-        match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
-        if (match?.[2]) {
-            const dateParts = match[2].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
-            }
-        }
-
-        // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
-        match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
-        if (match) {
-            const [_, day, month, year] = match;
-            return `${day}.${month}.${year}`;
-        }
-
-        // 5. Aktuelles Datum als Fallback (optional)
-        const today = new Date();
-        const day = String(today.getDate()).padStart(2, '0');
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const year = today.getFullYear();
-
-        // Als Kommentar belassen, da es möglicherweise besser ist, ein leeres Datum zurückzugeben
-        // return `${day}.${month}.${year}`;
-
-        return "";
+        // Ergebnis cachen
+        this._cache.dates.set(`filename_${filename}`, result);
+        return result;
     },
 
     /**
      * Setzt bedingte Formatierung für eine Spalte
      * @param {Sheet} sheet - Das zu formatierende Sheet
      * @param {string} column - Die zu formatierende Spalte (z.B. "A")
-     * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor})
+     * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor, pattern})
      */
     setConditionalFormattingForColumn(sheet, column, conditions) {
         if (!sheet || !column || !conditions || !conditions.length) return;
@@ -656,14 +724,26 @@ const Helpers = {
             });
 
             // Neue Regeln erstellen
-            const formatRules = conditions.map(({ value, background, fontColor }) =>
-                SpreadsheetApp.newConditionalFormatRule()
-                    .whenTextEqualTo(value)
+            const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
+                let rule;
+
+                if (pattern === "beginsWith") {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextStartsWith(value);
+                } else if (pattern === "contains") {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextContains(value);
+                } else {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextEqualTo(value);
+                }
+
+                return rule
                     .setBackground(background || "#ffffff")
                     .setFontColor(fontColor || "#000000")
                     .setRanges([range])
-                    .build()
-            );
+                    .build();
+            });
 
             // Regeln anwenden
             sheet.setConditionalFormatRules([...newRules, ...formatRules]);
@@ -686,7 +766,7 @@ const Helpers = {
 
         if (sheetName) {
             // Spaltenkonfiguration aus dem Sheetnamen bestimmen
-            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
+            const sheetConfig = config$1.sheets[sheetName.toLowerCase()]?.columns;
             if (sheetConfig && sheetConfig.zeitstempel) {
                 timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
             } else {
@@ -705,7 +785,7 @@ const Helpers = {
         const d = this.parseDate(row[timestampColumn]);
 
         // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
-        const targetYear = config?.tax?.year || new Date().getFullYear();
+        const targetYear = config$1?.tax?.year || new Date().getFullYear();
 
         // Wenn kein Datum oder das Jahr nicht übereinstimmt
         if (!d || d.getFullYear() !== targetYear) return 0;
@@ -760,13 +840,120 @@ const Helpers = {
      * @returns {string} - Spaltenbuchstabe(n)
      */
     getColumnLetter(columnIndex) {
-        let letter = '';
-        while (columnIndex > 0) {
-            const modulo = (columnIndex - 1) % 26;
-            letter = String.fromCharCode(65 + modulo) + letter;
-            columnIndex = Math.floor((columnIndex - modulo) / 26);
+        // Cache-Lookup für häufig verwendete Indizes
+        if (this._cache.columnLetters.has(columnIndex)) {
+            return this._cache.columnLetters.get(columnIndex);
         }
+
+        let letter = '';
+        let colIndex = columnIndex;
+
+        while (colIndex > 0) {
+            const modulo = (colIndex - 1) % 26;
+            letter = String.fromCharCode(65 + modulo) + letter;
+            colIndex = Math.floor((colIndex - modulo) / 26);
+        }
+
+        // Ergebnis cachen
+        this._cache.columnLetters.set(columnIndex, letter);
         return letter;
+    },
+
+    /**
+     * Prüft, ob zwei Zahlenwerte im Rahmen einer bestimmten Toleranz gleich sind
+     * @param {number} a - Erster Wert
+     * @param {number} b - Zweiter Wert
+     * @param {number} tolerance - Toleranzwert (Standard: 0.01)
+     * @returns {boolean} - true wenn Werte innerhalb der Toleranz gleich sind
+     */
+    isApproximatelyEqual(a, b, tolerance = 0.01) {
+        return Math.abs(a - b) <= tolerance;
+    },
+
+    /**
+     * Sicheres Runden eines Werts auf n Dezimalstellen
+     * @param {number} value - Der zu rundende Wert
+     * @param {number} decimals - Anzahl der Dezimalstellen (Standard: 2)
+     * @returns {number} - Gerundeter Wert
+     */
+    round(value, decimals = 2) {
+        const factor = Math.pow(10, decimals);
+        return Math.round((value + Number.EPSILON) * factor) / factor;
+    },
+
+    /**
+     * Prüft, ob ein Wert leer oder undefiniert ist
+     * @param {*} value - Der zu prüfende Wert
+     * @returns {boolean} - true wenn der Wert leer ist
+     */
+    isEmpty(value) {
+        return value === null || value === undefined || value.toString().trim() === "";
+    },
+
+    /**
+     * Bereinigt einen Text von Sonderzeichen und macht ihn vergleichbar
+     * @param {string} text - Der zu bereinigende Text
+     * @returns {string} - Der bereinigte Text
+     */
+    normalizeText(text) {
+        if (!text) return "";
+        return text.toString()
+            .toLowerCase()
+            .replace(/[äöüß]/g, match => {
+                return {
+                    'ä': 'ae',
+                    'ö': 'oe',
+                    'ü': 'ue',
+                    'ß': 'ss'
+                }[match];
+            })
+            .replace(/[^a-z0-9]/g, '');
+    },
+
+    /**
+     * Optimierte Batch-Verarbeitung für Google Sheets API-Calls
+     * Vermeidet häufige API-Calls, die zur Drosselung führen können
+     * @param {Sheet} sheet - Das zu aktualisierende Sheet
+     * @param {Array} data - Array mit Daten-Zeilen
+     * @param {number} startRow - Startzeile (1-basiert)
+     * @param {number} startCol - Startspalte (1-basiert)
+     */
+    batchWriteToSheet(sheet, data, startRow, startCol) {
+        if (!sheet || !data || !data.length || !data[0].length) return;
+
+        try {
+            // Schreibe alle Daten in einem API-Call
+            sheet.getRange(
+                startRow,
+                startCol,
+                data.length,
+                data[0].length
+            ).setValues(data);
+        } catch (e) {
+            console.error("Fehler beim Batch-Schreiben in das Sheet:", e);
+
+            // Fallback: Schreibe in kleineren Blöcken, falls der ursprüngliche Call fehlschlägt
+            const BATCH_SIZE = 50; // Kleinere Batch-Größe für Fallback
+
+            for (let i = 0; i < data.length; i += BATCH_SIZE) {
+                const batchData = data.slice(i, i + BATCH_SIZE);
+                try {
+                    sheet.getRange(
+                        startRow + i,
+                        startCol,
+                        batchData.length,
+                        batchData[0].length
+                    ).setValues(batchData);
+
+                    // Kurze Pause, um API-Drosselung zu vermeiden
+                    if (i + BATCH_SIZE < data.length) {
+                        Utilities.sleep(100);
+                    }
+                } catch (innerError) {
+                    console.error(`Fehler beim Schreiben von Batch ${i / BATCH_SIZE}:`, innerError);
+                }
+            }
+        }
     }
 };
 
@@ -776,6 +963,101 @@ const Helpers = {
  * Modul für den Import von Dateien aus Google Drive in die Buchhaltungstabelle
  */
 const ImportModule = (() => {
+    /**
+     * Initialisiert die Änderungshistorie, falls sie nicht existiert
+     * @param {Sheet} history - Das Änderungshistorie-Sheet
+     * @returns {boolean} - true bei erfolgreicher Initialisierung
+     */
+    const initializeHistorySheet = (history) => {
+        try {
+            if (history.getLastRow() === 0) {
+                const historyConfig = config$1.sheets.aenderungshistorie.columns;
+                const headerRow = Array(history.getLastColumn()).fill("");
+
+                headerRow[historyConfig.datum - 1] = "Datum";
+                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
+                headerRow[historyConfig.dateiname - 1] = "Dateiname";
+                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
+
+                history.appendRow(headerRow);
+                history.getRange(1, 1, 1, 4).setFontWeight("bold");
+            }
+            return true;
+        } catch (e) {
+            console.error("Fehler bei der Initialisierung des History-Sheets:", e);
+            return false;
+        }
+    };
+
+    /**
+     * Sammelt bereits importierte Dateien aus der Änderungshistorie
+     * @param {Sheet} history - Das Änderungshistorie-Sheet
+     * @returns {Set} - Set mit bereits importierten Dateinamen
+     */
+    const collectExistingFiles = (history) => {
+        const existingFiles = new Set();
+        try {
+            const historyData = history.getDataRange().getValues();
+            const historyConfig = config$1.sheets.aenderungshistorie.columns;
+
+            // Überschriftenzeile überspringen und alle Dateinamen sammeln
+            for (let i = 1; i < historyData.length; i++) {
+                const fileName = historyData[i][historyConfig.dateiname - 1];
+                if (fileName) existingFiles.add(fileName);
+            }
+        } catch (e) {
+            console.error("Fehler beim Sammeln bereits importierter Dateien:", e);
+        }
+        return existingFiles;
+    };
+
+    /**
+     * Ruft den übergeordneten Ordner des aktuellen Spreadsheets ab
+     * @returns {Folder|null} - Der übergeordnete Ordner oder null bei Fehler
+     */
+    const getParentFolder = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const file = DriveApp.getFileById(ss.getId());
+            const parents = file.getParents();
+            return parents.hasNext() ? parents.next() : null;
+        } catch (e) {
+            console.error("Fehler beim Abrufen des übergeordneten Ordners:", e);
+            return null;
+        }
+    };
+
+    /**
+     * Findet oder erstellt einen Ordner mit dem angegebenen Namen
+     * @param {Folder} parentFolder - Der übergeordnete Ordner
+     * @param {string} folderName - Der zu findende oder erstellende Ordnername
+     * @returns {Folder|null} - Der gefundene oder erstellte Ordner oder null bei Fehler
+     */
+    const findOrCreateFolder = (parentFolder, folderName) => {
+        if (!parentFolder) return null;
+
+        try {
+            let folder = Helpers.getFolderByName(parentFolder, folderName);
+
+            if (!folder) {
+                const ui = SpreadsheetApp.getUi();
+                const createFolder = ui.alert(
+                    `Der Ordner '${folderName}' existiert nicht. Soll er erstellt werden?`,
+                    ui.ButtonSet.YES_NO
+                );
+
+                if (createFolder === ui.Button.YES) {
+                    folder = parentFolder.createFolder(folderName);
+                }
+            }
+
+            return folder;
+        } catch (e) {
+            console.error(`Fehler beim Finden/Erstellen des Ordners ${folderName}:`, e);
+            return null;
+        }
+    };
+
     /**
      * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
      *
@@ -787,6 +1069,8 @@ const ImportModule = (() => {
      * @returns {number} - Anzahl der importierten Dateien
      */
     const importFilesFromFolder = (folder, mainSheet, type, historySheet, existingFiles) => {
+        if (!folder || !mainSheet || !historySheet) return 0;
+
         const files = folder.getFiles();
         const newMainRows = [];
         const newHistoryRows = [];
@@ -795,21 +1079,28 @@ const ImportModule = (() => {
 
         // Konfiguration für das richtige Sheet auswählen
         const sheetConfig = type === "Einnahme"
-            ? config.sheets.einnahmen.columns
-            : config.sheets.ausgaben.columns;
+            ? config$1.sheets.einnahmen.columns
+            : config$1.sheets.ausgaben.columns;
 
         // Konfiguration für das Änderungshistorie-Sheet
-        const historyConfig = config.sheets.aenderungshistorie.columns;
+        const historyConfig = config$1.sheets.aenderungshistorie.columns;
+
+        // Batch-Verarbeitung der Dateien
+        const batchSize = 20;
+        let fileCount = 0;
+        let currentBatch = [];
 
         while (files.hasNext()) {
             const file = files.next();
             const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
-            const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
-            const invoiceDate = Helpers.extractDateFromFilename(fileName);
-            const fileUrl = file.getUrl();
 
             // Prüfe, ob die Datei bereits importiert wurde
             if (!existingFiles.has(fileName)) {
+                // Extraktion der Rechnungsinformationen
+                const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
+                const invoiceDate = Helpers.extractDateFromFilename(fileName);
+                const fileUrl = file.getUrl();
+
                 // Neue Zeile für das Hauptsheet erstellen
                 const row = Array(mainSheet.getLastColumn()).fill("");
 
@@ -832,29 +1123,44 @@ const ImportModule = (() => {
                 historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
 
                 newHistoryRows.push(historyRow);
-
                 existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
                 importedCount++;
+
+                // Batch-Verarbeitung zum Verbessern der Performance
+                fileCount++;
+                currentBatch.push(file);
+
+                // Verarbeitungslimit erreicht oder letzte Datei
+                if (fileCount % batchSize === 0 || !files.hasNext()) {
+                    // Hier könnte zusätzliche Batch-Verarbeitung erfolgen
+                    // z.B. Metadaten extrahieren, etc.
+
+                    // Batch zurücksetzen
+                    currentBatch = [];
+
+                    // Kurze Pause einfügen um API-Limits zu vermeiden
+                    Utilities.sleep(50);
+                }
             }
         }
 
-        // Neue Zeilen in die entsprechenden Sheets schreiben
+        // Optimierte Schreibvorgänge mit Helpers
         if (newMainRows.length > 0) {
-            mainSheet.getRange(
+            Helpers.batchWriteToSheet(
+                mainSheet,
+                newMainRows,
                 mainSheet.getLastRow() + 1,
-                1,
-                newMainRows.length,
-                newMainRows[0].length
-            ).setValues(newMainRows);
+                1
+            );
         }
 
         if (newHistoryRows.length > 0) {
-            historySheet.getRange(
+            Helpers.batchWriteToSheet(
+                historySheet,
+                newHistoryRows,
                 historySheet.getLastRow() + 1,
-                1,
-                newHistoryRows.length,
-                newHistoryRows[0].length
-            ).setValues(newHistoryRows);
+                1
+            );
         }
 
         return importedCount;
@@ -882,80 +1188,29 @@ const ImportModule = (() => {
             // Änderungshistorie abrufen oder erstellen
             const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
 
-            // Header-Zeile für Änderungshistorie initialisieren, falls nötig
-            if (history.getLastRow() === 0) {
-                const historyConfig = config.sheets.aenderungshistorie.columns;
-                const headerRow = ["", "", "", ""];
-                headerRow[historyConfig.datum - 1] = "Datum";
-                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
-                headerRow[historyConfig.dateiname - 1] = "Dateiname";
-                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
-
-                history.appendRow(headerRow);
-                history.getRange(1, 1, 1, 4).setFontWeight("bold");
+            // Änderungshistorie initialisieren
+            if (!initializeHistorySheet(history)) {
+                ui.alert("Fehler: Die Änderungshistorie konnte nicht initialisiert werden!");
+                return 0;
             }
 
-            // Bereits importierte Dateien aus der Änderungshistorie erfassen
-            const historyData = history.getDataRange().getValues();
-            const existingFiles = new Set();
-            const historyConfig = config.sheets.aenderungshistorie.columns;
-
-            // Überschriftenzeile überspringen und alle Dateinamen sammeln
-            for (let i = 1; i < historyData.length; i++) {
-                existingFiles.add(historyData[i][historyConfig.dateiname - 1]); // Dateiname aus der entsprechenden Spalte
-            }
+            // Bereits importierte Dateien sammeln
+            const existingFiles = collectExistingFiles(history);
 
             // Auf übergeordneten Ordner zugreifen
-            let parentFolder;
-            try {
-                const file = DriveApp.getFileById(ss.getId());
-                const parents = file.getParents();
-                parentFolder = parents.hasNext() ? parents.next() : null;
-
-                if (!parentFolder) {
-                    ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
-                    return 0;
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf Google Drive: " + e.toString());
+            const parentFolder = getParentFolder();
+            if (!parentFolder) {
+                ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
                 return 0;
             }
 
             // Unterordner für Einnahmen und Ausgaben finden oder erstellen
-            let revenueFolder, expenseFolder;
-            let importedRevenue = 0, importedExpense = 0;
-
-            try {
-                revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
-                if (!revenueFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Einnahmen' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        revenueFolder = parentFolder.createFolder("Einnahmen");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Einnahmen-Ordner: " + e.toString());
-            }
-
-            try {
-                expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
-                if (!expenseFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Ausgaben' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        expenseFolder = parentFolder.createFolder("Ausgaben");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Ausgaben-Ordner: " + e.toString());
-            }
+            const revenueFolder = findOrCreateFolder(parentFolder, "Einnahmen");
+            const expenseFolder = findOrCreateFolder(parentFolder, "Ausgaben");
 
             // Import durchführen wenn Ordner existieren
+            let importedRevenue = 0, importedExpense = 0;
+
             if (revenueFolder) {
                 try {
                     importedRevenue = importFilesFromFolder(
@@ -1068,7 +1323,7 @@ const Validator = (() => {
      */
     const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
         const warnings = [];
-        const columns = config.sheets[sheetType].columns;
+        const columns = config$1.sheets[sheetType].columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1099,10 +1354,10 @@ const Validator = (() => {
                     if (isNaN(mwst)) return true;
 
                     // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
-                    const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                    const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
                     return !allowedRates.includes(Math.round(mwst));
                 },
-                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config?.tax?.allowedMwst?.join('%, ')}% oder leer.`
+                message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config$1?.tax?.allowedMwst?.join('%, ')}% oder leer.`
             }
         ];
 
@@ -1172,7 +1427,7 @@ const Validator = (() => {
 
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
-        const columns = config.sheets.bankbewegungen.columns;
+        const columns = config$1.sheets.bankbewegungen.columns;
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1340,7 +1595,7 @@ const Validator = (() => {
 
             case 'mwst':
                 const mwst = Helpers.parseMwstRate(value);
-                const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+                const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
                 return {
                     isValid: allowedRates.includes(Math.round(mwst)),
                     message: allowedRates.includes(Math.round(mwst))
@@ -1396,11 +1651,11 @@ const RefreshModule = (() => {
             // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
             let columns;
             if (name === "Einnahmen") {
-                columns = config.sheets.einnahmen.columns;
+                columns = config$1.sheets.einnahmen.columns;
             } else if (name === "Ausgaben") {
-                columns = config.sheets.ausgaben.columns;
+                columns = config$1.sheets.ausgaben.columns;
             } else if (name === "Eigenbelege") {
-                columns = config.sheets.eigenbelege.columns;
+                columns = config$1.sheets.eigenbelege.columns;
             } else {
                 return false; // Unbekanntes Sheet
             }
@@ -1449,23 +1704,23 @@ const RefreshModule = (() => {
             if (name === "Einnahmen") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config.einnahmen.categories)
+                    Object.keys(config$1.einnahmen.categories)
                 );
             } else if (name === "Ausgaben") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config.ausgaben.categories)
+                    Object.keys(config$1.ausgaben.categories)
                 );
             } else if (name === "Eigenbelege") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    config.eigenbelege.category
+                    config$1.eigenbelege.category
                 );
 
                 // Für Eigenbelege: Status-Dropdown hinzufügen
                 Validator.validateDropdown(
                     sheet, 2, columns.status, numRows, 1,
-                    config.eigenbelege.status
+                    config$1.eigenbelege.status
                 );
 
                 // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
@@ -1479,7 +1734,7 @@ const RefreshModule = (() => {
             // Zahlungsart-Dropdown für alle Blätter
             Validator.validateDropdown(
                 sheet, 2, columns.zahlungsart, numRows, 1,
-                config.common.paymentType
+                config$1.common.paymentType
             );
 
             // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
@@ -1517,11 +1772,11 @@ const RefreshModule = (() => {
             const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
             // Bankbewegungen-Konfiguration für Spalten holen
-            const columns = config.sheets.bankbewegungen.columns;
+            const columns = config$1.sheets.bankbewegungen.columns;
 
             // Konfigurationen für Spalten in den verschiedenen Sheets
-            const einnahmenCols = config.sheets.einnahmen.columns;
-            const ausgabenCols = config.sheets.ausgaben.columns;
+            const einnahmenCols = config$1.sheets.einnahmen.columns;
+            const ausgabenCols = config$1.sheets.ausgaben.columns;
 
             // Spaltenbuchstaben aus den Indizes generieren
             const columnLetters = {};
@@ -1549,21 +1804,21 @@ const RefreshModule = (() => {
             // Dropdown-Validierungen für Typ, Kategorie und Konten
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-                config.bank.type
+                config$1.bank.type
             );
 
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-                config.bank.category
+                config$1.bank.category
             );
 
             // Konten für Dropdown-Validierung sammeln
-            const allowedKontoSoll = Object.values(config.einnahmen.kontoMapping)
-                .concat(Object.values(config.ausgaben.kontoMapping))
+            const allowedKontoSoll = Object.values(config$1.einnahmen.kontoMapping)
+                .concat(Object.values(config$1.ausgaben.kontoMapping))
                 .map(m => m.soll);
 
-            const allowedGegenkonto = Object.values(config.einnahmen.kontoMapping)
-                .concat(Object.values(config.ausgaben.kontoMapping))
+            const allowedGegenkonto = Object.values(config$1.einnahmen.kontoMapping)
+                .concat(Object.values(config$1.ausgaben.kontoMapping))
                 .map(m => m.gegen);
 
             // Dropdown-Validierungen für Konten setzen
@@ -1795,9 +2050,9 @@ const RefreshModule = (() => {
                 let mapping = null;
 
                 if (tranType === "Einnahme") {
-                    mapping = config.einnahmen.kontoMapping[category];
+                    mapping = config$1.einnahmen.kontoMapping[category];
                 } else if (tranType === "Ausgabe") {
-                    mapping = config.ausgaben.kontoMapping[category];
+                    mapping = config$1.ausgaben.kontoMapping[category];
                 }
 
                 if (!mapping) {
@@ -2023,9 +2278,9 @@ const RefreshModule = (() => {
         const bankSheet = ss.getSheetByName("Bankbewegungen");
 
         // Konfigurationen für Spaltenindizes aus config
-        const bankCols = config.sheets.bankbewegungen.columns;
-        const einnahmenCols = config.sheets.einnahmen.columns;
-        const ausgabenCols = config.sheets.ausgaben.columns;
+        const bankCols = config$1.sheets.bankbewegungen.columns;
+        const einnahmenCols = config$1.sheets.einnahmen.columns;
+        const ausgabenCols = config$1.sheets.ausgaben.columns;
 
         // Map zum Speichern der zugeordneten Referenzen und ihrer Bankbewegungsinformationen
         const bankZuordnungen = {};
@@ -2469,7 +2724,7 @@ const UStVACalculator = (() => {
         try {
             // Sheet-Typ bestimmen
             const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
-            const columns = config.sheets[sheetType].columns;
+            const columns = config$1.sheets[sheetType].columns;
 
             // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
             const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
@@ -2500,7 +2755,7 @@ const UStVACalculator = (() => {
             // Je nach Typ (Einnahme/Ausgabe/Eigenbeleg) unterschiedlich verarbeiten
             if (isIncome) {
                 // EINNAHMEN
-                const catCfg = config.einnahmen.categories[category] ?? {};
+                const catCfg = config$1.einnahmen.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2523,7 +2778,7 @@ const UStVACalculator = (() => {
                 }
             } else if (isEigen) {
                 // EIGENBELEGE
-                const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
                 const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei") {
@@ -2551,7 +2806,7 @@ const UStVACalculator = (() => {
                 }
             } else {
                 // AUSGABEN
-                const catCfg = config.ausgaben.categories[category] ?? {};
+                const catCfg = config$1.ausgaben.categories[category] ?? {};
                 const taxType = catCfg.taxType ?? "steuerpflichtig";
 
                 if (taxType === "steuerfrei_inland") {
@@ -2710,7 +2965,7 @@ const UStVACalculator = (() => {
                 ];
 
                 // Monatliche Daten ausgeben
-                config.common.months.forEach((name, i) => {
+                config$1.common.months.forEach((name, i) => {
                     const month = i + 1;
                     outputRows.push(formatUStVARow(name, ustvaData[month]));
 
@@ -2873,7 +3128,7 @@ const BWACalculator = (() => {
      */
     const processRevenue = (row, bwaData) => {
         try {
-            const columns = config.sheets.einnahmen.columns;
+            const columns = config$1.sheets.einnahmen.columns;
 
             const m = Helpers.getMonthFromRow(row, "einnahmen");
             if (!m) return;
@@ -2891,7 +3146,7 @@ const BWACalculator = (() => {
             if (category === "Erträge aus Anlagenabgängen") return void (bwaData[m].anlagenabgaenge += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config.einnahmen.bwaMapping[category];
+            const mapping = config$1.einnahmen.bwaMapping[category];
             if (["umsatzerloese", "provisionserloese"].includes(mapping)) {
                 bwaData[m][mapping] += amount;
             } else if (Helpers.parseMwstRate(row[columns.mwstSatz - 1]) === 0) {
@@ -2912,7 +3167,7 @@ const BWACalculator = (() => {
      */
     const processExpense = (row, bwaData) => {
         try {
-            const columns = config.sheets.ausgaben.columns;
+            const columns = config$1.sheets.ausgaben.columns;
 
             const m = Helpers.getMonthFromRow(row, "ausgaben");
             if (!m) return;
@@ -2934,7 +3189,7 @@ const BWACalculator = (() => {
             if (category === "Fortbildungskosten") return void (bwaData[m].fortbildungskosten += amount);
 
             // BWA-Mapping aus Konfiguration verwenden
-            const mapping = config.ausgaben.bwaMapping[category];
+            const mapping = config$1.ausgaben.bwaMapping[category];
             switch (mapping) {
                 case "wareneinsatz":
                     bwaData[m].wareneinsatz += amount;
@@ -3000,14 +3255,14 @@ const BWACalculator = (() => {
      */
     const processEigen = (row, bwaData) => {
         try {
-            const columns = config.sheets.eigenbelege.columns;
+            const columns = config$1.sheets.eigenbelege.columns;
 
             const m = Helpers.getMonthFromRow(row, "eigenbelege");
             if (!m) return;
 
             const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
             const category = row[columns.kategorie - 1]?.toString().trim() || "";
-            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
             if (taxType === "steuerfrei") {
@@ -3078,10 +3333,10 @@ const BWACalculator = (() => {
                     d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten);
 
                 // Steuern berechnen
-                const taxConfig = config.tax.isHolding ? config.tax.holding : config.tax.operative;
+                const taxConfig = config$1.tax.isHolding ? config$1.tax.holding : config$1.tax.operative;
 
                 // Für Holdings gelten spezielle Steuersätze wegen Beteiligungsprivileg
-                const steuerfaktor = config.tax.isHolding
+                const steuerfaktor = config$1.tax.isHolding
                     ? taxConfig.gewinnUebertragSteuerpflichtig / 100
                     : 1;
 
@@ -3112,7 +3367,7 @@ const BWACalculator = (() => {
         const headers = ["Kategorie"];
         for (let q = 0; q < 4; q++) {
             for (let m = q * 3; m < q * 3 + 3; m++) {
-                headers.push(`${config.common.months[m]} (€)`);
+                headers.push(`${config$1.common.months[m]} (€)`);
             }
             headers.push(`Q${q + 1} (€)`);
         }
@@ -3370,9 +3625,9 @@ const BilanzCalculator = (() => {
             const bilanzData = createEmptyBilanz();
 
             // Spalten-Konfigurationen für die verschiedenen Sheets
-            const bankCols = config.sheets.bankbewegungen.columns;
-            const ausgabenCols = config.sheets.ausgaben.columns;
-            const gesellschafterCols = config.sheets.gesellschafterkonto.columns;
+            const bankCols = config$1.sheets.bankbewegungen.columns;
+            const ausgabenCols = config$1.sheets.ausgaben.columns;
+            const gesellschafterCols = config$1.sheets.gesellschafterkonto.columns;
 
             // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
             const bankSheet = ss.getSheetByName("Bankbewegungen");
@@ -3403,7 +3658,7 @@ const BilanzCalculator = (() => {
             }
 
             // 3. Stammkapital aus Konfiguration
-            bilanzData.passiva.stammkapital = config.tax.stammkapital || 25000;
+            bilanzData.passiva.stammkapital = config$1.tax.stammkapital || 25000;
 
             // 4. Suche nach Gesellschafterdarlehen im Gesellschafterkonto-Sheet
             const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
@@ -3506,7 +3761,7 @@ const BilanzCalculator = (() => {
      */
     const createAktivaArray = (bilanzData) => {
         const { aktiva } = bilanzData;
-        const year = config.tax.year || new Date().getFullYear();
+        const year = config$1.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Aktiva (Vermögenswerte)`, ""],
@@ -3537,7 +3792,7 @@ const BilanzCalculator = (() => {
      */
     const createPassivaArray = (bilanzData) => {
         const { passiva } = bilanzData;
-        const year = config.tax.year || new Date().getFullYear();
+        const year = config$1.tax.year || new Date().getFullYear();
 
         return [
             [`Bilanz ${year} - Passiva (Kapital und Schulden)`, ""],
@@ -3701,13 +3956,13 @@ const onEdit = e => {
     const sheetKey = name.toLowerCase();
 
     // Prüfen, ob wir für dieses Sheet eine Konfiguration haben
-    if (!config.sheets[sheetKey] || !config.sheets[sheetKey].columns.zeitstempel) return;
+    if (!config$1.sheets[sheetKey] || !config$1.sheets[sheetKey].columns.zeitstempel) return;
 
     // Header-Zeile ignorieren
     if (range.getRow() === 1) return;
 
     // Spalte für Zeitstempel aus der Konfiguration
-    const timestampCol = config.sheets[sheetKey].columns.zeitstempel;
+    const timestampCol = config$1.sheets[sheetKey].columns.zeitstempel;
 
     // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
     if (range.getColumn() === timestampCol ||

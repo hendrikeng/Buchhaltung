@@ -7,6 +7,101 @@ import config from "./config.js";
  */
 const ImportModule = (() => {
     /**
+     * Initialisiert die Änderungshistorie, falls sie nicht existiert
+     * @param {Sheet} history - Das Änderungshistorie-Sheet
+     * @returns {boolean} - true bei erfolgreicher Initialisierung
+     */
+    const initializeHistorySheet = (history) => {
+        try {
+            if (history.getLastRow() === 0) {
+                const historyConfig = config.sheets.aenderungshistorie.columns;
+                const headerRow = Array(history.getLastColumn()).fill("");
+
+                headerRow[historyConfig.datum - 1] = "Datum";
+                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
+                headerRow[historyConfig.dateiname - 1] = "Dateiname";
+                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
+
+                history.appendRow(headerRow);
+                history.getRange(1, 1, 1, 4).setFontWeight("bold");
+            }
+            return true;
+        } catch (e) {
+            console.error("Fehler bei der Initialisierung des History-Sheets:", e);
+            return false;
+        }
+    };
+
+    /**
+     * Sammelt bereits importierte Dateien aus der Änderungshistorie
+     * @param {Sheet} history - Das Änderungshistorie-Sheet
+     * @returns {Set} - Set mit bereits importierten Dateinamen
+     */
+    const collectExistingFiles = (history) => {
+        const existingFiles = new Set();
+        try {
+            const historyData = history.getDataRange().getValues();
+            const historyConfig = config.sheets.aenderungshistorie.columns;
+
+            // Überschriftenzeile überspringen und alle Dateinamen sammeln
+            for (let i = 1; i < historyData.length; i++) {
+                const fileName = historyData[i][historyConfig.dateiname - 1];
+                if (fileName) existingFiles.add(fileName);
+            }
+        } catch (e) {
+            console.error("Fehler beim Sammeln bereits importierter Dateien:", e);
+        }
+        return existingFiles;
+    };
+
+    /**
+     * Ruft den übergeordneten Ordner des aktuellen Spreadsheets ab
+     * @returns {Folder|null} - Der übergeordnete Ordner oder null bei Fehler
+     */
+    const getParentFolder = () => {
+        try {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const file = DriveApp.getFileById(ss.getId());
+            const parents = file.getParents();
+            return parents.hasNext() ? parents.next() : null;
+        } catch (e) {
+            console.error("Fehler beim Abrufen des übergeordneten Ordners:", e);
+            return null;
+        }
+    };
+
+    /**
+     * Findet oder erstellt einen Ordner mit dem angegebenen Namen
+     * @param {Folder} parentFolder - Der übergeordnete Ordner
+     * @param {string} folderName - Der zu findende oder erstellende Ordnername
+     * @returns {Folder|null} - Der gefundene oder erstellte Ordner oder null bei Fehler
+     */
+    const findOrCreateFolder = (parentFolder, folderName) => {
+        if (!parentFolder) return null;
+
+        try {
+            let folder = Helpers.getFolderByName(parentFolder, folderName);
+
+            if (!folder) {
+                const ui = SpreadsheetApp.getUi();
+                const createFolder = ui.alert(
+                    `Der Ordner '${folderName}' existiert nicht. Soll er erstellt werden?`,
+                    ui.ButtonSet.YES_NO
+                );
+
+                if (createFolder === ui.Button.YES) {
+                    folder = parentFolder.createFolder(folderName);
+                }
+            }
+
+            return folder;
+        } catch (e) {
+            console.error(`Fehler beim Finden/Erstellen des Ordners ${folderName}:`, e);
+            return null;
+        }
+    };
+
+    /**
      * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
      *
      * @param {Folder} folder - Google Drive Ordner mit den zu importierenden Dateien
@@ -17,6 +112,8 @@ const ImportModule = (() => {
      * @returns {number} - Anzahl der importierten Dateien
      */
     const importFilesFromFolder = (folder, mainSheet, type, historySheet, existingFiles) => {
+        if (!folder || !mainSheet || !historySheet) return 0;
+
         const files = folder.getFiles();
         const newMainRows = [];
         const newHistoryRows = [];
@@ -31,15 +128,22 @@ const ImportModule = (() => {
         // Konfiguration für das Änderungshistorie-Sheet
         const historyConfig = config.sheets.aenderungshistorie.columns;
 
+        // Batch-Verarbeitung der Dateien
+        const batchSize = 20;
+        let fileCount = 0;
+        let currentBatch = [];
+
         while (files.hasNext()) {
             const file = files.next();
             const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
-            const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
-            const invoiceDate = Helpers.extractDateFromFilename(fileName);
-            const fileUrl = file.getUrl();
 
             // Prüfe, ob die Datei bereits importiert wurde
             if (!existingFiles.has(fileName)) {
+                // Extraktion der Rechnungsinformationen
+                const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
+                const invoiceDate = Helpers.extractDateFromFilename(fileName);
+                const fileUrl = file.getUrl();
+
                 // Neue Zeile für das Hauptsheet erstellen
                 const row = Array(mainSheet.getLastColumn()).fill("");
 
@@ -62,29 +166,44 @@ const ImportModule = (() => {
                 historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
 
                 newHistoryRows.push(historyRow);
-
                 existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
                 importedCount++;
+
+                // Batch-Verarbeitung zum Verbessern der Performance
+                fileCount++;
+                currentBatch.push(file);
+
+                // Verarbeitungslimit erreicht oder letzte Datei
+                if (fileCount % batchSize === 0 || !files.hasNext()) {
+                    // Hier könnte zusätzliche Batch-Verarbeitung erfolgen
+                    // z.B. Metadaten extrahieren, etc.
+
+                    // Batch zurücksetzen
+                    currentBatch = [];
+
+                    // Kurze Pause einfügen um API-Limits zu vermeiden
+                    Utilities.sleep(50);
+                }
             }
         }
 
-        // Neue Zeilen in die entsprechenden Sheets schreiben
+        // Optimierte Schreibvorgänge mit Helpers
         if (newMainRows.length > 0) {
-            mainSheet.getRange(
+            Helpers.batchWriteToSheet(
+                mainSheet,
+                newMainRows,
                 mainSheet.getLastRow() + 1,
-                1,
-                newMainRows.length,
-                newMainRows[0].length
-            ).setValues(newMainRows);
+                1
+            );
         }
 
         if (newHistoryRows.length > 0) {
-            historySheet.getRange(
+            Helpers.batchWriteToSheet(
+                historySheet,
+                newHistoryRows,
                 historySheet.getLastRow() + 1,
-                1,
-                newHistoryRows.length,
-                newHistoryRows[0].length
-            ).setValues(newHistoryRows);
+                1
+            );
         }
 
         return importedCount;
@@ -112,80 +231,29 @@ const ImportModule = (() => {
             // Änderungshistorie abrufen oder erstellen
             const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
 
-            // Header-Zeile für Änderungshistorie initialisieren, falls nötig
-            if (history.getLastRow() === 0) {
-                const historyConfig = config.sheets.aenderungshistorie.columns;
-                const headerRow = ["", "", "", ""];
-                headerRow[historyConfig.datum - 1] = "Datum";
-                headerRow[historyConfig.typ - 1] = "Rechnungstyp";
-                headerRow[historyConfig.dateiname - 1] = "Dateiname";
-                headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
-
-                history.appendRow(headerRow);
-                history.getRange(1, 1, 1, 4).setFontWeight("bold");
+            // Änderungshistorie initialisieren
+            if (!initializeHistorySheet(history)) {
+                ui.alert("Fehler: Die Änderungshistorie konnte nicht initialisiert werden!");
+                return 0;
             }
 
-            // Bereits importierte Dateien aus der Änderungshistorie erfassen
-            const historyData = history.getDataRange().getValues();
-            const existingFiles = new Set();
-            const historyConfig = config.sheets.aenderungshistorie.columns;
-
-            // Überschriftenzeile überspringen und alle Dateinamen sammeln
-            for (let i = 1; i < historyData.length; i++) {
-                existingFiles.add(historyData[i][historyConfig.dateiname - 1]); // Dateiname aus der entsprechenden Spalte
-            }
+            // Bereits importierte Dateien sammeln
+            const existingFiles = collectExistingFiles(history);
 
             // Auf übergeordneten Ordner zugreifen
-            let parentFolder;
-            try {
-                const file = DriveApp.getFileById(ss.getId());
-                const parents = file.getParents();
-                parentFolder = parents.hasNext() ? parents.next() : null;
-
-                if (!parentFolder) {
-                    ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
-                    return 0;
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf Google Drive: " + e.toString());
+            const parentFolder = getParentFolder();
+            if (!parentFolder) {
+                ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
                 return 0;
             }
 
             // Unterordner für Einnahmen und Ausgaben finden oder erstellen
-            let revenueFolder, expenseFolder;
-            let importedRevenue = 0, importedExpense = 0;
-
-            try {
-                revenueFolder = Helpers.getFolderByName(parentFolder, "Einnahmen");
-                if (!revenueFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Einnahmen' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        revenueFolder = parentFolder.createFolder("Einnahmen");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Einnahmen-Ordner: " + e.toString());
-            }
-
-            try {
-                expenseFolder = Helpers.getFolderByName(parentFolder, "Ausgaben");
-                if (!expenseFolder) {
-                    const createFolder = ui.alert(
-                        "Der Ordner 'Ausgaben' existiert nicht. Soll er erstellt werden?",
-                        ui.ButtonSet.YES_NO
-                    );
-                    if (createFolder === ui.Button.YES) {
-                        expenseFolder = parentFolder.createFolder("Ausgaben");
-                    }
-                }
-            } catch (e) {
-                ui.alert("Fehler beim Zugriff auf den Ausgaben-Ordner: " + e.toString());
-            }
+            const revenueFolder = findOrCreateFolder(parentFolder, "Einnahmen");
+            const expenseFolder = findOrCreateFolder(parentFolder, "Ausgaben");
 
             // Import durchführen wenn Ordner existieren
+            let importedRevenue = 0, importedExpense = 0;
+
             if (revenueFolder) {
                 try {
                     importedRevenue = importFilesFromFolder(

@@ -6,28 +6,63 @@ import config from "./config.js";
  */
 const Helpers = {
     /**
+     * Cache für häufig verwendete Berechnungen
+     * Verbessert die Performance bei wiederholten Aufrufen
+     */
+    _cache: {
+        dates: new Map(),
+        currency: new Map(),
+        mwstRates: new Map(),
+        columnLetters: new Map()
+    },
+
+    /**
+     * Cache leeren
+     */
+    clearCache() {
+        this._cache.dates.clear();
+        this._cache.currency.clear();
+        this._cache.mwstRates.clear();
+        this._cache.columnLetters.clear();
+    },
+
+    /**
      * Konvertiert verschiedene Datumsformate in ein gültiges Date-Objekt
      * @param {Date|string} value - Das zu parsende Datum
      * @returns {Date|null} - Das geparste Datum oder null bei ungültigem Format
      */
     parseDate(value) {
-        // Wenn bereits ein Date-Objekt
-        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+        // Cache-Lookup für häufig verwendete Werte
+        const cacheKey = value instanceof Date
+            ? value.getTime().toString()
+            : value ? value.toString() : '';
 
+        if (this._cache.dates.has(cacheKey)) {
+            return this._cache.dates.get(cacheKey);
+        }
+
+        let result = null;
+
+        // Wenn bereits ein Date-Objekt
+        if (value instanceof Date) {
+            result = isNaN(value.getTime()) ? null : value;
+        }
         // Wenn String
-        if (typeof value === "string") {
+        else if (typeof value === "string") {
             // Deutsche Datumsformate (DD.MM.YYYY) unterstützen
             if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(value)) {
                 const [day, month, year] = value.split('.').map(Number);
                 const date = new Date(year, month - 1, day);
-                return isNaN(date.getTime()) ? null : date;
+                result = isNaN(date.getTime()) ? null : date;
+            } else {
+                const d = new Date(value);
+                result = isNaN(d.getTime()) ? null : d;
             }
-
-            const d = new Date(value);
-            return isNaN(d.getTime()) ? null : d;
         }
 
-        return null;
+        // Ergebnis cachen
+        this._cache.dates.set(cacheKey, result);
+        return result;
     },
 
     /**
@@ -39,20 +74,33 @@ const Helpers = {
         if (value === null || value === undefined || value === "") return 0;
         if (typeof value === "number") return value;
 
+        // Cache-Lookup für String-Werte
+        const stringValue = value.toString();
+        if (this._cache.currency.has(stringValue)) {
+            return this._cache.currency.get(stringValue);
+        }
+
         // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
-        const str = value.toString()
+        const str = stringValue
             .replace(/[^\d,.-]/g, "")
             .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
 
         // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
         const parts = str.split('.');
+        let result;
+
         if (parts.length > 2) {
             const last = parts.pop();
-            return parseFloat(parts.join('') + '.' + last);
+            result = parseFloat(parts.join('') + '.' + last);
+        } else {
+            result = parseFloat(str);
         }
 
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : num;
+        result = isNaN(result) ? 0 : result;
+
+        // Ergebnis cachen
+        this._cache.currency.set(stringValue, result);
+        return result;
     },
 
     /**
@@ -61,31 +109,44 @@ const Helpers = {
      * @returns {number} - Der normalisierte MwSt-Satz (0-100)
      */
     parseMwstRate(value) {
+        const defaultMwst = config?.tax?.defaultMwst || 19;
+
         if (value === null || value === undefined || value === "") {
-            // Verwende den Standard-MwSt-Satz aus der Konfiguration oder fallback auf 19%
-            return config?.tax?.defaultMwst || 19;
+            return defaultMwst;
         }
+
+        // Cache-Lookup für häufig verwendete Werte
+        const cacheKey = value.toString();
+        if (this._cache.mwstRates.has(cacheKey)) {
+            return this._cache.mwstRates.get(cacheKey);
+        }
+
+        let result;
 
         if (typeof value === "number") {
             // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
-            return value < 1 ? value * 100 : value;
-        }
-
-        // String-Wert parsen und bereinigen
-        const rate = parseFloat(
-            value.toString()
+            result = value < 1 ? value * 100 : value;
+        } else {
+            // String-Wert parsen und bereinigen
+            const rateStr = value.toString()
                 .replace(/%/g, "")
                 .replace(/,/g, ".")
-                .trim()
-        );
+                .trim();
 
-        // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
-        if (isNaN(rate)) {
-            return config?.tax?.defaultMwst || 19;
+            const rate = parseFloat(rateStr);
+
+            // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
+            if (isNaN(rate)) {
+                result = defaultMwst;
+            } else {
+                // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
+                result = rate < 1 ? rate * 100 : rate;
+            }
         }
 
-        // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
-        return rate < 1 ? rate * 100 : rate;
+        // Ergebnis cachen
+        this._cache.mwstRates.set(cacheKey, result);
+        return result;
     },
 
     /**
@@ -114,60 +175,59 @@ const Helpers = {
     extractDateFromFilename(filename) {
         if (!filename) return "";
 
+        // Cache-Lookup
+        if (this._cache.dates.has(`filename_${filename}`)) {
+            return this._cache.dates.get(`filename_${filename}`);
+        }
+
         const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+        let result = "";
 
         // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
 
         // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
         let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
         if (match?.[1]) {
-            return match[1];
-        }
-
-        // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
-        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
-        if (match?.[1]) {
-            const dateParts = match[1].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
+            result = match[1];
+        } else {
+            // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+            match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+            if (match?.[1]) {
+                const dateParts = match[1].split(/[-_.\/]/);
+                if (dateParts.length === 3) {
+                    const [year, month, day] = dateParts;
+                    result = `${day}.${month}.${year}`;
+                }
+            } else {
+                // 3. Format: YYYY-MM-DD am Anfang oder Ende
+                match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+                if (match?.[2]) {
+                    const dateParts = match[2].split(/[-_.\/]/);
+                    if (dateParts.length === 3) {
+                        const [year, month, day] = dateParts;
+                        result = `${day}.${month}.${year}`;
+                    }
+                } else {
+                    // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
+                    match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+                    if (match) {
+                        const [_, day, month, year] = match;
+                        result = `${day}.${month}.${year}`;
+                    }
+                }
             }
         }
 
-        // 3. Format: YYYY-MM-DD am Anfang oder Ende
-        match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
-        if (match?.[2]) {
-            const dateParts = match[2].split(/[-_.\/]/);
-            if (dateParts.length === 3) {
-                const [year, month, day] = dateParts;
-                return `${day}.${month}.${year}`;
-            }
-        }
-
-        // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
-        match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
-        if (match) {
-            const [_, day, month, year] = match;
-            return `${day}.${month}.${year}`;
-        }
-
-        // 5. Aktuelles Datum als Fallback (optional)
-        const today = new Date();
-        const day = String(today.getDate()).padStart(2, '0');
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const year = today.getFullYear();
-
-        // Als Kommentar belassen, da es möglicherweise besser ist, ein leeres Datum zurückzugeben
-        // return `${day}.${month}.${year}`;
-
-        return "";
+        // Ergebnis cachen
+        this._cache.dates.set(`filename_${filename}`, result);
+        return result;
     },
 
     /**
      * Setzt bedingte Formatierung für eine Spalte
      * @param {Sheet} sheet - Das zu formatierende Sheet
      * @param {string} column - Die zu formatierende Spalte (z.B. "A")
-     * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor})
+     * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor, pattern})
      */
     setConditionalFormattingForColumn(sheet, column, conditions) {
         if (!sheet || !column || !conditions || !conditions.length) return;
@@ -188,14 +248,26 @@ const Helpers = {
             });
 
             // Neue Regeln erstellen
-            const formatRules = conditions.map(({ value, background, fontColor }) =>
-                SpreadsheetApp.newConditionalFormatRule()
-                    .whenTextEqualTo(value)
+            const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
+                let rule;
+
+                if (pattern === "beginsWith") {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextStartsWith(value);
+                } else if (pattern === "contains") {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextContains(value);
+                } else {
+                    rule = SpreadsheetApp.newConditionalFormatRule()
+                        .whenTextEqualTo(value);
+                }
+
+                return rule
                     .setBackground(background || "#ffffff")
                     .setFontColor(fontColor || "#000000")
                     .setRanges([range])
-                    .build()
-            );
+                    .build();
+            });
 
             // Regeln anwenden
             sheet.setConditionalFormatRules([...newRules, ...formatRules]);
@@ -292,13 +364,120 @@ const Helpers = {
      * @returns {string} - Spaltenbuchstabe(n)
      */
     getColumnLetter(columnIndex) {
-        let letter = '';
-        while (columnIndex > 0) {
-            const modulo = (columnIndex - 1) % 26;
-            letter = String.fromCharCode(65 + modulo) + letter;
-            columnIndex = Math.floor((columnIndex - modulo) / 26);
+        // Cache-Lookup für häufig verwendete Indizes
+        if (this._cache.columnLetters.has(columnIndex)) {
+            return this._cache.columnLetters.get(columnIndex);
         }
+
+        let letter = '';
+        let colIndex = columnIndex;
+
+        while (colIndex > 0) {
+            const modulo = (colIndex - 1) % 26;
+            letter = String.fromCharCode(65 + modulo) + letter;
+            colIndex = Math.floor((colIndex - modulo) / 26);
+        }
+
+        // Ergebnis cachen
+        this._cache.columnLetters.set(columnIndex, letter);
         return letter;
+    },
+
+    /**
+     * Prüft, ob zwei Zahlenwerte im Rahmen einer bestimmten Toleranz gleich sind
+     * @param {number} a - Erster Wert
+     * @param {number} b - Zweiter Wert
+     * @param {number} tolerance - Toleranzwert (Standard: 0.01)
+     * @returns {boolean} - true wenn Werte innerhalb der Toleranz gleich sind
+     */
+    isApproximatelyEqual(a, b, tolerance = 0.01) {
+        return Math.abs(a - b) <= tolerance;
+    },
+
+    /**
+     * Sicheres Runden eines Werts auf n Dezimalstellen
+     * @param {number} value - Der zu rundende Wert
+     * @param {number} decimals - Anzahl der Dezimalstellen (Standard: 2)
+     * @returns {number} - Gerundeter Wert
+     */
+    round(value, decimals = 2) {
+        const factor = Math.pow(10, decimals);
+        return Math.round((value + Number.EPSILON) * factor) / factor;
+    },
+
+    /**
+     * Prüft, ob ein Wert leer oder undefiniert ist
+     * @param {*} value - Der zu prüfende Wert
+     * @returns {boolean} - true wenn der Wert leer ist
+     */
+    isEmpty(value) {
+        return value === null || value === undefined || value.toString().trim() === "";
+    },
+
+    /**
+     * Bereinigt einen Text von Sonderzeichen und macht ihn vergleichbar
+     * @param {string} text - Der zu bereinigende Text
+     * @returns {string} - Der bereinigte Text
+     */
+    normalizeText(text) {
+        if (!text) return "";
+        return text.toString()
+            .toLowerCase()
+            .replace(/[äöüß]/g, match => {
+                return {
+                    'ä': 'ae',
+                    'ö': 'oe',
+                    'ü': 'ue',
+                    'ß': 'ss'
+                }[match];
+            })
+            .replace(/[^a-z0-9]/g, '');
+    },
+
+    /**
+     * Optimierte Batch-Verarbeitung für Google Sheets API-Calls
+     * Vermeidet häufige API-Calls, die zur Drosselung führen können
+     * @param {Sheet} sheet - Das zu aktualisierende Sheet
+     * @param {Array} data - Array mit Daten-Zeilen
+     * @param {number} startRow - Startzeile (1-basiert)
+     * @param {number} startCol - Startspalte (1-basiert)
+     */
+    batchWriteToSheet(sheet, data, startRow, startCol) {
+        if (!sheet || !data || !data.length || !data[0].length) return;
+
+        try {
+            // Schreibe alle Daten in einem API-Call
+            sheet.getRange(
+                startRow,
+                startCol,
+                data.length,
+                data[0].length
+            ).setValues(data);
+        } catch (e) {
+            console.error("Fehler beim Batch-Schreiben in das Sheet:", e);
+
+            // Fallback: Schreibe in kleineren Blöcken, falls der ursprüngliche Call fehlschlägt
+            const BATCH_SIZE = 50; // Kleinere Batch-Größe für Fallback
+
+            for (let i = 0; i < data.length; i += BATCH_SIZE) {
+                const batchData = data.slice(i, i + BATCH_SIZE);
+                try {
+                    sheet.getRange(
+                        startRow + i,
+                        startCol,
+                        batchData.length,
+                        batchData[0].length
+                    ).setValues(batchData);
+
+                    // Kurze Pause, um API-Drosselung zu vermeiden
+                    if (i + BATCH_SIZE < data.length) {
+                        Utilities.sleep(100);
+                    }
+                } catch (innerError) {
+                    console.error(`Fehler beim Schreiben von Batch ${i / BATCH_SIZE}:`, innerError);
+                }
+            }
+        }
     }
 };
 
