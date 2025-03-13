@@ -65,12 +65,12 @@ function importDriveFiles() {};
                 mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
                 bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
                 bezahlt: 9,            // I: Bereits bezahlter Betrag
-                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                restbetragNetto: 10,   // J: Restbetrag Netto
                 quartal: 11,           // K: Berechnetes Quartal
                 zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
                 zahlungsart: 13,       // M: Zahlungsart
                 zahlungsdatum: 14,     // N: Zahlungsdatum
-                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                bankabgleich: 15,      // O: Bankabgleich-Information
                 zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
                 dateiname: 17,         // Q: Dateiname (für importierte Dateien)
                 dateilink: 18          // R: Link zur Originaldatei
@@ -129,12 +129,12 @@ function importDriveFiles() {};
                 mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
                 bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
                 bezahlt: 9,            // I: Bereits bezahlter Betrag
-                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                restbetragNetto: 10,   // J: Restbetrag Netto
                 quartal: 11,           // K: Berechnetes Quartal
                 zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
                 zahlungsart: 13,       // M: Zahlungsart
                 zahlungsdatum: 14,     // N: Zahlungsdatum
-                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                bankabgleich: 15,      // O: Bankabgleich-Information
                 zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
                 dateiname: 17,         // Q: Dateiname (für importierte Dateien)
                 dateilink: 18          // R: Link zur Originaldatei
@@ -260,24 +260,24 @@ function importDriveFiles() {};
         eigenbelege: {
             columns: {
                 datum: 1,              // A: Belegdatum
-                belegnummer: 2,        // B: Belegnummer
-                auslegendeVon: 3,      // C: Ausgelegt von (Person)
+                rechnungsnummer: 2,    // B: Belegnummer
+                ausgelegtVon: 3,       // C: Ausgelegt von (Person)
                 kategorie: 4,          // D: Kategorie
                 beschreibung: 5,       // E: Beschreibung
                 nettobetrag: 6,        // F: Nettobetrag
                 mwstSatz: 7,           // G: MwSt-Satz in %
                 mwstBetrag: 8,         // H: MwSt-Betrag (F*G)
                 bruttoBetrag: 9,       // I: Bruttobetrag (F+H)
-                ausgelegterBetrag: 10, // J: Ausgelegter Betrag
-                restbetrag: 11,        // K: Noch zu erstattender Betrag
+                bezahlt: 10,           // J: Bereits erstatteter Betrag
+                restbetragNetto: 11,   // K: Restbetrag Netto
                 quartal: 12,           // L: Berechnetes Quartal
-                status: 13,            // M: Status (Offen/Erstattet/Gebucht)
-                erstattungsart: 14,    // N: Erstattungsart
-                erstattungsdatum: 15,  // O: Erstattungsdatum
-                bankAbgleich: 16,      // P: Bank-Abgleich-Information
+                zahlungsstatus: 13,    // M: Erstattungsstatus (Offen/Erstattet/Gebucht)
+                zahlungsart: 14,       // N: Erstattungsart
+                zahlungsdatum: 15,     // O: Erstattungsdatum
+                bankabgleich: 16,      // P: Bankabgleich-Information
                 zeitstempel: 17,       // Q: Zeitstempel der letzten Änderung
                 dateiname: 18,         // R: Dateiname (für importierte Dateien)
-                belegLink: 19          // S: Link zum Originalbeleg
+                dateilink: 19          // S: Link zum Originalbeleg
             },
             // Kategorien mit Steuertyp
             categories: {
@@ -289,8 +289,6 @@ function importDriveFiles() {};
                 "Bewirtung": {taxType: "eigenbeleg", besonderheit: "bewirtung"},
                 "Sonstiges": {taxType: "steuerpflichtig"}
             },
-            // TODO: Remove
-            status: ["Offen", "Erstattet", "Gebucht"],
             // TODO: Necessary?
             kontoMapping: {},
             // TODO: Necessary?
@@ -344,7 +342,7 @@ function importDriveFiles() {};
                 betrag: 2,             // B: Betrag
                 art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
                 buchungstext: 4,       // D: Buchungstext
-                status: 5,             // E: Status
+                zahlungsstatus: 5,             // E: Status
                 referenz: 6,            // F: Referenznummer zur Bankbewegung
                 zeitstempel: 7       // G: Zeitstempel der letzten Änderung
             },
@@ -1334,7 +1332,7 @@ function importDriveFiles() {};
             ];
 
             // Status-abhängige Regeln
-            const status = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
+            const zahlungsstatus = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
 
             // Regeln für offene Zahlungen
             const openPaymentRules = [
@@ -1380,7 +1378,7 @@ function importDriveFiles() {};
             ];
 
             // Regeln basierend auf Zahlungsstatus zusammenstellen
-            const paymentRules = status === "offen" ? openPaymentRules : paidPaymentRules;
+            const paymentRules = zahlungsstatus === "offen" ? openPaymentRules : paidPaymentRules;
 
             // Alle Regeln kombinieren und anwenden
             const rules = [...baseRules, ...paymentRules];
@@ -1789,8 +1787,8 @@ function importDriveFiles() {};
                     (_, i) => [`=${columnLetters.nettobetrag}${i + 2}+${columnLetters.mwstBetrag}${i + 2}`]
                 );
 
-                // Steuerbemessungsgrundlage - für Teilzahlungen
-                formulasBatch[columns.steuerbemessung] = Array.from(
+                // Bezahlter Betrag - für Teilzahlungen
+                formulasBatch[columns.bezahlt] = Array.from(
                     {length: numRows},
                     (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
                 );
@@ -1801,11 +1799,19 @@ function importDriveFiles() {};
                     (_, i) => [`=IF(${columnLetters.datum}${i + 2}="";"";ROUNDUP(MONTH(${columnLetters.datum}${i + 2})/3;0))`]
                 );
 
-                // Zahlungsstatus
-                formulasBatch[columns.zahlungsstatus] = Array.from(
-                    {length: numRows},
-                    (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
-                );
+                if (name !== "Eigenbelege") {
+                    // Für Einnahmen und Ausgaben: Zahlungsstatus
+                    formulasBatch[columns.zahlungsstatus] = Array.from(
+                        {length: numRows},
+                        (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
+                    );
+                } else {
+                    // Für Eigenbelege: Zahlungsstatus
+                    formulasBatch[columns.zahlungsstatus] = Array.from(
+                        {length: numRows},
+                        (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Erstattet";"Teilerstattet"))`]
+                    );
+                }
 
                 // Formeln in Batches anwenden (weniger API-Calls)
                 Object.entries(formulasBatch).forEach(([col, formulas]) => {
@@ -1833,11 +1839,12 @@ function importDriveFiles() {};
                     ]);
                 } else {
                     // Für Eigenbelege: Status
-                    Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
+                    Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
                         {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
-                        {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
-                        {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
+                        {value: "Teilerstattet", background: "#FFEB9C", fontColor: "#9C6500"},
+                        {value: "Erstattet", background: "#C6EFCE", fontColor: "#006100"}
                     ]);
+
                 }
 
                 // Spaltenbreiten automatisch anpassen
@@ -1871,13 +1878,7 @@ function importDriveFiles() {};
             } else if (sheetName === "Eigenbelege") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    config$1.eigenbelege.categories
-                );
-
-                // Für Eigenbelege: Status-Dropdown hinzufügen
-                Validator.validateDropdown(
-                    sheet, 2, columns.status, numRows, 1,
-                    config$1.eigenbelege.status
+                    Object.keys(config$1.eigenbelege.categories)
                 );
             }
 
@@ -2699,12 +2700,12 @@ function importDriveFiles() {};
             const normalRows = [];
 
             // Bank-Abgleich-Updates sammeln
-            const bankAbgleichUpdates = [];
+            const bankabgleichUpdates = [];
 
             // Datenzeilen durchgehen und in Kategorien einteilen
             for (let i = 0; i < data.length; i++) {
                 const row = i + 2; // Aktuelle Zeile im Sheet
-                const nettoBetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
+                const nettobetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
                 const bezahltBetrag = Helpers.parseCurrency(data[i][columns.bezahlt - 1]);
                 const zahlungsDatum = data[i][columns.zahlungsdatum - 1];
                 const referenz = data[i][columns.rechnungsnummer - 1];
@@ -2718,7 +2719,7 @@ function importDriveFiles() {};
 
                 // Zahlungsstatus berechnen
                 const mwst = Helpers.parseMwstRate(data[i][columns.mwstSatz - 1]) / 100;
-                const bruttoBetrag = nettoBetrag * (1 + mwst);
+                const bruttoBetrag = nettobetrag * (1 + mwst);
                 const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
                 const isPartialPaid = !isPaid && bezahltBetrag > 0;
 
@@ -2727,7 +2728,7 @@ function importDriveFiles() {};
                     gutschriftRows.push(row);
                     // Bank-Abgleich-Info setzen
                     if (hatBankzuordnung) {
-                        bankAbgleichUpdates.push({
+                        bankabgleichUpdates.push({
                             row,
                             value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                         });
@@ -2736,7 +2737,7 @@ function importDriveFiles() {};
                     if (zahlungsDatum) {
                         if (hatBankzuordnung) {
                             fullPaidWithBankRows.push(row);
-                            bankAbgleichUpdates.push({
+                            bankabgleichUpdates.push({
                                 row,
                                 value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                             });
@@ -2750,7 +2751,7 @@ function importDriveFiles() {};
                 } else if (isPartialPaid) {
                     if (hatBankzuordnung) {
                         partialPaidWithBankRows.push(row);
-                        bankAbgleichUpdates.push({
+                        bankabgleichUpdates.push({
                             row,
                             value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                         });
@@ -2761,8 +2762,8 @@ function importDriveFiles() {};
                     // Unbezahlt - normale Zeile
                     normalRows.push(row);
                     // Vorhandene Bank-Abgleich-Info entfernen falls vorhanden
-                    if (sheet.getRange(row, columns.bankAbgleich).getValue().toString().startsWith("✓ Bank:")) {
-                        bankAbgleichUpdates.push({
+                    if (sheet.getRange(row, columns.bankabgleich).getValue().toString().startsWith("✓ Bank:")) {
+                        bankabgleichUpdates.push({
                             row,
                             value: ""
                         });
@@ -2778,17 +2779,12 @@ function importDriveFiles() {};
             applyColorToRows(sheet, gutschriftRows, "#E6E0FF"); // Helles Lila
             applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
 
-            // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-            if (sheet.getRange(1, columns.bankAbgleich).getValue() === "") {
-                sheet.getRange(1, columns.bankAbgleich).setValue("Bank-Abgleich");
-            }
-
             // Bank-Abgleich-Updates in Batches ausführen
-            if (bankAbgleichUpdates.length > 0) {
+            if (bankabgleichUpdates.length > 0) {
                 // Gruppiere Updates nach Wert für effizientere Batch-Updates
                 const groupedUpdates = {};
 
-                bankAbgleichUpdates.forEach(update => {
+                bankabgleichUpdates.forEach(update => {
                     const { row, value } = update;
                     if (!groupedUpdates[value]) {
                         groupedUpdates[value] = [];
@@ -2803,7 +2799,7 @@ function importDriveFiles() {};
                     for (let i = 0; i < rows.length; i += batchSize) {
                         const batchRows = rows.slice(i, i + batchSize);
                         batchRows.forEach(row => {
-                            sheet.getRange(row, columns.bankAbgleich).setValue(value);
+                            sheet.getRange(row, columns.bankabgleich).setValue(value);
                         });
 
                         // Kurze Pause, um API-Limits zu vermeiden
@@ -2992,7 +2988,7 @@ function importDriveFiles() {};
 
                 // Beträge aus der Zeile extrahieren
                 const netto = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
-                const restNetto = Helpers.parseCurrency(row[columns.steuerbemessung - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+                const restNetto = Helpers.parseCurrency(row[columns.restbetragNetto - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
                 const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
 
                 // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten

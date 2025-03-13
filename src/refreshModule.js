@@ -91,7 +91,7 @@ const RefreshModule = (() => {
             );
 
             // Bezahlter Betrag - für Teilzahlungen
-            formulasBatch[columns.bezahlt] = Array.from(
+            formulasBatch[columns.restbetragNetto] = Array.from(
                 {length: numRows},
                 (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
             );
