@@ -105,8 +105,8 @@ const ImportModule = (() => {
      * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
      *
      * @param {Folder} folder - Google Drive Ordner mit den zu importierenden Dateien
-     * @param {Sheet} mainSheet - Hauptsheet (Einnahmen oder Ausgaben)
-     * @param {string} type - Typ der Dateien ("Einnahme" oder "Ausgabe")
+     * @param {Sheet} mainSheet - Hauptsheet (Einnahmen, Ausgaben oder Eigenbelege)
+     * @param {string} type - Typ der Dateien ("Einnahme", "Ausgabe" oder "Eigenbeleg")
      * @param {Sheet} historySheet - Sheet für die Änderungshistorie
      * @param {Set} existingFiles - Set mit bereits importierten Dateinamen
      * @returns {number} - Anzahl der importierten Dateien
@@ -121,9 +121,17 @@ const ImportModule = (() => {
         let importedCount = 0;
 
         // Konfiguration für das richtige Sheet auswählen
-        const sheetConfig = type === "Einnahme"
-            ? config.einnahmen.columns
-            : config.ausgaben.columns;
+        const sheetTypeMap = {
+            "Einnahme": config.sheets.einnahmen.columns,
+            "Ausgabe": config.sheets.ausgaben.columns,
+            "Eigenbeleg": config.sheets.eigenbelege.columns
+        };
+
+        const sheetConfig = sheetTypeMap[type];
+        if (!sheetConfig) {
+            console.error("Unbekannter Dateityp:", type);
+            return 0;
+        }
 
         // Konfiguration für das Änderungshistorie-Sheet
         const historyConfig = config.aenderungshistorie.columns;
@@ -161,7 +169,7 @@ const ImportModule = (() => {
 
                 // Daten in die richtigen Historie-Spalten setzen (0-basiert)
                 historyRow[historyConfig.datum - 1] = timestamp;           // Zeitstempel
-                historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe)
+                historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe/Eigenbeleg)
                 historyRow[historyConfig.dateiname - 1] = fileName;        // Dateiname
                 historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
 
@@ -210,7 +218,7 @@ const ImportModule = (() => {
     };
 
     /**
-     * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- und Ausgabenordnern
+     * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- Ausgaben- und Eigenbelegeordnern
      * @returns {number} Anzahl der importierten Dateien
      */
     const importDriveFiles = () => {
@@ -219,12 +227,13 @@ const ImportModule = (() => {
         let totalImported = 0;
 
         try {
-            // Hauptsheets für Einnahmen und Ausgaben abrufen
+            // Hauptsheets für Einnahmen, Ausgaben und Eigenbelege abrufen
             const revenueMain = ss.getSheetByName("Einnahmen");
             const expenseMain = ss.getSheetByName("Ausgaben");
+            const receiptsMain = ss.getSheetByName("Eigenbelege");
 
-            if (!revenueMain || !expenseMain) {
-                ui.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!");
+            if (!revenueMain || !expenseMain || !receiptsMain) {
+                ui.alert("Fehler: Die Sheets 'Einnahmen', 'Ausgaben' oder 'Eigenbelege' existieren nicht!");
                 return 0;
             }
 
@@ -247,12 +256,13 @@ const ImportModule = (() => {
                 return 0;
             }
 
-            // Unterordner für Einnahmen und Ausgaben finden oder erstellen
+            // Unterordner für Einnahmen, Ausgaben und Eigenbelege finden oder erstellen
             const revenueFolder = findOrCreateFolder(parentFolder, "Einnahmen");
             const expenseFolder = findOrCreateFolder(parentFolder, "Ausgaben");
+            const receiptsFolder = findOrCreateFolder(parentFolder, "Eigenbelege");
 
             // Import durchführen wenn Ordner existieren
-            let importedRevenue = 0, importedExpense = 0;
+            let importedRevenue = 0, importedExpense = 0, importedReceipts = 0;
 
             if (revenueFolder) {
                 try {
@@ -286,6 +296,22 @@ const ImportModule = (() => {
                 }
             }
 
+            if (receiptsFolder) {
+                try {
+                    importedReceipts = importFilesFromFolder(
+                        receiptsFolder,
+                        receiptsMain,
+                        "Eigenbeleg",
+                        history,
+                        existingFiles  // Das gleiche Set wird für beide Importe verwendet
+                    );
+                    totalImported += importedReceipts;
+                } catch (e) {
+                    console.error("Fehler beim Import der Eigenbelege:", e);
+                    ui.alert("Fehler beim Import der Eigenbelege: " + e.toString());
+                }
+            }
+
             // Abschluss-Meldung anzeigen
             if (totalImported === 0) {
                 ui.alert("Es wurden keine neuen Dateien gefunden.");
@@ -293,7 +319,8 @@ const ImportModule = (() => {
                 ui.alert(
                     `Import abgeschlossen.\n\n` +
                     `${importedRevenue} Einnahmen importiert.\n` +
-                    `${importedExpense} Ausgaben importiert.`
+                    `${importedExpense} Ausgaben importiert.\n` +
+                    `${importedReceipts} Eigenbelege importiert.`
                 );
             }
 
