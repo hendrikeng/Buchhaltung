@@ -159,3 +159,14 @@ const importDriveFiles = () => {
         console.error("Import-Fehler:", error);
     }
 };
+
+// Exportiere alle relevanten Funktionen in den globalen Namensraum,
+// damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
+global.onOpen = onOpen;
+global.onEdit = onEdit;
+global.setupTrigger = setupTrigger;
+global.refreshSheet = refreshSheet;
+global.calculateUStVA = calculateUStVA;
+global.calculateBWA = calculateBWA;
+global.calculateBilanz = calculateBilanz;
+global.importDriveFiles = importDriveFiles;

@@ -1,30 +1,30 @@
-// file: rollup.config.js
+// rollup.config.js
 import resolve from '@rollup/plugin-node-resolve';
-// import rollupPluginGas from "rollup-plugin-google-apps-script";
-// import terser from '@rollup/plugin-terser';
+import rollupPluginGas from 'rollup-plugin-google-apps-script';
+import terser from '@rollup/plugin-terser';
 
 export default {
-    input: 'src/code.js',       // Dein Haupt-Einstiegspunkt
+    input: 'src/code.js',
     output: {
-        file: 'dist/code.js',     // Gebündelte Datei für Apps Script
-        format: 'cjs',            // Verwende CommonJS-Format
+        file: 'dist/code.js',
+        format: 'iife',
         banner: '/* Bundled Code for Google Apps Script */',
     },
-    treeshake: false,
     plugins: [
-        // rollupPluginGas(),
-        resolve(),                // Auflösen von Modul-Importen
-        // terser({                  // Minimieren des Codes
-        //     format: {
-        //         comments: false,  // Entfernt alle Kommentare
-        //     },
-        //     compress: {
-        //         drop_console: false, // Behält console.log für Debugging
-        //         drop_debugger: true  // Entfernt debugger-Anweisungen
-        //     },
-        //     mangle: {
-        //         reserved: ['global'] // Schützt 'global' vor Umbenennung (wichtig für Apps Script)
-        //     }
-        // })
+        resolve(),
+        rollupPluginGas(),
+        terser({
+                format: {
+                    comments: false,
+                },
+                compress: {
+                    drop_console: false,
+                    drop_debugger: true,
+                },
+                mangle: {
+                    reserved: ['global']
+                }
+            }
+        )
     ]
 };
