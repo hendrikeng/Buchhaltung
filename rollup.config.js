@@ -1,7 +1,7 @@
 // rollup.config.js
 import resolve from '@rollup/plugin-node-resolve';
 import rollupPluginGas from 'rollup-plugin-google-apps-script';
-import terser from '@rollup/plugin-terser';
+// import terser from '@rollup/plugin-terser';
 
 export default {
     input: 'src/code.js',
@@ -13,18 +13,18 @@ export default {
     plugins: [
         resolve(),
         rollupPluginGas(),
-        terser({
-                format: {
-                    comments: false,
-                },
-                compress: {
-                    drop_console: false,
-                    drop_debugger: true,
-                },
-                mangle: {
-                    reserved: ['global']
-                }
-            }
-        )
+        // terser({
+        //         format: {
+        //             comments: false,
+        //         },
+        //         compress: {
+        //             drop_console: false,
+        //             drop_debugger: true,
+        //         },
+        //         mangle: {
+        //             reserved: ['global']
+        //         }
+        //     }
+        // )
     ]
 };

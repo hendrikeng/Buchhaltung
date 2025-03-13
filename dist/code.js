@@ -1,1 +1,4703 @@
-var global=this;function onOpen(){}function onEdit(){}function setupTrigger(){}function refreshSheet(){}function calculateUStVA(){}function calculateBWA(){}function calculateBilanz(){}function importDriveFiles(){}!function(e){"function"==typeof define&&define.amd?define(e):e()}((function(){"use strict";var e={common:{paymentType:["Überweisung","Bar","Kreditkarte","Paypal","Lastschrift"],months:["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"],currentYear:(new Date).getFullYear(),version:"1.0.0"},tax:{defaultMwst:19,allowedMwst:[0,7,19],stammkapital:25e3,year:2021,isHolding:!1,holding:{gewerbesteuer:470,koerperschaftsteuer:15,solidaritaetszuschlag:5.5,gewinnUebertragSteuerfrei:95,gewinnUebertragSteuerpflichtig:5},operative:{gewerbesteuer:470,koerperschaftsteuer:15,solidaritaetszuschlag:5.5,gewinnUebertragSteuerfrei:0,gewinnUebertragSteuerpflichtig:100}},sheets:{einnahmen:{columns:{datum:1,rechnungsnummer:2,kategorie:3,kunde:4,nettobetrag:5,mwstSatz:6,mwstBetrag:7,bruttoBetrag:8,bezahlt:9,steuerbemessung:10,quartal:11,zahlungsstatus:12,zahlungsart:13,zahlungsdatum:14,bankAbgleich:15,zeitstempel:16,dateiname:17,dateilink:18}},ausgaben:{columns:{datum:1,rechnungsnummer:2,kategorie:3,kunde:4,nettobetrag:5,mwstSatz:6,mwstBetrag:7,bruttoBetrag:8,bezahlt:9,steuerbemessung:10,quartal:11,zahlungsstatus:12,zahlungsart:13,zahlungsdatum:14,bankAbgleich:15,zeitstempel:16,dateiname:17,dateilink:18}},eigenbelege:{columns:{datum:1,belegnummer:2,kategorie:3,beschreibung:4,nettobetrag:5,mwstSatz:6,mwstBetrag:7,bruttoBetrag:8,bezahlt:9,steuerbemessung:10,quartal:11,status:12,zahlungsart:13,zahlungsdatum:14,zeitstempel:16,dateiname:17,dateilink:18}},bankbewegungen:{columns:{datum:1,buchungstext:2,betrag:3,saldo:4,transaktionstyp:5,kategorie:6,kontoSoll:7,kontoHaben:8,referenz:9,verwendungszweck:10,matchInfo:11,anmerkung:12}},gesellschafterkonto:{columns:{datum:1,beschreibung:2,kategorie:3,betrag:4,gesellschafter:5,anmerkung:6,kontoSoll:7,kontoHaben:8,buchungsdatum:9,beleg:10,saldo:11,zeitstempel:12}},holdingTransfers:{columns:{datum:1,beschreibung:2,kategorie:3,betrag:4,anmerkung:5,zeitstempel:6}},aenderungshistorie:{columns:{datum:1,typ:2,dateiname:3,dateilink:4}}},einnahmen:{categories:{"Erlöse aus Lieferungen und Leistungen":{taxType:"steuerpflichtig"},"Provisionserlöse":{taxType:"steuerpflichtig"},"Sonstige betriebliche Erträge":{taxType:"steuerpflichtig"},"Erträge aus Vermietung/Verpachtung":{taxType:"steuerfrei_inland"},"Erträge aus Zuschüssen":{taxType:"steuerpflichtig"},"Erträge aus Währungsgewinnen":{taxType:"steuerpflichtig"},"Erträge aus Anlagenabgängen":{taxType:"steuerpflichtig"},Darlehen:{taxType:"steuerfrei_inland"},Zinsen:{taxType:"steuerfrei_inland"},Gewinnvortrag:{taxType:"steuerfrei_inland"},Verlustvortrag:{taxType:"steuerfrei_inland"}},kontoMapping:{"Erlöse aus Lieferungen und Leistungen":{soll:"1200",gegen:"4400",mwst:"1776"},"Provisionserlöse":{soll:"1200",gegen:"4120",mwst:"1776"},"Sonstige betriebliche Erträge":{soll:"1200",gegen:"4830",mwst:"1776"},"Erträge aus Vermietung/Verpachtung":{soll:"1200",gegen:"4180"},"Erträge aus Zuschüssen":{soll:"1200",gegen:"4190",mwst:"1776"},"Erträge aus Währungsgewinnen":{soll:"1200",gegen:"4840"},"Erträge aus Anlagenabgängen":{soll:"1200",gegen:"4855"},Darlehen:{soll:"1200",gegen:"3100"},Zinsen:{soll:"1200",gegen:"4130"},Gewinnvortrag:{soll:"1200",gegen:"2970"},Verlustvortrag:{soll:"1200",gegen:"2978"}},bwaMapping:{"Erlöse aus Lieferungen und Leistungen":"umsatzerloese","Provisionserlöse":"provisionserloese","Sonstige betriebliche Erträge":"sonstigeErtraege","Erträge aus Vermietung/Verpachtung":"vermietung","Erträge aus Zuschüssen":"zuschuesse","Erträge aus Währungsgewinnen":"waehrungsgewinne","Erträge aus Anlagenabgängen":"anlagenabgaenge",Darlehen:"sonstigeErtraege",Zinsen:"sonstigeErtraege"}},ausgaben:{categories:{Wareneinsatz:{taxType:"steuerpflichtig",group:"material"},"Bezogene Leistungen":{taxType:"steuerpflichtig",group:"material"},"Roh-, Hilfs- & Betriebsstoffe":{taxType:"steuerpflichtig",group:"material"},"Bruttolöhne & Gehälter":{taxType:"steuerfrei_inland",group:"personal"},"Soziale Abgaben & Arbeitgeberanteile":{taxType:"steuerfrei_inland",group:"personal"},"Sonstige Personalkosten":{taxType:"steuerpflichtig",group:"personal"},Miete:{taxType:"steuerfrei_inland",group:"raum"},Nebenkosten:{taxType:"steuerpflichtig",group:"raum"},Betriebskosten:{taxType:"steuerpflichtig",group:"betrieb"},"Marketing & Werbung":{taxType:"steuerpflichtig",group:"betrieb"},Reisekosten:{taxType:"steuerpflichtig",group:"betrieb"},Versicherungen:{taxType:"steuerfrei_inland",group:"betrieb"},Porto:{taxType:"steuerfrei_inland",group:"betrieb"},"Google Ads":{taxType:"steuerfrei_ausland",group:"betrieb"},AWS:{taxType:"steuerfrei_ausland",group:"betrieb"},"Facebook Ads":{taxType:"steuerfrei_ausland",group:"betrieb"},Bewirtung:{taxType:"steuerpflichtig",group:"betrieb",besonderheit:"bewirtung"},"Telefon & Internet":{taxType:"steuerpflichtig",group:"betrieb"},"Bürokosten":{taxType:"steuerpflichtig",group:"betrieb"},Fortbildungskosten:{taxType:"steuerpflichtig",group:"betrieb"},"Abschreibungen Maschinen":{taxType:"steuerpflichtig",group:"abschreibung"},"Abschreibungen Büroausstattung":{taxType:"steuerpflichtig",group:"abschreibung"},"Abschreibungen immaterielle Wirtschaftsgüter":{taxType:"steuerpflichtig",group:"abschreibung"},"Zinsen auf Bankdarlehen":{taxType:"steuerpflichtig",group:"zinsen"},"Zinsen auf Gesellschafterdarlehen":{taxType:"steuerpflichtig",group:"zinsen"},Leasingkosten:{taxType:"steuerpflichtig",group:"abschreibung"},"Gewerbesteuerrückstellungen":{taxType:"steuerfrei_inland",group:"steuer"},"Körperschaftsteuer":{taxType:"steuerfrei_inland",group:"steuer"},"Solidaritätszuschlag":{taxType:"steuerfrei_inland",group:"steuer"},"Sonstige Steuerrückstellungen":{taxType:"steuerfrei_inland",group:"steuer"},"Sonstige betriebliche Aufwendungen":{taxType:"steuerpflichtig",group:"sonstige"}},kontoMapping:{Wareneinsatz:{soll:"5000",gegen:"1200",vorsteuer:"1576"},"Bezogene Leistungen":{soll:"5300",gegen:"1200",vorsteuer:"1576"},"Roh-, Hilfs- & Betriebsstoffe":{soll:"5400",gegen:"1200",vorsteuer:"1576"},"Bruttolöhne & Gehälter":{soll:"6000",gegen:"1200"},"Soziale Abgaben & Arbeitgeberanteile":{soll:"6010",gegen:"1200"},"Sonstige Personalkosten":{soll:"6020",gegen:"1200",vorsteuer:"1576"},Miete:{soll:"6310",gegen:"1200"},Nebenkosten:{soll:"6320",gegen:"1200",vorsteuer:"1576"},Betriebskosten:{soll:"6300",gegen:"1200",vorsteuer:"1576"},"Marketing & Werbung":{soll:"6600",gegen:"1200",vorsteuer:"1576"},Reisekosten:{soll:"6650",gegen:"1200",vorsteuer:"1576"},Versicherungen:{soll:"6400",gegen:"1200"},Porto:{soll:"6810",gegen:"1200"},"Google Ads":{soll:"6600",gegen:"1200"},AWS:{soll:"6500",gegen:"1200"},"Facebook Ads":{soll:"6600",gegen:"1200"},Bewirtung:{soll:"6670",gegen:"1200",vorsteuer:"1576"},"Telefon & Internet":{soll:"6805",gegen:"1200",vorsteuer:"1576"},"Bürokosten":{soll:"6815",gegen:"1200",vorsteuer:"1576"},Fortbildungskosten:{soll:"6830",gegen:"1200",vorsteuer:"1576"},"Abschreibungen Maschinen":{soll:"6200",gegen:"1200"},"Abschreibungen Büroausstattung":{soll:"6210",gegen:"1200"},"Abschreibungen immaterielle Wirtschaftsgüter":{soll:"6220",gegen:"1200"},"Zinsen auf Bankdarlehen":{soll:"7300",gegen:"1200"},"Zinsen auf Gesellschafterdarlehen":{soll:"7310",gegen:"1200"},Leasingkosten:{soll:"6240",gegen:"1200",vorsteuer:"1576"},"Gewerbesteuerrückstellungen":{soll:"7610",gegen:"1200"},"Körperschaftsteuer":{soll:"7600",gegen:"1200"},"Solidaritätszuschlag":{soll:"7620",gegen:"1200"},"Sonstige Steuerrückstellungen":{soll:"7630",gegen:"1200"},"Sonstige betriebliche Aufwendungen":{soll:"6800",gegen:"1200",vorsteuer:"1576"}},bwaMapping:{Wareneinsatz:"wareneinsatz","Bezogene Leistungen":"fremdleistungen","Roh-, Hilfs- & Betriebsstoffe":"rohHilfsBetriebsstoffe",Betriebskosten:"sonstigeAufwendungen","Marketing & Werbung":"werbungMarketing",Reisekosten:"reisekosten","Bruttolöhne & Gehälter":"bruttoLoehne","Soziale Abgaben & Arbeitgeberanteile":"sozialeAbgaben","Sonstige Personalkosten":"sonstigePersonalkosten","Sonstige betriebliche Aufwendungen":"sonstigeAufwendungen",Miete:"mieteNebenkosten",Nebenkosten:"mieteNebenkosten",Versicherungen:"versicherungen",Porto:"buerokosten","Telefon & Internet":"telefonInternet","Bürokosten":"buerokosten",Fortbildungskosten:"fortbildungskosten","Abschreibungen Maschinen":"abschreibungenMaschinen","Abschreibungen Büroausstattung":"abschreibungenBueromaterial","Abschreibungen immaterielle Wirtschaftsgüter":"abschreibungenImmateriell","Zinsen auf Bankdarlehen":"zinsenBank","Zinsen auf Gesellschafterdarlehen":"zinsenGesellschafter",Leasingkosten:"leasingkosten","Google Ads":"werbungMarketing",AWS:"sonstigeAufwendungen","Facebook Ads":"werbungMarketing",Bewirtung:"sonstigeAufwendungen","Gewerbesteuerrückstellungen":"gewerbesteuerRueckstellungen","Körperschaftsteuer":"koerperschaftsteuer","Solidaritätszuschlag":"solidaritaetszuschlag","Sonstige Steuerrückstellungen":"steuerrueckstellungen"}},bank:{type:["Einnahme","Ausgabe","Interne Buchung"],defaultAccount:"1200"},gesellschafterkonto:{category:["Gesellschafterdarlehen","Ausschüttungen","Kapitalrückführung","Privatentnahme","Privateinlage"],shareholder:["Christopher Giebel","Hendrik Werner"]},eigenbelege:{category:["Kleidung","Trinkgeld","Private Vorauslage","Bürokosten","Reisekosten","Bewirtung","Sonstiges"],mapping:{Kleidung:{taxType:"steuerpflichtig"},Trinkgeld:{taxType:"steuerfrei"},"Private Vorauslage":{taxType:"steuerfrei"},"Bürokosten":{taxType:"steuerpflichtig"},Reisekosten:{taxType:"steuerpflichtig"},Bewirtung:{taxType:"eigenbeleg",besonderheit:"bewirtung"},Sonstiges:{taxType:"steuerpflichtig"}},status:["Offen","Erstattet","Gebucht"]},holdingTransfers:{category:["Gewinnübertrag","Kapitalrückführung"]},kontenplan:{"0000":"Eröffnungsbilanz","0100":"Immaterielle Vermögensgegenstände","0400":"Grundstücke ohne Bauten","0500":"Bauten auf eigenen Grundstücken","0650":"Technische Anlagen und Maschinen","0700":"Andere Anlagen, Betriebs- und Geschäftsausstattung",1200:"Bank",1210:"Kasse",1300:"Forderungen aus Lieferungen und Leistungen",1576:"Vorsteuer 19%",1577:"Vorsteuer 7%",1590:"Umsatzsteuer-Vorauszahlungen",1600:"Forderungen gegen Gesellschafter",1776:"Umsatzsteuer 19%",1777:"Umsatzsteuer 7%",1790:"Umsatzsteuer-Vorauszahlungen",2e3:"Gezeichnetes Kapital",2100:"Kapitalrücklage",2970:"Gewinnvortrag vor Verwendung",2978:"Verlustvortrag vor Verwendung",3100:"Darlehen",3150:"Verbindlichkeiten gegenüber Kreditinstituten",3200:"Verbindlichkeiten aus Lieferungen und Leistungen",3300:"Verbindlichkeiten gegenüber Gesellschaftern",4e3:"Umsatzerlöse",4120:"Provisionserlöse",4130:"Zinsertrag",4180:"Erträge aus Vermietung und Verpachtung",4190:"Erträge aus Zuschüssen und Zulagen",4400:"Erlöse aus Lieferungen und Leistungen",4830:"Sonstige betriebliche Erträge",4840:"Erträge aus Währungsumrechnung",4855:"Erträge aus Anlagenabgang",5e3:"Wareneinsatz",5300:"Bezogene Leistungen",5400:"Roh-, Hilfs- und Betriebsstoffe",6e3:"Löhne und Gehälter",6010:"Gesetzliche soziale Aufwendungen",6020:"Sonstige Personalkosten",6200:"Abschreibungen auf Sachanlagen",6210:"Abschreibungen auf Büroausstattung",6220:"Abschreibungen auf immaterielle Vermögensgegenstände",6240:"Leasingkosten",6300:"Betriebskosten",6310:"Miete",6320:"Nebenkosten",6400:"Versicherungen",6500:"IT-Kosten",6600:"Werbekosten",6650:"Reisekosten",6670:"Bewirtungskosten",6800:"Sonstige betriebliche Aufwendungen",6805:"Telefon und Internet",6810:"Porto",6815:"Bürobedarf",6830:"Fortbildungskosten",7300:"Zinsaufwendungen für Bankdarlehen",7310:"Zinsaufwendungen für Gesellschafterdarlehen",7600:"Körperschaftsteuer",7610:"Gewerbesteuer",7620:"Solidaritätszuschlag",7630:"Sonstige Steuern",8e3:"Eröffnungsbilanzkonto",8400:"Abschlussbilanzkonto",8999:"Gewinn- und Verlustkonto"},initialize(){return this.bank.category=[...Object.keys(this.einnahmen.categories),...Object.keys(this.ausgaben.categories),...this.gesellschafterkonto.category,...this.holdingTransfers.category,...this.eigenbelege.category],this.bank.category=[...new Set(this.bank.category)],this}}.initialize();const t={_cache:{dates:new Map,currency:new Map,mwstRates:new Map,columnLetters:new Map},clearCache(){this._cache.dates.clear(),this._cache.currency.clear(),this._cache.mwstRates.clear(),this._cache.columnLetters.clear()},parseDate(e){const t=e instanceof Date?e.getTime().toString():e?e.toString():"";if(this._cache.dates.has(t))return this._cache.dates.get(t);let n=null;if(e instanceof Date)n=isNaN(e.getTime())?null:e;else if("string"==typeof e)if(/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(e)){const[t,r,s]=e.split(".").map(Number),a=new Date(s,r-1,t);n=isNaN(a.getTime())?null:a}else{const t=new Date(e);n=isNaN(t.getTime())?null:t}return this._cache.dates.set(t,n),n},parseCurrency(e){if(null==e||""===e)return 0;if("number"==typeof e)return e;const t=e.toString();if(this._cache.currency.has(t))return this._cache.currency.get(t);const n=t.replace(/[^\d,.-]/g,"").replace(/,/g,"."),r=n.split(".");let s;if(r.length>2){const e=r.pop();s=parseFloat(r.join("")+"."+e)}else s=parseFloat(n);return s=isNaN(s)?0:s,this._cache.currency.set(t,s),s},parseMwstRate(t){const n=e?.tax?.defaultMwst||19;if(null==t||""===t)return n;const r=t.toString();if(this._cache.mwstRates.has(r))return this._cache.mwstRates.get(r);let s;if("number"==typeof t)s=t<1?100*t:t;else{const e=t.toString().replace(/%/g,"").replace(/,/g,".").trim(),r=parseFloat(e);s=isNaN(r)?n:r<1?100*r:r}return this._cache.mwstRates.set(r,s),s},getFolderByName(e,t){if(!e)return null;try{const n=e.getFoldersByName(t);return n.hasNext()?n.next():null}catch(e){return console.error("Fehler beim Suchen des Ordners:",e),null}},extractDateFromFilename(e){if(!e)return"";if(this._cache.dates.has(`filename_${e}`))return this._cache.dates.get(`filename_${e}`);const t=e.replace(/\.[^/.]+$/,"");let n="",r=t.match(/(\d{2}[.]\d{2}[.]\d{4})/);if(r?.[1])n=r[1];else if(r=t.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/),r?.[1]){const e=r[1].split(/[-_.\/]/);if(3===e.length){const[t,r,s]=e;n=`${s}.${r}.${t}`}}else if(r=t.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/),r?.[2]){const e=r[2].split(/[-_.\/]/);if(3===e.length){const[t,r,s]=e;n=`${s}.${r}.${t}`}}else if(r=t.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/),r){const[e,t,s,a]=r;n=`${t}.${s}.${a}`}return this._cache.dates.set(`filename_${e}`,n),n},setConditionalFormattingForColumn(e,t,n){if(e&&t&&n&&n.length)try{const r=Math.max(e.getLastRow(),2),s=e.getRange(`${t}2:${t}${r}`),a=e.getConditionalFormatRules().filter((e=>!e.getRanges().some((e=>e.getColumn()===s.getColumn()&&e.getRow()===s.getRow()&&e.getNumColumns()===s.getNumColumns())))),i=n.map((({value:e,background:t,fontColor:n,pattern:r})=>{let a;return a="beginsWith"===r?SpreadsheetApp.newConditionalFormatRule().whenTextStartsWith(e):"contains"===r?SpreadsheetApp.newConditionalFormatRule().whenTextContains(e):SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(e),a.setBackground(t||"#ffffff").setFontColor(n||"#000000").setRanges([s]).build()}));e.setConditionalFormatRules([...a,...i])}catch(e){console.error("Fehler beim Setzen der bedingten Formatierung:",e)}},getMonthFromRow(t,n=null){if(!t)return 0;let r;if(n){const t=e.sheets[n.toLowerCase()]?.columns;r=t&&t.zeitstempel?t.zeitstempel-1:15}else r=13;if(t.length<=r)return 0;const s=this.parseDate(t[r]),a=e?.tax?.year||(new Date).getFullYear();return s&&s.getFullYear()===a?s.getMonth()+1:0},formatDate(e){const t=this.parseDate(e);if(!t)return"";return`${String(t.getDate()).padStart(2,"0")}.${String(t.getMonth()+1).padStart(2,"0")}.${t.getFullYear()}`},formatCurrency(e,t="€"){return this.parseCurrency(e).toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})+" "+t},generateUniqueId:(e="")=>`${e}${(new Date).getTime()}${Math.floor(1e4*Math.random())}`,getColumnLetter(e){if(this._cache.columnLetters.has(e))return this._cache.columnLetters.get(e);let t="",n=e;for(;n>0;){const e=(n-1)%26;t=String.fromCharCode(65+e)+t,n=Math.floor((n-e)/26)}return this._cache.columnLetters.set(e,t),t},isApproximatelyEqual:(e,t,n=.01)=>Math.abs(e-t)<=n,round(e,t=2){const n=Math.pow(10,t);return Math.round((e+Number.EPSILON)*n)/n},isEmpty:e=>null==e||""===e.toString().trim(),normalizeText:e=>e?e.toString().toLowerCase().replace(/[äöüß]/g,(e=>({"ä":"ae","ö":"oe","ü":"ue","ß":"ss"}[e]))).replace(/[^a-z0-9]/g,""):"",batchWriteToSheet(e,t,n,r){if(e&&t&&t.length&&t[0].length)try{e.getRange(n,r,t.length,t[0].length).setValues(t)}catch(s){console.error("Fehler beim Batch-Schreiben in das Sheet:",s);const a=50;for(let s=0;s<t.length;s+=a){const i=t.slice(s,s+a);try{e.getRange(n+s,r,i.length,i[0].length).setValues(i),s+a<t.length&&Utilities.sleep(100)}catch(e){console.error(`Fehler beim Schreiben von Batch ${s/a}:`,e)}}}}},n=(()=>{const n=(e,n)=>{if(!e)return null;try{let r=t.getFolderByName(e,n);if(!r){const t=SpreadsheetApp.getUi();t.alert(`Der Ordner '${n}' existiert nicht. Soll er erstellt werden?`,t.ButtonSet.YES_NO)===t.Button.YES&&(r=e.createFolder(n))}return r}catch(e){return console.error(`Fehler beim Finden/Erstellen des Ordners ${n}:`,e),null}},r=(n,r,s,a,i)=>{if(!n||!r||!a)return 0;const l=n.getFiles(),g=[],u=[],o=new Date;let h=0;const c="Einnahme"===s?e.sheets.einnahmen.columns:e.sheets.ausgaben.columns,b=e.sheets.aenderungshistorie.columns;let m=0,d=[];for(;l.hasNext();){const e=l.next(),n=e.getName().replace(/\.[^/.]+$/,"");if(!i.has(n)){const f=n.replace(/^[^ ]* /,""),p=t.extractDateFromFilename(n),k=e.getUrl(),w=Array(r.getLastColumn()).fill("");w[c.datum-1]=p,w[c.rechnungsnummer-1]=f,w[c.zeitstempel-1]=o,w[c.dateiname-1]=n,w[c.dateilink-1]=k,g.push(w);const S=Array(a.getLastColumn()).fill("");S[b.datum-1]=o,S[b.typ-1]=s,S[b.dateiname-1]=n,S[b.dateilink-1]=k,u.push(S),i.add(n),h++,m++,d.push(e),m%20!=0&&l.hasNext()||(d=[],Utilities.sleep(50))}}return g.length>0&&t.batchWriteToSheet(r,g,r.getLastRow()+1,1),u.length>0&&t.batchWriteToSheet(a,u,a.getLastRow()+1,1),h};return{importDriveFiles:()=>{const t=SpreadsheetApp.getActiveSpreadsheet(),s=SpreadsheetApp.getUi();let a=0;try{const i=t.getSheetByName("Einnahmen"),l=t.getSheetByName("Ausgaben");if(!i||!l)return s.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!"),0;const g=t.getSheetByName("Änderungshistorie")||t.insertSheet("Änderungshistorie");if(!(t=>{try{if(0===t.getLastRow()){const n=e.sheets.aenderungshistorie.columns,r=Array(t.getLastColumn()).fill("");r[n.datum-1]="Datum",r[n.typ-1]="Rechnungstyp",r[n.dateiname-1]="Dateiname",r[n.dateilink-1]="Link zur Datei",t.appendRow(r),t.getRange(1,1,1,4).setFontWeight("bold")}return!0}catch(e){return console.error("Fehler bei der Initialisierung des History-Sheets:",e),!1}})(g))return s.alert("Fehler: Die Änderungshistorie konnte nicht initialisiert werden!"),0;const u=(t=>{const n=new Set;try{const r=t.getDataRange().getValues(),s=e.sheets.aenderungshistorie.columns;for(let e=1;e<r.length;e++){const t=r[e][s.dateiname-1];t&&n.add(t)}}catch(e){console.error("Fehler beim Sammeln bereits importierter Dateien:",e)}return n})(g),o=(()=>{try{const e=SpreadsheetApp.getActiveSpreadsheet(),t=DriveApp.getFileById(e.getId()).getParents();return t.hasNext()?t.next():null}catch(e){return console.error("Fehler beim Abrufen des übergeordneten Ordners:",e),null}})();if(!o)return s.alert("Fehler: Kein übergeordneter Ordner gefunden."),0;const h=n(o,"Einnahmen"),c=n(o,"Ausgaben");let b=0,m=0;if(h)try{b=r(h,i,"Einnahme",g,u),a+=b}catch(e){console.error("Fehler beim Import der Einnahmen:",e),s.alert("Fehler beim Import der Einnahmen: "+e.toString())}if(c)try{m=r(c,l,"Ausgabe",g,u),a+=m}catch(e){console.error("Fehler beim Import der Ausgaben:",e),s.alert("Fehler beim Import der Ausgaben: "+e.toString())}return 0===a?s.alert("Es wurden keine neuen Dateien gefunden."):s.alert(`Import abgeschlossen.\n\n${b} Einnahmen importiert.\n${m} Ausgaben importiert.`),a}catch(e){return console.error("Unerwarteter Fehler beim Import:",e),s.alert("Ein unerwarteter Fehler ist aufgetreten: "+e.toString()),0}}}})(),r=(()=>{const n=(n,s,a="einnahmen")=>{const i=[],l=e.sheets[a].columns,g=[{check:e=>t.isEmpty(e[l.datum-1]),message:"Rechnungsdatum fehlt."},{check:e=>t.isEmpty(e[l.rechnungsnummer-1]),message:"Rechnungsnummer fehlt."},{check:e=>t.isEmpty(e[l.kategorie-1]),message:"Kategorie fehlt."},{check:e=>t.isEmpty(e[l.kunde-1]),message:"Kunde/Lieferant fehlt."},{check:e=>r(e[l.nettobetrag-1]),message:"Nettobetrag fehlt oder ungültig."},{check:n=>{const r=null==n[l.mwstSatz-1]?"":n[l.mwstSatz-1].toString().trim();if(t.isEmpty(r))return!1;const s=t.parseMwstRate(r);if(isNaN(s))return!0;return!(e?.tax?.allowedMwst||[0,7,19]).includes(Math.round(s))},message:`Ungültiger MwSt-Satz. Erlaubt sind: ${e?.tax?.allowedMwst?.join("%, ")}% oder leer.`}],u=n[l.zahlungsstatus-1]?n[l.zahlungsstatus-1].toString().trim().toLowerCase():"";return((e,t,n)=>{n.forEach((({check:n,message:r})=>{n(e)&&i.push(`Zeile ${t}: ${r}`)}))})(n,s,[...g,..."offen"===u?[{check:e=>!t.isEmpty(e[l.zahlungsart-1]),message:"Zahlungsart darf bei offener Zahlung nicht gesetzt sein."},{check:e=>!t.isEmpty(e[l.zahlungsdatum-1]),message:"Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein."}]:[{check:e=>t.isEmpty(e[l.zahlungsart-1]),message:"Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein."},{check:e=>t.isEmpty(e[l.zahlungsdatum-1]),message:"Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein."},{check:e=>{if(t.isEmpty(e[l.zahlungsdatum-1]))return!1;const n=t.parseDate(e[l.zahlungsdatum-1]);return!!n&&n>new Date},message:"Zahlungsdatum darf nicht in der Zukunft liegen."},{check:e=>{if(t.isEmpty(e[l.zahlungsdatum-1])||t.isEmpty(e[l.datum-1]))return!1;const n=t.parseDate(e[l.zahlungsdatum-1]),r=t.parseDate(e[l.datum-1]);return!(!n||!r)&&n<r},message:"Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."}]]),i},r=e=>t.isEmpty(e)||isNaN(parseFloat(e.toString().trim())),s=n=>{if(!n)return["Bankbewegungen-Sheet nicht gefunden"];const s=n.getDataRange().getValues(),a=[],i=e.sheets.bankbewegungen.columns,l=[{check:e=>t.isEmpty(e[i.datum-1]),message:"Buchungsdatum fehlt."},{check:e=>t.isEmpty(e[i.buchungstext-1]),message:"Buchungstext fehlt."},{check:e=>!t.isEmpty(e[i.betrag-1])&&!isNaN(parseFloat(e[i.betrag-1].toString().trim())),message:"Betrag darf nicht gesetzt sein."},{check:e=>t.isEmpty(e[i.saldo-1])||r(e[i.saldo-1]),message:"Saldo fehlt oder ungültig."},{check:e=>!t.isEmpty(e[i.transaktionstyp-1]),message:"Typ darf nicht gesetzt sein."},{check:e=>!t.isEmpty(e[i.kategorie-1]),message:"Kategorie darf nicht gesetzt sein."},{check:e=>!t.isEmpty(e[i.kontoSoll-1]),message:"Konto (Soll) darf nicht gesetzt sein."},{check:e=>!t.isEmpty(e[i.kontoHaben-1]),message:"Gegenkonto (Haben) darf nicht gesetzt sein."}],g=[{check:e=>t.isEmpty(e[i.datum-1]),message:"Buchungsdatum fehlt."},{check:e=>t.isEmpty(e[i.buchungstext-1]),message:"Buchungstext fehlt."},{check:e=>t.isEmpty(e[i.betrag-1])||r(e[i.betrag-1]),message:"Betrag fehlt oder ungültig."},{check:e=>t.isEmpty(e[i.saldo-1])||r(e[i.saldo-1]),message:"Saldo fehlt oder ungültig."},{check:e=>t.isEmpty(e[i.transaktionstyp-1]),message:"Typ fehlt."},{check:e=>t.isEmpty(e[i.kategorie-1]),message:"Kategorie fehlt."},{check:e=>t.isEmpty(e[i.kontoSoll-1]),message:"Konto (Soll) fehlt."},{check:e=>t.isEmpty(e[i.kontoHaben-1]),message:"Gegenkonto (Haben) fehlt."}],u=(e,t,n)=>{n.forEach((({check:n,message:r})=>{n(e)&&a.push(`Zeile ${t}: ${r}`)}))};return s.forEach(((e,t)=>{const n=t+1;0===t||t===s.length-1?u(e,n,l):t>0&&t<s.length-1&&u(e,n,g)})),a},a=(e,t)=>e.reduce(((e,r,s)=>{if(r.some((e=>""!==e))){const a=n(r,s+2,t);e.push(...a)}return e}),[]),i=(n,r)=>{switch(r.toLowerCase()){case"date":const r=t.parseDate(n);return{isValid:!!r,message:r?"":"Ungültiges Datumsformat. Bitte verwenden Sie DD.MM.YYYY."};case"number":const s=parseFloat(n);return{isValid:!isNaN(s),message:isNaN(s)?"Ungültige Zahl.":""};case"currency":const a=t.parseCurrency(n);return{isValid:!isNaN(a),message:isNaN(a)?"Ungültiger Geldbetrag.":""};case"mwst":const i=t.parseMwstRate(n),l=e?.tax?.allowedMwst||[0,7,19];return{isValid:l.includes(Math.round(i)),message:l.includes(Math.round(i))?"":`Ungültiger MwSt-Satz. Erlaubt sind: ${l.join("%, ")}%.`};case"text":return{isValid:!t.isEmpty(n),message:t.isEmpty(n)?"Text darf nicht leer sein.":""};default:return{isValid:!0,message:""}}},l=(e,t)=>{e.errors.push(t),e.errorsByRow[t.row]||(e.errorsByRow[t.row]=[]),e.errorsByRow[t.row].push(t),e.errorsByColumn[t.column]||(e.errorsByColumn[t.column]=[]),e.errorsByColumn[t.column].push(t)};return{validateDropdown:(e,t,n,r,s,a)=>{if(!e||!a||!a.length)return null;try{return e.getRange(t,n,r,s).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(a,!0).setAllowInvalid(!1).build())}catch(e){return console.error("Fehler beim Erstellen der Dropdown-Validierung:",e),null}},validateRevenueAndExpenses:n,validateBanking:s,validateAllSheets:(e,t,n=null)=>{if(!e||!t)return SpreadsheetApp.getUi().alert("Fehler: Benötigte Sheets nicht gefunden!"),!1;try{const r=[];if(e.getLastRow()>1){const t=e.getDataRange().getValues().slice(1),n=a(t,"einnahmen");n.length&&r.push("Fehler in 'Einnahmen':\n"+n.join("\n"))}if(t.getLastRow()>1){const e=t.getDataRange().getValues().slice(1),n=a(e,"ausgaben");n.length&&r.push("Fehler in 'Ausgaben':\n"+n.join("\n"))}if(n){const e=s(n);e.length&&r.push("Fehler in 'Bankbewegungen':\n"+e.join("\n"))}if(r.length){const e=SpreadsheetApp.getUi(),t=1500;let n=r.join("\n\n");return n.length>t&&(n=n.substring(0,t)+"\n\n... und weitere Fehler. Bitte beheben Sie die angezeigten Fehler zuerst."),e.alert("Validierungsfehler gefunden",n,e.ButtonSet.OK),!1}return!0}catch(e){return console.error("Fehler bei der Validierung:",e),SpreadsheetApp.getUi().alert("Ein Fehler ist bei der Validierung aufgetreten: "+e.toString()),!1}},validateCellValue:i,validateSheetWithRules:(e,n)=>{const r={isValid:!0,errors:[],errorsByRow:{},errorsByColumn:{}};if(!e)return r.isValid=!1,r.errors.push("Sheet nicht gefunden"),r;const s=e.getDataRange().getValues();if(s.length<=1)return r;for(let e=1;e<s.length;e++){const a=s[e];Object.entries(n).forEach((([n,s])=>{const g=parseInt(n,10);if(isNaN(g)||g>=a.length)return;const u=a[g],{type:o,required:h}=s;if(h&&t.isEmpty(u)){l(r,{row:e+1,column:g+1,message:"Pflichtfeld nicht ausgefüllt"})}else if(!t.isEmpty(u)&&o){const t=i(u,o);if(!t.isValid){const n={row:e+1,column:g+1,message:t.message};l(r,n)}}}))}return r.isValid=0===r.errors.length,r},isEmpty:t.isEmpty,isInvalidNumber:r}})(),s=(()=>{const n={sheets:new Map,references:{einnahmen:null,ausgaben:null}},s=()=>{n.sheets.clear(),n.references.einnahmen=null,n.references.ausgaben=null},a=e=>{if(n.sheets.has(e))return n.sheets.get(e);const t=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(e);return t&&n.sheets.set(e,t),t},i=n=>{try{const r=n.getLastRow();if(r<2)return!0;const s=r-1,a=n.getName();let i;if("Einnahmen"===a)i=e.sheets.einnahmen.columns;else if("Ausgaben"===a)i=e.sheets.ausgaben.columns;else{if("Eigenbelege"!==a)return!1;i=e.sheets.eigenbelege.columns}const g={};Object.entries(i).forEach((([e,n])=>{g[e]=t.getColumnLetter(n)}));const u={};u[i.mwstBetrag]=Array.from({length:s},((e,t)=>[`=${g.nettobetrag}${t+2}*${g.mwstSatz}${t+2}`])),u[i.bruttoBetrag]=Array.from({length:s},((e,t)=>[`=${g.nettobetrag}${t+2}+${g.mwstBetrag}${t+2}`])),u[i.steuerbemessung]=Array.from({length:s},((e,t)=>[`=(${g.bruttoBetrag}${t+2}-${g.bezahlt}${t+2})/(1+${g.mwstSatz}${t+2})`])),u[i.quartal]=Array.from({length:s},((e,t)=>[`=IF(${g.datum}${t+2}="";"";ROUNDUP(MONTH(${g.datum}${t+2})/3;0))`])),u[i.zahlungsstatus]=Array.from({length:s},((e,t)=>[`=IF(VALUE(${g.bezahlt}${t+2})=0;"Offen";IF(VALUE(${g.bezahlt}${t+2})>=VALUE(${g.bruttoBetrag}${t+2});"Bezahlt";"Teilbezahlt"))`])),Object.entries(u).forEach((([e,t])=>{n.getRange(2,Number(e),s,1).setFormulas(t)}));const o=n.getRange(2,i.bezahlt,s,1),h=o.getValues().map((([e])=>[t.isEmpty(e)?0:e]));return o.setValues(h),l(n,a,s,i),"Eigenbelege"!==a?t.setConditionalFormattingForColumn(n,g.zahlungsstatus,[{value:"Offen",background:"#FFC7CE",fontColor:"#9C0006"},{value:"Teilbezahlt",background:"#FFEB9C",fontColor:"#9C6500"},{value:"Bezahlt",background:"#C6EFCE",fontColor:"#006100"}]):t.setConditionalFormattingForColumn(n,g.status,[{value:"Offen",background:"#FFC7CE",fontColor:"#9C0006"},{value:"Erstattet",background:"#FFEB9C",fontColor:"#9C6500"},{value:"Gebucht",background:"#C6EFCE",fontColor:"#006100"}]),n.autoResizeColumns(1,n.getLastColumn()),!0}catch(e){return console.error(`Fehler beim Aktualisieren von ${n.getName()}:`,e),!1}},l=(t,n,s,a)=>{"Einnahmen"===n?r.validateDropdown(t,2,a.kategorie,s,1,Object.keys(e.einnahmen.categories)):"Ausgaben"===n?r.validateDropdown(t,2,a.kategorie,s,1,Object.keys(e.ausgaben.categories)):"Eigenbelege"===n&&(r.validateDropdown(t,2,a.kategorie,s,1,e.eigenbelege.category),r.validateDropdown(t,2,a.status,s,1,e.eigenbelege.status)),r.validateDropdown(t,2,a.zahlungsart,s,1,e.common.paymentType)},g=n=>{try{const r=SpreadsheetApp.getActiveSpreadsheet(),s=n.getLastRow();if(s<3)return!0;const a=3,i=s-a+1,l=s-a-1,g=e.sheets.bankbewegungen.columns,h={};Object.entries(g).forEach((([e,n])=>{h[e]=t.getColumnLetter(n)})),l>0&&n.getRange(a,g.saldo,l,1).setFormulas(Array.from({length:l},((e,t)=>[`=${h.saldo}${a+t-1}+${h.betrag}${a+t}`])));const b=n.getRange(a,g.betrag,i,1).getValues().map((([e])=>{const t=parseFloat(e)||0;return[t>0?"Einnahme":t<0?"Ausgabe":""]}));return n.getRange(a,g.transaktionstyp,i,1).setValues(b),u(n,a,i,g),t.setConditionalFormattingForColumn(n,h.transaktionstyp,[{value:"Einnahme",background:"#C6EFCE",fontColor:"#006100"},{value:"Ausgabe",background:"#FFC7CE",fontColor:"#9C0006"}]),c(r,n,a,i,s,g,h),o(n,s,g,h),n.autoResizeColumns(1,n.getLastColumn()),!0}catch(e){return console.error("Fehler beim Aktualisieren des Bankbewegungen-Sheets:",e),!1}},u=(t,n,s,a)=>{r.validateDropdown(t,n,a.transaktionstyp,s,1,e.bank.type),r.validateDropdown(t,n,a.kategorie,s,1,e.bank.category);const i=new Set,l=new Set;Object.values(e.einnahmen.kontoMapping).forEach((e=>{e.soll&&i.add(e.soll),e.gegen&&l.add(e.gegen)})),Object.values(e.ausgaben.kontoMapping).forEach((e=>{e.soll&&i.add(e.soll),e.gegen&&l.add(e.gegen)})),r.validateDropdown(t,n,a.kontoSoll,s,1,Array.from(i)),r.validateDropdown(t,n,a.kontoHaben,s,1,Array.from(l))},o=(e,t,n,r)=>{const s=e.getRange(t,n.buchungstext).getDisplayValue().toString().trim().toLowerCase(),a=Utilities.formatDate(new Date,Session.getScriptTimeZone(),"dd.MM.yyyy");if("endsaldo"===s)e.getRange(t,n.datum).setValue(a),e.getRange(t,n.saldo).setFormula(`=${r.saldo}${t-1}`);else{const r=Array(e.getLastColumn()).fill("");r[n.datum-1]=a,r[n.buchungstext-1]="Endsaldo",r[n.saldo-1]=e.getRange(t,n.saldo).getValue(),e.appendRow(r)}},h=e=>{if(1===arguments.length&&"einnahmen"===e&&n.references.einnahmen)return n.references.einnahmen;if(1===arguments.length&&"ausgaben"===e&&n.references.ausgaben)return n.references.ausgaben;const r={};if(!e||!e.length)return r;for(let n=0;n<e.length;n++){const s=e[n][0];if(t.isEmpty(s))continue;let a=s.trim();const i=a.startsWith("G-");i&&(a=a.substring(2));const l=t.normalizeText(a);let g=0;t.isEmpty(e[n][3])||(g=t.parseCurrency(e[n][3]),g=Math.abs(g));let u=0;t.isEmpty(e[n][4])||(u=t.parseMwstRate(e[n][4]));let o=0;t.isEmpty(e[n][7])||(o=t.parseCurrency(e[n][7]),o=Math.abs(o));const h=g*(1+u/100);r[a]={ref:s.trim(),normalizedRef:l,row:n+2,betrag:g,mwstRate:u,brutto:h,bezahlt:o,offen:t.round(h-o,2),isGutschrift:i},l===a||r[l]||(r[l]=r[a])}return 1===arguments.length&&("einnahmen"===e?n.references.einnahmen=r:"ausgaben"===e&&(n.references.ausgaben=r)),r},c=(n,r,s,i,l,g,u)=>{const o=e.sheets.einnahmen.columns,c=e.sheets.ausgaben.columns,m=a("Einnahmen");let A=[],y={};if(m&&m.getLastRow()>1){const e=m.getLastRow()-1;A=m.getRange(2,o.rechnungsnummer,e,8).getDisplayValues(),y=h(A)}const E=a("Ausgaben");let z=[],v={};if(E&&E.getLastRow()>1){const e=E.getLastRow()-1;z=E.getRange(2,c.rechnungsnummer,e,8).getDisplayValues(),v=h(z)}const B=r.getRange(s,1,i,g.matchInfo).getDisplayValues(),F=[],V=[],R=[],C={};for(let n=0;n<B.length;n++){const r=n+s,a=B[n],i=a[g.buchungstext-1]?a[g.buchungstext-1].toString().trim().toLowerCase():"";if(r===l&&"endsaldo"===i){F.push([""]),V.push([""]),R.push([""]);continue}const u=a[g.transaktionstyp-1],h=a[g.referenz-1];let k="",w="",S="";const A=a[g.kategorie-1]||"";if(!t.isEmpty(h)){let e=!1;const n=Math.abs(t.parseCurrency(a[g.betrag-1]));if("Einnahme"===u){const t=b(h,y,n);if(t){e=!0,k=d(t,n,a,g,m,o);C[`einnahme#${t.row}`]={typ:"einnahme",row:t.row,bankDatum:a[g.datum-1],matchInfo:k,transTyp:u}}}else if("Ausgabe"===u){const t=b(h,v,n);if(t){e=!0,k=f(t,n,a,g,E,c);C[`ausgabe#${t.row}`]={typ:"ausgabe",row:t.row,bankDatum:a[g.datum-1],matchInfo:k,transTyp:u}}if(!e){const t=b(h,y);if(t){e=!0,k=p(t,n,a,g,m,o);C[`einnahme#${t.row}`]={typ:"einnahme",row:t.row,bankDatum:a[g.datum-1],matchInfo:k,transTyp:"Gutschrift"}}}}if(!e){const t=h.toString().toLowerCase();t.includes("gesellschaftskonto")?(e=!0,k="Einnahme"===u?"Gesellschaftskonto (Einnahme)":"Gesellschaftskonto (Ausgabe)"):t.includes("holding")&&(e=!0,k="Einnahme"===u?"Holding (Einnahme)":"Holding (Ausgabe)")}}if(A){let t=null;"Einnahme"===u?t=e.einnahmen.kontoMapping[A]:"Ausgabe"===u&&(t=e.ausgaben.kontoMapping[A]),t?(w=t.soll||"",S=t.gegen||""):(w="Manuell prüfen",S="Manuell prüfen")}F.push([k]),V.push([w]),R.push([S])}r.getRange(s,g.matchInfo,i,1).setValues(F),r.getRange(s,g.kontoSoll,i,1).setValues(V),r.getRange(s,g.kontoHaben,i,1).setValues(R),Utilities.sleep(500),k(r,s,F,g),w(r,u.matchInfo),Utilities.sleep(500),S(m,E,C)},b=(e,n,r=null)=>{if(!e||!n)return null;const s=t.normalizeText(e);if(n[e])return m(n[e],r);if(s&&n[s])return m(n[s],r);const a=Object.keys(n);for(const t of a)if(t.includes(e)||e.includes(t))return m(n[t],r);for(const e of a){const a=t.normalizeText(e);if(a.includes(s)||s.includes(a))return m(n[e],r)}return null},m=(e,n=null)=>{if(!e)return null;const r={...e};if(null===n)return r.matchType="Referenz-Match",r;const s=Math.abs(e.brutto),a=Math.abs(e.bezahlt),i=.02;return t.isApproximatelyEqual(n,s,i)||t.isApproximatelyEqual(a,s,i)&&a>0?(r.matchType="Vollständige Zahlung",r):n<s&&s-n>.1*s?(r.matchType="Teilzahlung",r):n>s&&t.isApproximatelyEqual(n,s,i)?(r.matchType="Vollständige Zahlung",r):(r.matchType="Unsichere Zahlung",r.betragsDifferenz=t.round(Math.abs(n-s),2),r)},d=(e,n,r,s,a,i)=>{let l="";if(e.matchType&&(l="Unsichere Zahlung"===e.matchType&&e.betragsDifferenz?` (${e.matchType}, Diff: ${e.betragsDifferenz}€)`:` (${e.matchType})`),("Vollständige Zahlung"===e.matchType||"Teilzahlung"===e.matchType)&&a){const n=r[s.datum-1];if(n){const r=e.row,s=a.getRange(r,i.zahlungsdatum),g=s.getValue();t.isEmpty(g)&&(s.setValue(n),l+=" ✓ Datum aktualisiert")}}return`Einnahme #${e.row}${l}`},f=(e,n,r,s,a,i)=>{let l="";if(e.matchType&&(l="Unsichere Zahlung"===e.matchType&&e.betragsDifferenz?` (${e.matchType}, Diff: ${e.betragsDifferenz}€)`:` (${e.matchType})`),("Vollständige Zahlung"===e.matchType||"Teilzahlung"===e.matchType)&&a){const n=r[s.datum-1];if(n){const r=e.row,s=a.getRange(r,i.zahlungsdatum),g=s.getValue();t.isEmpty(g)&&(s.setValue(n),l+=" ✓ Datum aktualisiert")}}return`Ausgabe #${e.row}${l}`},p=(e,n,r,s,a,i)=>{let l="";const g=Math.abs(e.brutto);if(l=t.isApproximatelyEqual(n,g,.01)?" (Vollständige Gutschrift)":n<g?" (Teilgutschrift)":" (Ungewöhnliche Gutschrift)",a){const n=r[s.datum-1];if(n){const r=e.row,s=a.getRange(r,i.zahlungsdatum),g=s.getValue();t.isEmpty(g)&&(s.setValue(n),l+=" ✓ Datum aktualisiert");const u=a.getRange(r,i.rechnungsnummer),o=u.getValue();o&&!o.toString().startsWith("G-")&&(u.setValue("G-"+o),l+=" ✓ Ref. markiert")}}return`Gutschrift zu Einnahme #${e.row}${l}`},k=(e,t,n,r)=>{const s={Einnahme:{rows:[],color:"#EAF1DD"},"Vollständige Zahlung (Einnahme)":{rows:[],color:"#C6EFCE"},"Teilzahlung (Einnahme)":{rows:[],color:"#FCE4D6"},Ausgabe:{rows:[],color:"#FFCCCC"},"Vollständige Zahlung (Ausgabe)":{rows:[],color:"#FFC7CE"},"Teilzahlung (Ausgabe)":{rows:[],color:"#FCE4D6"},Gutschrift:{rows:[],color:"#E6E0FF"},"Gesellschaftskonto/Holding":{rows:[],color:"#FFEB9C"}};n.forEach(((e,n)=>{const r=t+n,a=e&&e[0]?e[0].toString():"";a&&(a.includes("Einnahme")?a.includes("Vollständige Zahlung")?s["Vollständige Zahlung (Einnahme)"].rows.push(r):a.includes("Teilzahlung")?s["Teilzahlung (Einnahme)"].rows.push(r):s.Einnahme.rows.push(r):a.includes("Ausgabe")?a.includes("Vollständige Zahlung")?s["Vollständige Zahlung (Ausgabe)"].rows.push(r):a.includes("Teilzahlung")?s["Teilzahlung (Ausgabe)"].rows.push(r):s.Ausgabe.rows.push(r):a.includes("Gutschrift")?s.Gutschrift.rows.push(r):(a.includes("Gesellschaftskonto")||a.includes("Holding"))&&s["Gesellschaftskonto/Holding"].rows.push(r))})),Object.values(s).forEach((t=>{if(t.rows.length>0){const n=20;for(let s=0;s<t.rows.length;s+=n){t.rows.slice(s,s+n).forEach((n=>{try{e.getRange(n,1,1,r.matchInfo).setBackground(t.color)}catch(e){console.error(`Fehler beim Formatieren von Zeile ${n}:`,e)}})),s+n<t.rows.length&&Utilities.sleep(50)}}}))},w=(e,n)=>{t.setConditionalFormattingForColumn(e,n,[{value:"Einnahme",background:"#C6EFCE",fontColor:"#006100",pattern:"beginsWith"},{value:"Ausgabe",background:"#FFC7CE",fontColor:"#9C0006",pattern:"beginsWith"},{value:"Gutschrift",background:"#E6E0FF",fontColor:"#5229A3",pattern:"beginsWith"},{value:"Gesellschaftskonto",background:"#FFEB9C",fontColor:"#9C6500",pattern:"beginsWith"},{value:"Holding",background:"#FFEB9C",fontColor:"#9C6500",pattern:"beginsWith"},{value:"Vollständige Zahlung",background:"#C6EFCE",fontColor:"#006100",pattern:"contains"},{value:"Teilzahlung",background:"#FCE4D6",fontColor:"#974706",pattern:"contains"},{value:"Unsichere Zahlung",background:"#F8CBAD",fontColor:"#843C0C",pattern:"contains"},{value:"Vollständige Gutschrift",background:"#E6E0FF",fontColor:"#5229A3",pattern:"contains"},{value:"Teilgutschrift",background:"#E6E0FF",fontColor:"#5229A3",pattern:"contains"},{value:"Ungewöhnliche Gutschrift",background:"#FFD966",fontColor:"#7F6000",pattern:"contains"}])},S=(e,t,n)=>{e&&e.getLastRow()>1&&A(e,"Einnahmen",n),t&&t.getLastRow()>1&&A(t,"Ausgaben",n)},A=(n,r,s)=>{const a="Einnahmen"===r?e.sheets.einnahmen.columns:e.sheets.ausgaben.columns,i=n.getLastRow()-1,l=n.getRange(2,1,i,a.zahlungsdatum).getValues(),g=[],u=[],o=[],h=[],c=[],b=[],m=[];for(let e=0;e<l.length;e++){const i=e+2,d=t.parseCurrency(l[e][a.nettobetrag-1]),f=t.parseCurrency(l[e][a.bezahlt-1]),p=l[e][a.zahlungsdatum-1],k=l[e][a.rechnungsnummer-1],w=k&&k.toString().startsWith("G-"),S=`${r.toLowerCase().slice(0,-1)}#${i}`,A=void 0!==s[S],y=d*(1+t.parseMwstRate(l[e][a.mwstSatz-1])/100),z=Math.abs(f)>=.999*Math.abs(y),v=!z&&f>0;w?(c.push(i),A&&m.push({row:i,value:E(s[S])})):z?p?A?(g.push(i),m.push({row:i,value:E(s[S])})):u.push(i):h.push(i):v?A?(o.push(i),m.push({row:i,value:E(s[S])})):h.push(i):(b.push(i),n.getRange(i,a.bankAbgleich).getValue().toString().startsWith("✓ Bank:")&&m.push({row:i,value:""}))}if(y(n,g,"#C6EFCE"),y(n,u,"#EAF1DD"),y(n,o,"#FFC7AA"),y(n,h,"#FCE4D6"),y(n,c,"#E6E0FF"),y(n,b,null),""===n.getRange(1,a.bankAbgleich).getValue()&&n.getRange(1,a.bankAbgleich).setValue("Bank-Abgleich"),m.length>0){const e={};m.forEach((t=>{const{row:n,value:r}=t;e[r]||(e[r]=[]),e[r].push(n)})),Object.entries(e).forEach((([e,t])=>{for(let r=0;r<t.length;r+=20){t.slice(r,r+20).forEach((t=>{n.getRange(t,a.bankAbgleich).setValue(e)})),r+20<t.length&&Utilities.sleep(50)}}))}},y=(e,t,n)=>{if(!t||0===t.length)return;for(let r=0;r<t.length;r+=20){t.slice(r,r+20).forEach((t=>{try{const r=e.getRange(t,1,1,e.getLastColumn());n?r.setBackground(n):r.setBackground(null)}catch(e){console.error(`Fehler beim Formatieren von Zeile ${t}:`,e)}})),r+20<t.length&&Utilities.sleep(50)}},E=e=>{if(!e)return"";let t="✓ Bank: "+e.bankDatum;return e.additional&&e.additional.length>0&&(t+=" + "+e.additional.length+" weitere"),t};return{refreshActiveSheet:()=>{try{const e=SpreadsheetApp.getActiveSpreadsheet().getActiveSheet(),t=e.getName(),n=SpreadsheetApp.getUi();s(),["Einnahmen","Ausgaben","Eigenbelege"].includes(t)?(i(e),n.alert(`Das Blatt "${t}" wurde aktualisiert.`)):"Bankbewegungen"===t?(g(e),n.alert(`Das Blatt "${t}" wurde aktualisiert.`)):n.alert("Für dieses Blatt gibt es keine Refresh-Funktion.")}catch(e){console.error("Fehler beim Aktualisieren des aktiven Sheets:",e),SpreadsheetApp.getUi().alert("Ein Fehler ist beim Aktualisieren aufgetreten: "+e.toString())}},refreshAllSheets:()=>{try{SpreadsheetApp.getActiveSpreadsheet();s();const e=["Einnahmen","Ausgaben","Eigenbelege","Bankbewegungen"];for(const t of e){const e=a(t);e&&("Bankbewegungen"===t?g(e):i(e),Utilities.sleep(100))}}catch(e){console.error("Fehler beim Aktualisieren aller Sheets:",e)}}}})(),a=(()=>{const n={ustva:null,lastUpdated:null},s=()=>({steuerpflichtige_einnahmen:0,steuerfreie_inland_einnahmen:0,steuerfreie_ausland_einnahmen:0,steuerpflichtige_ausgaben:0,steuerfreie_inland_ausgaben:0,steuerfreie_ausland_ausgaben:0,eigenbelege_steuerpflichtig:0,eigenbelege_steuerfrei:0,nicht_abzugsfaehige_vst:0,ust_7:0,ust_19:0,vst_7:0,vst_19:0}),a=(n,r,s,a=!1)=>{try{const u=s?"einnahmen":a?"eigenbelege":"ausgaben",o=e.sheets[u].columns,h=t.parseDate(n[o.zahlungsdatum-1]);if(!h||h>new Date)return;const c=t.getMonthFromRow(n,u);if(!c||c<1||c>12)return;const b=t.parseCurrency(n[o.nettobetrag-1]),m=b-(t.parseCurrency(n[o.steuerbemessung-1])||0);if(t.isApproximatelyEqual(m,0))return;const d=t.parseMwstRate(n[o.mwstSatz-1]),f=Math.round(d),p=t.round(m*(d/100),2),k=n[o.kategorie-1]?.toString().trim()||"";s?i(r,c,m,p,f,k):a?l(r,c,m,p,f,k):g(r,c,m,p,f,k)}catch(e){console.error("Fehler bei der Verarbeitung einer UStVA-Zeile:",e)}},i=(t,n,r,s,a,i)=>{const l=(e.einnahmen.categories[i]??{}).taxType??"steuerpflichtig";"steuerfrei_inland"===l?t[n].steuerfreie_inland_einnahmen+=r:"steuerfrei_ausland"!==l&&a?(t[n].steuerpflichtige_einnahmen+=r,7!==a&&19!==a||(t[n][`ust_${a}`]+=s)):t[n].steuerfreie_ausland_einnahmen+=r},l=(n,r,s,a,i,l)=>{const g=e.eigenbelege.mapping[l]??{},u=g.taxType??"steuerpflichtig";if("steuerfrei"===u)n[r].eigenbelege_steuerfrei+=s;else if("eigenbeleg"===u&&"bewirtung"===g.besonderheit){if(n[r].eigenbelege_steuerpflichtig+=s,7===i||19===i){const e=t.round(.7*a,2),s=t.round(.3*a,2);n[r][`vst_${i}`]+=e,n[r].nicht_abzugsfaehige_vst+=s}}else n[r].eigenbelege_steuerpflichtig+=s,7!==i&&19!==i||(n[r][`vst_${i}`]+=a)},g=(t,n,r,s,a,i)=>{const l=(e.ausgaben.categories[i]??{}).taxType??"steuerpflichtig";"steuerfrei_inland"===l?t[n].steuerfreie_inland_ausgaben+=r:"steuerfrei_ausland"===l?t[n].steuerfreie_ausland_ausgaben+=r:(t[n].steuerpflichtige_ausgaben+=r,7!==a&&19!==a||(t[n][`vst_${a}`]+=s))},u=(e,n)=>{const r=t.round(n.ust_7+n.ust_19-(n.vst_7+n.vst_19-n.nicht_abzugsfaehige_vst),2),s=t.round(n.steuerpflichtige_einnahmen+n.steuerfreie_inland_einnahmen+n.steuerfreie_ausland_einnahmen-(n.steuerpflichtige_ausgaben+n.steuerfreie_inland_ausgaben+n.steuerfreie_ausland_ausgaben+n.eigenbelege_steuerpflichtig+n.eigenbelege_steuerfrei),2);return[e,n.steuerpflichtige_einnahmen,n.steuerfreie_inland_einnahmen,n.steuerfreie_ausland_einnahmen,n.steuerpflichtige_ausgaben,n.steuerfreie_inland_ausgaben,n.steuerfreie_ausland_ausgaben,n.eigenbelege_steuerpflichtig,n.eigenbelege_steuerfrei,n.nicht_abzugsfaehige_vst,n.ust_7,n.ust_19,n.vst_7,n.vst_19,r,s]},o=(e,t,n)=>{const r={steuerpflichtige_einnahmen:0,steuerfreie_inland_einnahmen:0,steuerfreie_ausland_einnahmen:0,steuerpflichtige_ausgaben:0,steuerfreie_inland_ausgaben:0,steuerfreie_ausland_ausgaben:0,eigenbelege_steuerpflichtig:0,eigenbelege_steuerfrei:0,nicht_abzugsfaehige_vst:0,ust_7:0,ust_19:0,vst_7:0,vst_19:0};for(let s=t;s<=n;s++)if(e[s])for(const t in r)r[t]+=e[s][t]||0;return r};return{calculateUStVA:()=>{try{const t=SpreadsheetApp.getActiveSpreadsheet(),s=SpreadsheetApp.getUi(),i=(()=>{const e=new Date;if(n.ustva&&n.lastUpdated&&e-n.lastUpdated<3e5)return n.ustva;try{const t=SpreadsheetApp.getActiveSpreadsheet(),s=t.getSheetByName("Einnahmen"),i=t.getSheetByName("Ausgaben"),l=t.getSheetByName("Eigenbelege");if(!s||!i)return console.error("Fehlende Blätter: 'Einnahmen' oder 'Ausgaben' nicht gefunden"),null;if(!r.validateAllSheets(s,i))return console.error("UStVA-Berechnung abgebrochen, da Fehler in den Daten gefunden wurden"),null;const g=s.getDataRange().getValues(),u=i.getDataRange().getValues(),o=l?l.getDataRange().getValues():[],h=Object.fromEntries(Array.from({length:12},((e,t)=>[t+1,{steuerpflichtige_einnahmen:0,steuerfreie_inland_einnahmen:0,steuerfreie_ausland_einnahmen:0,steuerpflichtige_ausgaben:0,steuerfreie_inland_ausgaben:0,steuerfreie_ausland_ausgaben:0,eigenbelege_steuerpflichtig:0,eigenbelege_steuerfrei:0,nicht_abzugsfaehige_vst:0,ust_7:0,ust_19:0,vst_7:0,vst_19:0}])));return g.slice(1).forEach((e=>a(e,h,!0))),u.slice(1).forEach((e=>a(e,h,!1))),o.length&&o.slice(1).forEach((e=>a(e,h,!1,!0))),n.ustva=h,n.lastUpdated=e,h}catch(e){return console.error("Fehler beim Sammeln der UStVA-Daten:",e),null}})();if(!i)return void s.alert("Die UStVA konnte nicht berechnet werden. Bitte prüfen Sie die Fehleranzeige.");const l=[["Zeitraum","Steuerpflichtige Einnahmen","Steuerfreie Inland-Einnahmen","Steuerfreie Ausland-Einnahmen","Steuerpflichtige Ausgaben","Steuerfreie Inland-Ausgaben","Steuerfreie Ausland-Ausgaben","Eigenbelege steuerpflichtig","Eigenbelege steuerfrei","Nicht abzugsfähige VSt (Bewirtung)","USt 7%","USt 19%","VSt 7%","VSt 19%","USt-Zahlung","Ergebnis"]];e.common.months.forEach(((e,t)=>{const n=t+1;if(l.push(u(e,i[n])),n%3==0){const e=n/3,t=n-2;l.push(u(`Quartal ${e}`,o(i,t,n)))}})),l.push(u("Gesamtjahr",o(i,1,12)));let g=t.getSheetByName("UStVA");g?g.clearContents():g=t.insertSheet("UStVA");g.getRange(1,1,l.length,l[0].length).setValues(l),g.getRange(1,1,1,l[0].length).setFontWeight("bold");for(let e=0;e<4;e++){const t=3*(e+1)+1+e;g.getRange(t,1,1,l[0].length).setBackground("#e6f2ff")}return g.getRange(l.length,1,1,l[0].length).setBackground("#d9e6f2").setFontWeight("bold"),g.getRange(2,2,l.length-1,15).setNumberFormat("#,##0.00 €"),g.autoResizeColumns(1,l[0].length),t.setActiveSheet(g),s.alert("UStVA wurde erfolgreich aktualisiert!"),!0}catch(e){return console.error("Fehler bei der UStVA-Berechnung:",e),SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: "+e.toString()),!1}},clearCache:()=>{n.ustva=null,n.lastUpdated=null},_internal:{createEmptyUStVA:s,processUStVARow:a,formatUStVARow:u,aggregateUStVA:o}}})(),i=(()=>{const n={bwaData:null,lastCalculated:null},r=()=>({umsatzerloese:0,provisionserloese:0,steuerfreieInlandEinnahmen:0,steuerfreieAuslandEinnahmen:0,sonstigeErtraege:0,vermietung:0,zuschuesse:0,waehrungsgewinne:0,anlagenabgaenge:0,gesamtErloese:0,wareneinsatz:0,fremdleistungen:0,rohHilfsBetriebsstoffe:0,gesamtWareneinsatz:0,bruttoLoehne:0,sozialeAbgaben:0,sonstigePersonalkosten:0,werbungMarketing:0,reisekosten:0,versicherungen:0,telefonInternet:0,buerokosten:0,fortbildungskosten:0,kfzKosten:0,sonstigeAufwendungen:0,gesamtBetriebsausgaben:0,abschreibungenMaschinen:0,abschreibungenBueromaterial:0,abschreibungenImmateriell:0,zinsenBank:0,zinsenGesellschafter:0,leasingkosten:0,gesamtAbschreibungenZinsen:0,eigenkapitalveraenderungen:0,gesellschafterdarlehen:0,ausschuettungen:0,gesamtBesonderePosten:0,steuerrueckstellungen:0,rueckstellungenSonstige:0,gesamtRueckstellungenTransfers:0,ebit:0,umsatzsteuer:0,vorsteuer:0,nichtAbzugsfaehigeVSt:0,koerperschaftsteuer:0,solidaritaetszuschlag:0,gewerbesteuer:0,gewerbesteuerRueckstellungen:0,sonstigeSteuerrueckstellungen:0,steuerlast:0,gewinnNachSteuern:0,eigenbelegeSteuerfrei:0,eigenbelegeSteuerpflichtig:0}),s=(n,r)=>{try{const s=e.sheets.einnahmen.columns,a=t.getMonthFromRow(n,"einnahmen");if(!a)return;const i=t.parseCurrency(n[s.nettobetrag-1]);if(0===i)return;const l=n[s.kategorie-1]?.toString().trim()||"";if(["Gewinnvortrag","Verlustvortrag","Gewinnvortrag/Verlustvortrag"].includes(l))return;switch(l){case"Sonstige betriebliche Erträge":return void(r[a].sonstigeErtraege+=i);case"Erträge aus Vermietung/Verpachtung":return void(r[a].vermietung+=i);case"Erträge aus Zuschüssen":return void(r[a].zuschuesse+=i);case"Erträge aus Währungsgewinnen":return void(r[a].waehrungsgewinne+=i);case"Erträge aus Anlagenabgängen":return void(r[a].anlagenabgaenge+=i)}const g=e.einnahmen.bwaMapping[l];if("umsatzerloese"===g||"provisionserloese"===g)return void(r[a][g]+=i);0===t.parseMwstRate(n[s.mwstSatz-1])?r[a].steuerfreieInlandEinnahmen+=i:r[a].umsatzerloese+=i}catch(e){console.error("Fehler bei der Verarbeitung einer Einnahme:",e)}},a=(n,r)=>{try{const s=e.sheets.ausgaben.columns,a=t.getMonthFromRow(n,"ausgaben");if(!a)return;const i=t.parseCurrency(n[s.nettobetrag-1]);if(0===i)return;const l=n[s.kategorie-1]?.toString().trim()||"";if(["Privatentnahme","Privateinlage","Holding Transfers","Gewinnvortrag","Verlustvortrag","Gewinnvortrag/Verlustvortrag"].includes(l))return;switch(l){case"Bruttolöhne & Gehälter":return void(r[a].bruttoLoehne+=i);case"Soziale Abgaben & Arbeitgeberanteile":return void(r[a].sozialeAbgaben+=i);case"Sonstige Personalkosten":return void(r[a].sonstigePersonalkosten+=i);case"Gewerbesteuerrückstellungen":return void(r[a].gewerbesteuerRueckstellungen+=i);case"Telefon & Internet":return void(r[a].telefonInternet+=i);case"Bürokosten":return void(r[a].buerokosten+=i);case"Fortbildungskosten":return void(r[a].fortbildungskosten+=i)}const g=e.ausgaben.bwaMapping[l];if(!g)return void(r[a].sonstigeAufwendungen+=i);switch(g){case"wareneinsatz":r[a].wareneinsatz+=i;break;case"fremdleistungen":r[a].fremdleistungen+=i;break;case"rohHilfsBetriebsstoffe":r[a].rohHilfsBetriebsstoffe+=i;break;case"werbungMarketing":r[a].werbungMarketing+=i;break;case"reisekosten":r[a].reisekosten+=i;break;case"versicherungen":r[a].versicherungen+=i;break;case"kfzKosten":r[a].kfzKosten+=i;break;case"abschreibungenMaschinen":r[a].abschreibungenMaschinen+=i;break;case"abschreibungenBueromaterial":r[a].abschreibungenBueromaterial+=i;break;case"abschreibungenImmateriell":r[a].abschreibungenImmateriell+=i;break;case"zinsenBank":r[a].zinsenBank+=i;break;case"zinsenGesellschafter":r[a].zinsenGesellschafter+=i;break;case"leasingkosten":r[a].leasingkosten+=i;break;case"koerperschaftsteuer":r[a].koerperschaftsteuer+=i;break;case"solidaritaetszuschlag":r[a].solidaritaetszuschlag+=i;break;case"gewerbesteuer":r[a].gewerbesteuer+=i;break;default:r[a].sonstigeAufwendungen+=i}}catch(e){console.error("Fehler bei der Verarbeitung einer Ausgabe:",e)}},i=(n,r)=>{try{const s=e.sheets.eigenbelege.columns,a=t.getMonthFromRow(n,"eigenbelege");if(!a)return;const i=t.parseCurrency(n[s.nettobetrag-1]);if(0===i)return;const l=n[s.kategorie-1]?.toString().trim()||"",g=e.eigenbelege.mapping[l]??{};"steuerfrei"===(g.taxType??"steuerpflichtig")?r[a].eigenbelegeSteuerfrei+=i:r[a].eigenbelegeSteuerpflichtig+=i}catch(e){console.error("Fehler bei der Verarbeitung eines Eigenbelegs:",e)}},l=()=>{try{const r=new Date;if(n.bwaData&&n.lastCalculated){if(r-n.lastCalculated<3e5)return n.bwaData}const l=SpreadsheetApp.getActiveSpreadsheet(),g=l.getSheetByName("Einnahmen"),u=l.getSheetByName("Ausgaben"),o=l.getSheetByName("Eigenbelege");if(!g||!u)return console.error("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'"),null;const h=Object.fromEntries(Array.from({length:12},((e,t)=>[t+1,{umsatzerloese:0,provisionserloese:0,steuerfreieInlandEinnahmen:0,steuerfreieAuslandEinnahmen:0,sonstigeErtraege:0,vermietung:0,zuschuesse:0,waehrungsgewinne:0,anlagenabgaenge:0,gesamtErloese:0,wareneinsatz:0,fremdleistungen:0,rohHilfsBetriebsstoffe:0,gesamtWareneinsatz:0,bruttoLoehne:0,sozialeAbgaben:0,sonstigePersonalkosten:0,werbungMarketing:0,reisekosten:0,versicherungen:0,telefonInternet:0,buerokosten:0,fortbildungskosten:0,kfzKosten:0,sonstigeAufwendungen:0,gesamtBetriebsausgaben:0,abschreibungenMaschinen:0,abschreibungenBueromaterial:0,abschreibungenImmateriell:0,zinsenBank:0,zinsenGesellschafter:0,leasingkosten:0,gesamtAbschreibungenZinsen:0,eigenkapitalveraenderungen:0,gesellschafterdarlehen:0,ausschuettungen:0,gesamtBesonderePosten:0,steuerrueckstellungen:0,rueckstellungenSonstige:0,gesamtRueckstellungenTransfers:0,ebit:0,umsatzsteuer:0,vorsteuer:0,nichtAbzugsfaehigeVSt:0,koerperschaftsteuer:0,solidaritaetszuschlag:0,gewerbesteuer:0,gewerbesteuerRueckstellungen:0,sonstigeSteuerrueckstellungen:0,steuerlast:0,gewinnNachSteuern:0,eigenbelegeSteuerfrei:0,eigenbelegeSteuerpflichtig:0}])));return g.getDataRange().getValues().slice(1).forEach((e=>s(e,h))),u.getDataRange().getValues().slice(1).forEach((e=>a(e,h))),o&&o.getDataRange().getValues().slice(1).forEach((e=>i(e,h))),(n=>{for(let r=1;r<=12;r++){const s=n[r];s.gesamtErloese=t.round(s.umsatzerloese+s.provisionserloese+s.steuerfreieInlandEinnahmen+s.steuerfreieAuslandEinnahmen+s.sonstigeErtraege+s.vermietung+s.zuschuesse+s.waehrungsgewinne+s.anlagenabgaenge,2),s.gesamtWareneinsatz=t.round(s.wareneinsatz+s.fremdleistungen+s.rohHilfsBetriebsstoffe,2),s.gesamtBetriebsausgaben=t.round(s.bruttoLoehne+s.sozialeAbgaben+s.sonstigePersonalkosten+s.werbungMarketing+s.reisekosten+s.versicherungen+s.telefonInternet+s.buerokosten+s.fortbildungskosten+s.kfzKosten+s.sonstigeAufwendungen,2),s.gesamtAbschreibungenZinsen=t.round(s.abschreibungenMaschinen+s.abschreibungenBueromaterial+s.abschreibungenImmateriell+s.zinsenBank+s.zinsenGesellschafter+s.leasingkosten,2),s.gesamtBesonderePosten=t.round(s.eigenkapitalveraenderungen+s.gesellschafterdarlehen+s.ausschuettungen,2),s.gesamtRueckstellungenTransfers=t.round(s.steuerrueckstellungen+s.rueckstellungenSonstige,2),s.ebit=t.round(s.gesamtErloese-(s.gesamtWareneinsatz+s.gesamtBetriebsausgaben+s.gesamtAbschreibungenZinsen+s.gesamtBesonderePosten),2);const a=e.tax.isHolding?e.tax.holding:e.tax.operative,i=e.tax.isHolding?a.gewinnUebertragSteuerpflichtig/100:1;s.gewerbesteuer=t.round(s.ebit*(a.gewerbesteuer/1e4)*i,2),s.koerperschaftsteuer=t.round(s.ebit*(a.koerperschaftsteuer/100)*i,2),s.solidaritaetszuschlag=t.round(s.koerperschaftsteuer*(a.solidaritaetszuschlag/100),2),s.steuerlast=t.round(s.koerperschaftsteuer+s.solidaritaetszuschlag+s.gewerbesteuer,2),s.gewinnNachSteuern=t.round(s.ebit-s.steuerlast,2)}})(h),n.bwaData=h,n.lastCalculated=r,h}catch(e){return console.error("Fehler bei der Aggregation der BWA-Daten:",e),null}},g=(e,n)=>{const r=[];let s=0;for(let t=1;t<=12;t++){const a=e.get(n[t])||0;r.push(a),s+=a}const a=[0,0,0,0];for(let e=0;e<12;e++)a[Math.floor(e/3)]+=r[e];const i=r.map((e=>t.round(e,2))),l=a.map((e=>t.round(e,2))),g=t.round(s,2);return[e.label,...i.slice(0,3),l[0],...i.slice(3,6),l[1],...i.slice(6,9),l[2],...i.slice(9,12),l[3],g]},u=(e,t,n,r)=>{e.getRange(1,1,1,t).setFontWeight("bold").setBackground("#f3f3f3");let s=2;for(const t of n)e.getRange(s,1).setFontWeight("bold"),s+=t.count+1;e.getRange(2,2,r-1,t-1).setNumberFormat("#,##0.00 €");[11,15,26,33,36,38,39,46].forEach((n=>{n<=r&&e.getRange(n,1,1,t).setBackground("#e6f2ff")})),e.getRange(39,1,1,t).setFontWeight("bold"),e.getRange(46,1,1,t).setFontWeight("bold"),e.autoResizeColumns(1,t)};return{calculateBWA:()=>{try{const t=SpreadsheetApp.getActiveSpreadsheet(),n=l();if(!n)return void SpreadsheetApp.getUi().alert("Fehler: BWA-Daten konnten nicht generiert werden.");const r=[{label:"Erlöse aus Lieferungen und Leistungen",get:e=>e.umsatzerloese||0},{label:"Provisionserlöse",get:e=>e.provisionserloese||0},{label:"Steuerfreie Inland-Einnahmen",get:e=>e.steuerfreieInlandEinnahmen||0},{label:"Steuerfreie Ausland-Einnahmen",get:e=>e.steuerfreieAuslandEinnahmen||0},{label:"Sonstige betriebliche Erträge",get:e=>e.sonstigeErtraege||0},{label:"Erträge aus Vermietung/Verpachtung",get:e=>e.vermietung||0},{label:"Erträge aus Zuschüssen",get:e=>e.zuschuesse||0},{label:"Erträge aus Währungsgewinnen",get:e=>e.waehrungsgewinne||0},{label:"Erträge aus Anlagenabgängen",get:e=>e.anlagenabgaenge||0},{label:"Betriebserlöse",get:e=>e.gesamtErloese||0},{label:"Wareneinsatz",get:e=>e.wareneinsatz||0},{label:"Bezogene Leistungen",get:e=>e.fremdleistungen||0},{label:"Roh-, Hilfs- & Betriebsstoffe",get:e=>e.rohHilfsBetriebsstoffe||0},{label:"Gesamtkosten Material & Fremdleistungen",get:e=>e.gesamtWareneinsatz||0},{label:"Bruttolöhne & Gehälter",get:e=>e.bruttoLoehne||0},{label:"Soziale Abgaben & Arbeitgeberanteile",get:e=>e.sozialeAbgaben||0},{label:"Sonstige Personalkosten",get:e=>e.sonstigePersonalkosten||0},{label:"Werbung & Marketing",get:e=>e.werbungMarketing||0},{label:"Reisekosten",get:e=>e.reisekosten||0},{label:"Versicherungen",get:e=>e.versicherungen||0},{label:"Telefon & Internet",get:e=>e.telefonInternet||0},{label:"Bürokosten",get:e=>e.buerokosten||0},{label:"Fortbildungskosten",get:e=>e.fortbildungskosten||0},{label:"Kfz-Kosten",get:e=>e.kfzKosten||0},{label:"Sonstige betriebliche Aufwendungen",get:e=>e.sonstigeAufwendungen||0},{label:"Abschreibungen Maschinen",get:e=>e.abschreibungenMaschinen||0},{label:"Abschreibungen Büroausstattung",get:e=>e.abschreibungenBueromaterial||0},{label:"Abschreibungen immaterielle Wirtschaftsgüter",get:e=>e.abschreibungenImmateriell||0},{label:"Zinsen auf Bankdarlehen",get:e=>e.zinsenBank||0},{label:"Zinsen auf Gesellschafterdarlehen",get:e=>e.zinsenGesellschafter||0},{label:"Leasingkosten",get:e=>e.leasingkosten||0},{label:"Gesamt Abschreibungen & Zinsen",get:e=>e.gesamtAbschreibungenZinsen||0},{label:"Eigenkapitalveränderungen",get:e=>e.eigenkapitalveraenderungen||0},{label:"Gesellschafterdarlehen",get:e=>e.gesellschafterdarlehen||0},{label:"Ausschüttungen an Gesellschafter",get:e=>e.ausschuettungen||0},{label:"Steuerrückstellungen",get:e=>e.steuerrueckstellungen||0},{label:"Rückstellungen sonstige",get:e=>e.rueckstellungenSonstige||0},{label:"Betriebsergebnis vor Steuern (EBIT)",get:e=>e.ebit||0},{label:"Umsatzsteuer (abzuführen)",get:e=>e.umsatzsteuer||0},{label:"Vorsteuer",get:e=>e.vorsteuer||0},{label:"Nicht abzugsfähige VSt (Bewirtung)",get:e=>e.nichtAbzugsfaehigeVSt||0},{label:"Körperschaftsteuer",get:e=>e.koerperschaftsteuer||0},{label:"Solidaritätszuschlag",get:e=>e.solidaritaetszuschlag||0},{label:"Gewerbesteuer",get:e=>e.gewerbesteuer||0},{label:"Gesamtsteueraufwand",get:e=>e.steuerlast||0},{label:"Jahresüberschuss/-fehlbetrag",get:e=>e.gewinnNachSteuern||0}],s=(()=>{const t=["Kategorie"];for(let n=0;n<4;n++){for(let r=3*n;r<3*n+3;r++)t.push(`${e.common.months[r]} (€)`);t.push(`Q${n+1} (€)`)}return t.push("Jahr (€)"),t})(),a=[s],i=[{titel:"Betriebserlöse (Einnahmen)",count:10},{titel:"Materialaufwand & Wareneinsatz",count:4},{titel:"Betriebsausgaben (Sachkosten)",count:11},{titel:"Abschreibungen & Zinsen",count:7},{titel:"Besondere Posten",count:3},{titel:"Rückstellungen",count:2},{titel:"Betriebsergebnis vor Steuern (EBIT)",count:1},{titel:"Steuern & Vorsteuer",count:7},{titel:"Jahresüberschuss/-fehlbetrag",count:1}];let o=0;for(let e=0;e<i.length;e++){const t=i[e];a.push([`${e+1}. ${t.titel}`,...Array(s.length-1).fill("")]);for(let e=0;e<t.count;e++)a.push(g(r[o++],n));e<i.length-1&&a.push(Array(s.length).fill(""))}let h=t.getSheetByName("BWA");h?h.clearContents():h=t.insertSheet("BWA");return h.getRange(1,1,a.length,a[0].length).setValues(a),u(h,s.length,i,a.length),SpreadsheetApp.getUi().alert("BWA wurde aktualisiert!"),t.setActiveSheet(h),!0}catch(e){return console.error("Fehler bei der BWA-Berechnung:",e),SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: "+e.toString()),!1}},clearCache:()=>{n.bwaData=null,n.lastCalculated=null},_internal:{createEmptyBWA:r,processRevenue:s,processExpense:a,processEigen:i,aggregateBWAData:l}}})(),l=(()=>{const n={bilanzData:null,lastCalculated:null},r=()=>({aktiva:{sachanlagen:0,immaterielleVermoegen:0,finanzanlagen:0,summeAnlagevermoegen:0,bankguthaben:0,kasse:0,forderungenLuL:0,vorraete:0,summeUmlaufvermoegen:0,rechnungsabgrenzung:0,summeAktiva:0},passiva:{stammkapital:0,kapitalruecklagen:0,gewinnvortrag:0,verlustvortrag:0,jahresueberschuss:0,summeEigenkapital:0,bankdarlehen:0,gesellschafterdarlehen:0,verbindlichkeitenLuL:0,steuerrueckstellungen:0,summeVerbindlichkeiten:0,rechnungsabgrenzung:0,summePassiva:0}}),s=()=>{try{const r=new Date;if(n.bilanzData&&n.lastCalculated){if(r-n.lastCalculated<3e5)return n.bilanzData}const s=SpreadsheetApp.getActiveSpreadsheet(),g={aktiva:{sachanlagen:0,immaterielleVermoegen:0,finanzanlagen:0,summeAnlagevermoegen:0,bankguthaben:0,kasse:0,forderungenLuL:0,vorraete:0,summeUmlaufvermoegen:0,rechnungsabgrenzung:0,summeAktiva:0},passiva:{stammkapital:0,kapitalruecklagen:0,gewinnvortrag:0,verlustvortrag:0,jahresueberschuss:0,summeEigenkapital:0,bankdarlehen:0,gesellschafterdarlehen:0,verbindlichkeitenLuL:0,steuerrueckstellungen:0,summeVerbindlichkeiten:0,rechnungsabgrenzung:0,summePassiva:0}},u=e.sheets.bankbewegungen.columns,o=e.sheets.ausgaben.columns,h=e.sheets.gesellschafterkonto.columns,c=s.getSheetByName("Bankbewegungen");if(c){const e=c.getLastRow();if(e>=1){"endsaldo"===c.getRange(e,u.buchungstext).getValue().toString().toLowerCase()&&(g.aktiva.bankguthaben=t.parseCurrency(c.getRange(e,u.saldo).getValue()))}}const b=s.getSheetByName("BWA");if(b){const e=b.getDataRange().getValues();for(let n=e.length-1;n>=0;n--){const r=e[n];if(r[0].toString().toLowerCase().includes("jahresüberschuss")){g.passiva.jahresueberschuss=t.parseCurrency(r[r.length-1]);break}}}return g.passiva.stammkapital=e.tax.stammkapital||25e3,g.passiva.gesellschafterdarlehen=a(s,h),g.passiva.steuerrueckstellungen=i(s,o),l(g),n.bilanzData=g,n.lastCalculated=r,g}catch(e){return console.error("Fehler bei der Sammlung der Bilanzdaten:",e),null}},a=(e,n)=>{let r=0;const s=e.getSheetByName("Gesellschafterkonto");if(s){const e=s.getDataRange().getValues();for(let s=1;s<e.length;s++){const a=e[s];a[n.kategorie-1]&&"gesellschafterdarlehen"===a[n.kategorie-1].toString().toLowerCase()&&(r+=t.parseCurrency(a[n.betrag-1]||0))}}return r},i=(e,n)=>{let r=0;const s=e.getSheetByName("Ausgaben");if(s){const e=s.getDataRange().getValues(),a=["Gewerbesteuerrückstellungen","Körperschaftsteuer","Solidaritätszuschlag","Sonstige Steuerrückstellungen"];for(let s=1;s<e.length;s++){const i=e[s],l=i[n.kategorie-1]?.toString().trim()||"";a.includes(l)&&(r+=t.parseCurrency(i[n.nettobetrag-1]||0))}}return r},l=e=>{const{aktiva:n,passiva:r}=e;n.summeAnlagevermoegen=t.round(n.sachanlagen+n.immaterielleVermoegen+n.finanzanlagen,2),n.summeUmlaufvermoegen=t.round(n.bankguthaben+n.kasse+n.forderungenLuL+n.vorraete,2),n.summeAktiva=t.round(n.summeAnlagevermoegen+n.summeUmlaufvermoegen+n.rechnungsabgrenzung,2),r.summeEigenkapital=t.round(r.stammkapital+r.kapitalruecklagen+r.gewinnvortrag-r.verlustvortrag+r.jahresueberschuss,2),r.summeVerbindlichkeiten=t.round(r.bankdarlehen+r.gesellschafterdarlehen+r.verbindlichkeitenLuL+r.steuerrueckstellungen,2),r.summePassiva=t.round(r.summeEigenkapital+r.summeVerbindlichkeiten+r.rechnungsabgrenzung,2)},g=(e,n=!1)=>t.isApproximatelyEqual(e,0)&&n?"":e;return{calculateBilanz:()=>{try{const n=SpreadsheetApp.getActiveSpreadsheet(),r=SpreadsheetApp.getUi(),a=s();if(!a)return r.alert("Fehler: Bilanzdaten konnten nicht gesammelt werden."),!1;const i=(t=>{const{aktiva:n}=t;return[[`Bilanz ${e.tax.year||(new Date).getFullYear()} - Aktiva (Vermögenswerte)`,""],["",""],["1. Anlagevermögen",""],["1.1 Sachanlagen",g(n.sachanlagen)],["1.2 Immaterielle Vermögensgegenstände",g(n.immaterielleVermoegen)],["1.3 Finanzanlagen",g(n.finanzanlagen)],["Summe Anlagevermögen","=SUM(B4:B6)"],["",""],["2. Umlaufvermögen",""],["2.1 Bankguthaben",g(n.bankguthaben)],["2.2 Kasse",g(n.kasse)],["2.3 Forderungen aus Lieferungen und Leistungen",g(n.forderungenLuL)],["2.4 Vorräte",g(n.vorraete)],["Summe Umlaufvermögen","=SUM(B10:B13)"],["",""],["3. Rechnungsabgrenzungsposten",g(n.rechnungsabgrenzung)],["",""],["Summe Aktiva","=B7+B14+B16"]]})(a),l=(t=>{const{passiva:n}=t;return[[`Bilanz ${e.tax.year||(new Date).getFullYear()} - Passiva (Kapital und Schulden)`,""],["",""],["1. Eigenkapital",""],["1.1 Gezeichnetes Kapital (Stammkapital)",g(n.stammkapital)],["1.2 Kapitalrücklage",g(n.kapitalruecklagen)],["1.3 Gewinnvortrag",g(n.gewinnvortrag)],["1.4 Verlustvortrag (negativ)",g(n.verlustvortrag)],["1.5 Jahresüberschuss/Jahresfehlbetrag",g(n.jahresueberschuss)],["Summe Eigenkapital","=SUM(F4:F8)"],["",""],["2. Verbindlichkeiten",""],["2.1 Verbindlichkeiten gegenüber Kreditinstituten",g(n.bankdarlehen)],["2.2 Verbindlichkeiten gegenüber Gesellschaftern",g(n.gesellschafterdarlehen)],["2.3 Verbindlichkeiten aus Lieferungen und Leistungen",g(n.verbindlichkeitenLuL)],["2.4 Steuerrückstellungen",g(n.steuerrueckstellungen)],["Summe Verbindlichkeiten","=SUM(F12:F15)"],["",""],["3. Rechnungsabgrenzungsposten",g(n.rechnungsabgrenzung)],["",""],["Summe Passiva","=F9+F16+F18"]]})(a),u=a.aktiva.summeAktiva,o=a.passiva.summePassiva,h=Math.abs(u-o);h>.01&&r.alert("Bilanz ist nicht ausgeglichen",`Die Bilanzsummen von Aktiva (${t.formatCurrency(u)}) und Passiva (${t.formatCurrency(o)}) stimmen nicht überein. Differenz: ${t.formatCurrency(h)}. Bitte überprüfen Sie Ihre Buchhaltungsdaten.`,r.ButtonSet.OK);let c=n.getSheetByName("Bilanz");return c?c.clearContents():c=n.insertSheet("Bilanz"),c.getRange(1,1,i.length,2).setValues(i),c.getRange(1,5,l.length,2).setValues(l),((e,t,n)=>{e.getRange("A1").setFontWeight("bold").setFontSize(12),e.getRange("E1").setFontWeight("bold").setFontSize(12),[7,14,18].forEach((n=>{n<=t&&(e.getRange(n,1,1,2).setFontWeight("bold"),18===n?e.getRange(n,1,1,2).setBackground("#e6f2ff"):e.getRange(n,1,1,2).setBackground("#f0f0f0"))})),[9,16,20].forEach((t=>{t<=n&&(e.getRange(t,5,1,2).setFontWeight("bold"),20===t?e.getRange(t,5,1,2).setBackground("#e6f2ff"):e.getRange(t,5,1,2).setBackground("#f0f0f0"))})),[3,9,16].forEach((n=>{n<=t&&e.getRange(n,1).setFontWeight("bold")})),[3,11,17].forEach((t=>{t<=n&&e.getRange(t,5).setFontWeight("bold")})),e.getRange("B4:B18").setNumberFormat("#,##0.00 €"),e.getRange("F4:F20").setNumberFormat("#,##0.00 €"),e.autoResizeColumns(1,6)})(c,i.length,l.length),r.alert("Die Bilanz wurde erfolgreich erstellt!"),!0}catch(e){return console.error("Fehler bei der Bilanzerstellung:",e),SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: "+e.toString()),!1}},clearCache:()=>{n.bilanzData=null,n.lastCalculated=null},_internal:{createEmptyBilanz:r,aggregateBilanzData:s}}})(),g=(e,t)=>{try{s.refreshAllSheets(),e()}catch(e){SpreadsheetApp.getUi().alert(`${t}: ${e.message}`),console.error(`${t}:`,e)}};global.onOpen=()=>{SpreadsheetApp.getUi().createMenu("📂 Buchhaltung").addItem("📥 Dateien importieren","importDriveFiles").addItem("🔄 Aktuelles Blatt aktualisieren","refreshSheet").addItem("📊 UStVA berechnen","calculateUStVA").addItem("📈 BWA berechnen","calculateBWA").addItem("📝 Bilanz erstellen","calculateBilanz").addToUi()},global.onEdit=t=>{const{range:n}=t,r=n.getSheet(),s=r.getName().toLowerCase();if(!e.sheets[s]||!e.sheets[s].columns.zeitstempel)return;if(1===n.getRow())return;const a=e.sheets[s].columns.zeitstempel;if(n.getColumn()===a||n.getNumColumns()>1&&n.getColumn()<=a&&n.getColumn()+n.getNumColumns()>a)return;const i=n.getNumRows(),l=[],g=new Date;for(let e=0;e<i;e++){const t=n.getRow()+e,s=r.getRange(1,1,1,r.getLastColumn()).getValues()[0].length;r.getRange(t,1,1,s).getValues()[0].every((e=>""===e))||l.push([g])}l.length>0&&r.getRange(n.getRow(),a,l.length,1).setValues(l)},global.setupTrigger=()=>{const e=ScriptApp.getProjectTriggers();e.some((e=>"onOpen"===e.getHandlerFunction()))||ScriptApp.newTrigger("onOpen").forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onOpen().create(),e.some((e=>"onEdit"===e.getHandlerFunction()))||ScriptApp.newTrigger("onEdit").forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create()},global.refreshSheet=()=>s.refreshActiveSheet(),global.calculateUStVA=()=>{g(a.calculateUStVA,"Fehler bei der UStVA-Berechnung")},global.calculateBWA=()=>{g(i.calculateBWA,"Fehler bei der BWA-Berechnung")},global.calculateBilanz=()=>{g(l.calculateBilanz,"Fehler bei der Bilanzerstellung")},global.importDriveFiles=()=>{try{n.importDriveFiles(),s.refreshAllSheets()}catch(e){SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: "+e.message),console.error("Import-Fehler:",e)}}}));
+/* Bundled Code for Google Apps Script */
+var global = this;
+function onOpen() {};
+function onEdit() {};
+function setupTrigger() {};
+function refreshSheet() {};
+function calculateUStVA() {};
+function calculateBWA() {};
+function calculateBilanz() {};
+function importDriveFiles() {};
+(function (factory) {
+    typeof define === 'function' && define.amd ? define(factory) :
+    factory();
+})((function () { 'use strict';
+
+    /**
+     * Konfiguration für die Buchhaltungsanwendung
+     * Unterstützt die Buchhaltung für Holding und operative GmbH nach SKR04
+     */
+    const config = {
+        // Allgemeine Einstellungen
+        common: {
+            paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
+            months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+            currentYear: new Date().getFullYear(),
+            version: "1.0.0"
+        },
+
+        // Steuerliche Einstellungen
+        tax: {
+            defaultMwst: 19,
+            allowedMwst: [0, 7, 19],  // Erlaubte MwSt-Sätze
+            stammkapital: 25000,
+            year: 2021,  // Geschäftsjahr
+            isHolding: false, // true bei Holding
+
+            // Holding-spezifische Steuersätze
+            holding: {
+                gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
+                koerperschaftsteuer: 15,
+                solidaritaetszuschlag: 5.5,
+                gewinnUebertragSteuerfrei: 95,  // % der Beteiligungserträge steuerfrei
+                gewinnUebertragSteuerpflichtig: 5  // % der Beteiligungserträge steuerpflichtig
+            },
+
+            // Operative GmbH Steuersätze
+            operative: {
+                gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
+                koerperschaftsteuer: 15,
+                solidaritaetszuschlag: 5.5,
+                gewinnUebertragSteuerfrei: 0,
+                gewinnUebertragSteuerpflichtig: 100
+            }
+        },
+
+        // Sheet-Struktur Konfiguration - mit konstanten Spaltendefinitionen
+        sheets: {
+            // Konfiguration für das Einnahmen-Sheet
+            einnahmen: {
+                columns: {
+                    datum: 1,              // A: Rechnungsdatum
+                    rechnungsnummer: 2,    // B: Rechnungsnummer
+                    kategorie: 3,          // C: Kategorie
+                    kunde: 4,              // D: Kunde
+                    nettobetrag: 5,        // E: Nettobetrag
+                    mwstSatz: 6,           // F: MwSt-Satz in %
+                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                    bezahlt: 9,            // I: Bereits bezahlter Betrag
+                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                    quartal: 11,           // K: Berechnetes Quartal
+                    zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                    zahlungsart: 13,       // M: Zahlungsart
+                    zahlungsdatum: 14,     // N: Zahlungsdatum
+                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                    dateilink: 18          // R: Link zur Originaldatei
+                }
+            },
+
+            // Konfiguration für das Ausgaben-Sheet (identisch zu Einnahmen)
+            ausgaben: {
+                columns: {
+                    datum: 1,              // A: Rechnungsdatum
+                    rechnungsnummer: 2,    // B: Rechnungsnummer
+                    kategorie: 3,          // C: Kategorie
+                    kunde: 4,              // D: Lieferant
+                    nettobetrag: 5,        // E: Nettobetrag
+                    mwstSatz: 6,           // F: MwSt-Satz in %
+                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                    bezahlt: 9,            // I: Bereits bezahlter Betrag
+                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                    quartal: 11,           // K: Berechnetes Quartal
+                    zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                    zahlungsart: 13,       // M: Zahlungsart
+                    zahlungsdatum: 14,     // N: Zahlungsdatum
+                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                    dateilink: 18          // R: Link zur Originaldatei
+                }
+            },
+
+            // Konfiguration für das Eigenbelege-Sheet
+            eigenbelege: {
+                columns: {
+                    datum: 1,              // A: Belegdatum
+                    belegnummer: 2,        // B: Belegnummer
+                    kategorie: 3,          // C: Kategorie
+                    beschreibung: 4,       // D: Beschreibung
+                    nettobetrag: 5,        // E: Nettobetrag
+                    mwstSatz: 6,           // F: MwSt-Satz in %
+                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                    bezahlt: 9,            // I: Bereits bezahlter Betrag
+                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                    quartal: 11,           // K: Berechnetes Quartal
+                    status: 12,            // L: Status (Offen/Erstattet/Gebucht)
+                    zahlungsart: 13,       // M: Zahlungsart
+                    zahlungsdatum: 14,     // N: Erstattungsdatum
+                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                    dateilink: 18          // R: Link zur Originaldatei
+                }
+            },
+
+            // Konfiguration für das Bankbewegungen-Sheet
+            bankbewegungen: {
+                columns: {
+                    datum: 1,              // A: Buchungsdatum
+                    buchungstext: 2,       // B: Buchungstext
+                    betrag: 3,             // C: Betrag
+                    saldo: 4,              // D: Saldo (berechnet)
+                    transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
+                    kategorie: 6,          // F: Kategorie
+                    kontoSoll: 7,          // G: Konto (Soll)
+                    kontoHaben: 8,         // H: Gegenkonto (Haben)
+                    referenz: 9,           // I: Referenznummer
+                    verwendungszweck: 10,  // J: Verwendungszweck
+                    matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
+                    zeitstempel: 12,       // L: Zeitstempel
+                }
+            },
+
+            // TODO: Konfiguration für das Gesellschafterkonto-Sheet
+            gesellschafterkonto: {
+                columns: {
+                    datum: 1,              // A: Datum
+                    beschreibung: 2,       // B: Beschreibung
+                    kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
+                    betrag: 4,             // D: Betrag
+                    gesellschafter: 5,     // E: Gesellschafter
+                    anmerkung: 6,          // F: Anmerkung
+                    kontoSoll: 7,          // G: Konto (Soll)
+                    kontoHaben: 8,         // H: Gegenkonto (Haben)
+                    buchungsdatum: 9,      // I: Buchungsdatum
+                    beleg: 10,             // J: Beleg/Referenz
+                    saldo: 11,             // K: Saldo (berechnet)
+                    zeitstempel: 12        // L: Zeitstempel der letzten Änderung
+                }
+            },
+
+            // TODO Konfiguration für das Holding Transfers-Sheet
+            holdingTransfers: {
+                columns: {
+                    datum: 1,              // A: Datum
+                    betrag: 2,             // B: Betrag
+                    art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
+                    buchungstext: 4,       // D: Buchungstext
+                    status: 5,             // E: Status
+                    referenz: 6,            // F: Referenznummer zur Bankbewegung
+                    zeitstempel: 7       // G: Zeitstempel der letzten Änderung
+                }
+            },
+
+            // Konfiguration für das Änderungshistorie-Sheet
+            aenderungshistorie: {
+                columns: {
+                    datum: 1,              // A: Datum/Zeitstempel
+                    typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
+                    dateiname: 3,          // C: Dateiname
+                    dateilink: 4           // D: Link zur Datei
+                }
+            }
+        },
+
+        // Einnahmen-Konfiguration
+        einnahmen: {
+            // Kategorien mit Steuertyp
+            categories: {
+                "Erlöse aus Lieferungen und Leistungen": {taxType: "steuerpflichtig"},
+                "Provisionserlöse": {taxType: "steuerpflichtig"},
+                "Sonstige betriebliche Erträge": {taxType: "steuerpflichtig"},
+                "Erträge aus Vermietung/Verpachtung": {taxType: "steuerfrei_inland"},
+                "Erträge aus Zuschüssen": {taxType: "steuerpflichtig"},
+                "Erträge aus Währungsgewinnen": {taxType: "steuerpflichtig"},
+                "Erträge aus Anlagenabgängen": {taxType: "steuerpflichtig"},
+                "Darlehen": {taxType: "steuerfrei_inland"},
+                "Zinsen": {taxType: "steuerfrei_inland"},
+                "Gewinnvortrag": {taxType: "steuerfrei_inland"},
+                "Verlustvortrag": {taxType: "steuerfrei_inland"}
+            },
+
+            // SKR04-konforme Konten-Zuordnung
+            kontoMapping: {
+                "Erlöse aus Lieferungen und Leistungen": {soll: "1200", gegen: "4400", mwst: "1776"},
+                "Provisionserlöse": {soll: "1200", gegen: "4120", mwst: "1776"},
+                "Sonstige betriebliche Erträge": {soll: "1200", gegen: "4830", mwst: "1776"},
+                "Erträge aus Vermietung/Verpachtung": {soll: "1200", gegen: "4180"},
+                "Erträge aus Zuschüssen": {soll: "1200", gegen: "4190", mwst: "1776"},
+                "Erträge aus Währungsgewinnen": {soll: "1200", gegen: "4840"},
+                "Erträge aus Anlagenabgängen": {soll: "1200", gegen: "4855"},
+                "Darlehen": {soll: "1200", gegen: "3100"},
+                "Zinsen": {soll: "1200", gegen: "4130"},
+                "Gewinnvortrag": {soll: "1200", gegen: "2970"},
+                "Verlustvortrag": {soll: "1200", gegen: "2978"}
+            },
+
+            // BWA-Mapping für Einnahmen-Kategorien
+            bwaMapping: {
+                "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
+                "Provisionserlöse": "provisionserloese",
+                "Sonstige betriebliche Erträge": "sonstigeErtraege",
+                "Erträge aus Vermietung/Verpachtung": "vermietung",
+                "Erträge aus Zuschüssen": "zuschuesse",
+                "Erträge aus Währungsgewinnen": "waehrungsgewinne",
+                "Erträge aus Anlagenabgängen": "anlagenabgaenge",
+                "Darlehen": "sonstigeErtraege",
+                "Zinsen": "sonstigeErtraege"
+            }
+        },
+
+        // Ausgaben-Konfiguration
+        ausgaben: {
+            // Kategorien mit Steuertyp
+            categories: {
+                // Materialaufwand & Wareneinsatz
+                "Wareneinsatz": {taxType: "steuerpflichtig", group: "material"},
+                "Bezogene Leistungen": {taxType: "steuerpflichtig", group: "material"},
+                "Roh-, Hilfs- & Betriebsstoffe": {taxType: "steuerpflichtig", group: "material"},
+
+                // Personalkosten
+                "Bruttolöhne & Gehälter": {taxType: "steuerfrei_inland", group: "personal"},
+                "Soziale Abgaben & Arbeitgeberanteile": {taxType: "steuerfrei_inland", group: "personal"},
+                "Sonstige Personalkosten": {taxType: "steuerpflichtig", group: "personal"},
+
+                // Raumkosten
+                "Miete": {taxType: "steuerfrei_inland", group: "raum"},
+                "Nebenkosten": {taxType: "steuerpflichtig", group: "raum"},
+
+                // Betriebskosten
+                "Betriebskosten": {taxType: "steuerpflichtig", group: "betrieb"},
+                "Marketing & Werbung": {taxType: "steuerpflichtig", group: "betrieb"},
+                "Reisekosten": {taxType: "steuerpflichtig", group: "betrieb"},
+                "Versicherungen": {taxType: "steuerfrei_inland", group: "betrieb"},
+                "Porto": {taxType: "steuerfrei_inland", group: "betrieb"},
+                "Google Ads": {taxType: "steuerfrei_ausland", group: "betrieb"},
+                "AWS": {taxType: "steuerfrei_ausland", group: "betrieb"},
+                "Facebook Ads": {taxType: "steuerfrei_ausland", group: "betrieb"},
+                "Bewirtung": {taxType: "steuerpflichtig", group: "betrieb", besonderheit: "bewirtung"},
+                "Telefon & Internet": {taxType: "steuerpflichtig", group: "betrieb"},
+                "Bürokosten": {taxType: "steuerpflichtig", group: "betrieb"},
+                "Fortbildungskosten": {taxType: "steuerpflichtig", group: "betrieb"},
+
+                // Abschreibungen & Zinsen
+                "Abschreibungen Maschinen": {taxType: "steuerpflichtig", group: "abschreibung"},
+                "Abschreibungen Büroausstattung": {taxType: "steuerpflichtig", group: "abschreibung"},
+                "Abschreibungen immaterielle Wirtschaftsgüter": {taxType: "steuerpflichtig", group: "abschreibung"},
+                "Zinsen auf Bankdarlehen": {taxType: "steuerpflichtig", group: "zinsen"},
+                "Zinsen auf Gesellschafterdarlehen": {taxType: "steuerpflichtig", group: "zinsen"},
+                "Leasingkosten": {taxType: "steuerpflichtig", group: "abschreibung"},
+
+                // Steuern & Rückstellungen
+                "Gewerbesteuerrückstellungen": {taxType: "steuerfrei_inland", group: "steuer"},
+                "Körperschaftsteuer": {taxType: "steuerfrei_inland", group: "steuer"},
+                "Solidaritätszuschlag": {taxType: "steuerfrei_inland", group: "steuer"},
+                "Sonstige Steuerrückstellungen": {taxType: "steuerfrei_inland", group: "steuer"},
+
+                // Sonstige Aufwendungen
+                "Sonstige betriebliche Aufwendungen": {taxType: "steuerpflichtig", group: "sonstige"}
+            },
+
+            // SKR04-konforme Konten-Zuordnung
+            kontoMapping: {
+                "Wareneinsatz": {soll: "5000", gegen: "1200", vorsteuer: "1576"},
+                "Bezogene Leistungen": {soll: "5300", gegen: "1200", vorsteuer: "1576"},
+                "Roh-, Hilfs- & Betriebsstoffe": {soll: "5400", gegen: "1200", vorsteuer: "1576"},
+                "Bruttolöhne & Gehälter": {soll: "6000", gegen: "1200"},
+                "Soziale Abgaben & Arbeitgeberanteile": {soll: "6010", gegen: "1200"},
+                "Sonstige Personalkosten": {soll: "6020", gegen: "1200", vorsteuer: "1576"},
+                "Miete": {soll: "6310", gegen: "1200"},
+                "Nebenkosten": {soll: "6320", gegen: "1200", vorsteuer: "1576"},
+                "Betriebskosten": {soll: "6300", gegen: "1200", vorsteuer: "1576"},
+                "Marketing & Werbung": {soll: "6600", gegen: "1200", vorsteuer: "1576"},
+                "Reisekosten": {soll: "6650", gegen: "1200", vorsteuer: "1576"},
+                "Versicherungen": {soll: "6400", gegen: "1200"},
+                "Porto": {soll: "6810", gegen: "1200"},
+                "Google Ads": {soll: "6600", gegen: "1200"},
+                "AWS": {soll: "6500", gegen: "1200"},
+                "Facebook Ads": {soll: "6600", gegen: "1200"},
+                "Bewirtung": {soll: "6670", gegen: "1200", vorsteuer: "1576"},
+                "Telefon & Internet": {soll: "6805", gegen: "1200", vorsteuer: "1576"},
+                "Bürokosten": {soll: "6815", gegen: "1200", vorsteuer: "1576"},
+                "Fortbildungskosten": {soll: "6830", gegen: "1200", vorsteuer: "1576"},
+                "Abschreibungen Maschinen": {soll: "6200", gegen: "1200"},
+                "Abschreibungen Büroausstattung": {soll: "6210", gegen: "1200"},
+                "Abschreibungen immaterielle Wirtschaftsgüter": {soll: "6220", gegen: "1200"},
+                "Zinsen auf Bankdarlehen": {soll: "7300", gegen: "1200"},
+                "Zinsen auf Gesellschafterdarlehen": {soll: "7310", gegen: "1200"},
+                "Leasingkosten": {soll: "6240", gegen: "1200", vorsteuer: "1576"},
+                "Gewerbesteuerrückstellungen": {soll: "7610", gegen: "1200"},
+                "Körperschaftsteuer": {soll: "7600", gegen: "1200"},
+                "Solidaritätszuschlag": {soll: "7620", gegen: "1200"},
+                "Sonstige Steuerrückstellungen": {soll: "7630", gegen: "1200"},
+                "Sonstige betriebliche Aufwendungen": {soll: "6800", gegen: "1200", vorsteuer: "1576"}
+            },
+
+            // BWA-Mapping für Ausgaben-Kategorien
+            bwaMapping: {
+                "Wareneinsatz": "wareneinsatz",
+                "Bezogene Leistungen": "fremdleistungen",
+                "Roh-, Hilfs- & Betriebsstoffe": "rohHilfsBetriebsstoffe",
+                "Betriebskosten": "sonstigeAufwendungen",
+                "Marketing & Werbung": "werbungMarketing",
+                "Reisekosten": "reisekosten",
+                "Bruttolöhne & Gehälter": "bruttoLoehne",
+                "Soziale Abgaben & Arbeitgeberanteile": "sozialeAbgaben",
+                "Sonstige Personalkosten": "sonstigePersonalkosten",
+                "Sonstige betriebliche Aufwendungen": "sonstigeAufwendungen",
+                "Miete": "mieteNebenkosten",
+                "Nebenkosten": "mieteNebenkosten",
+                "Versicherungen": "versicherungen",
+                "Porto": "buerokosten",
+                "Telefon & Internet": "telefonInternet",
+                "Bürokosten": "buerokosten",
+                "Fortbildungskosten": "fortbildungskosten",
+                "Abschreibungen Maschinen": "abschreibungenMaschinen",
+                "Abschreibungen Büroausstattung": "abschreibungenBueromaterial",
+                "Abschreibungen immaterielle Wirtschaftsgüter": "abschreibungenImmateriell",
+                "Zinsen auf Bankdarlehen": "zinsenBank",
+                "Zinsen auf Gesellschafterdarlehen": "zinsenGesellschafter",
+                "Leasingkosten": "leasingkosten",
+                "Google Ads": "werbungMarketing",
+                "AWS": "sonstigeAufwendungen",
+                "Facebook Ads": "werbungMarketing",
+                "Bewirtung": "sonstigeAufwendungen",
+                "Gewerbesteuerrückstellungen": "gewerbesteuerRueckstellungen",
+                "Körperschaftsteuer": "koerperschaftsteuer",
+                "Solidaritätszuschlag": "solidaritaetszuschlag",
+                "Sonstige Steuerrückstellungen": "steuerrueckstellungen"
+            }
+        },
+
+        // Bankbewegungen-Konfiguration
+        bank: {
+            // Typen von Bankbewegungen
+            type: ["Einnahme", "Ausgabe", "Interne Buchung"],
+
+            // Standard-Bankkonto
+            defaultAccount: "1200"
+        },
+
+        // Gesellschafterkonto-Konfiguration
+        gesellschafterkonto: {
+            category: ["Gesellschafterdarlehen", "Ausschüttungen", "Kapitalrückführung", "Privatentnahme", "Privateinlage"],
+            shareholder: ["Christopher Giebel", "Hendrik Werner"]
+        },
+
+        // Eigenbelege-Konfiguration
+        eigenbelege: {
+            categories: {
+                "Kleidung": {taxType: "steuerpflichtig"},
+                "Trinkgeld": {taxType: "steuerfrei"},
+                "Private Vorauslage": {taxType: "steuerfrei"},
+                "Bürokosten": {taxType: "steuerpflichtig"},
+                "Reisekosten": {taxType: "steuerpflichtig"},
+                "Bewirtung": {taxType: "eigenbeleg", besonderheit: "bewirtung"},
+                "Sonstiges": {taxType: "steuerpflichtig"}
+            },
+            status: ["Offen", "Erstattet", "Gebucht"]
+        },
+
+        // Holding Transfers-Konfiguration
+        holdingTransfers: {
+            category: ["Gewinnübertrag", "Kapitalrückführung"]
+        },
+
+        // Kontenplan SKR04 (Auszug der wichtigsten Konten)
+        kontenplan: {
+            // Bestandskonten (Klasse 0-3)
+            "0000": "Eröffnungsbilanz",
+            "0100": "Immaterielle Vermögensgegenstände",
+            "0400": "Grundstücke ohne Bauten",
+            "0500": "Bauten auf eigenen Grundstücken",
+            "0650": "Technische Anlagen und Maschinen",
+            "0700": "Andere Anlagen, Betriebs- und Geschäftsausstattung",
+            "1200": "Bank",
+            "1210": "Kasse",
+            "1300": "Forderungen aus Lieferungen und Leistungen",
+            "1576": "Vorsteuer 19%",
+            "1577": "Vorsteuer 7%",
+            "1590": "Umsatzsteuer-Vorauszahlungen",
+            "1600": "Forderungen gegen Gesellschafter",
+            "1776": "Umsatzsteuer 19%",
+            "1777": "Umsatzsteuer 7%",
+            "1790": "Umsatzsteuer-Vorauszahlungen",
+            "2000": "Gezeichnetes Kapital",
+            "2100": "Kapitalrücklage",
+            "2970": "Gewinnvortrag vor Verwendung",
+            "2978": "Verlustvortrag vor Verwendung",
+            "3100": "Darlehen",
+            "3150": "Verbindlichkeiten gegenüber Kreditinstituten",
+            "3200": "Verbindlichkeiten aus Lieferungen und Leistungen",
+            "3300": "Verbindlichkeiten gegenüber Gesellschaftern",
+
+            // Erlöskonten (Klasse 4)
+            "4000": "Umsatzerlöse",
+            "4120": "Provisionserlöse",
+            "4130": "Zinsertrag",
+            "4180": "Erträge aus Vermietung und Verpachtung",
+            "4190": "Erträge aus Zuschüssen und Zulagen",
+            "4400": "Erlöse aus Lieferungen und Leistungen",
+            "4830": "Sonstige betriebliche Erträge",
+            "4840": "Erträge aus Währungsumrechnung",
+            "4855": "Erträge aus Anlagenabgang",
+
+            // Aufwandskonten (Klasse 5-7)
+            "5000": "Wareneinsatz",
+            "5300": "Bezogene Leistungen",
+            "5400": "Roh-, Hilfs- und Betriebsstoffe",
+            "6000": "Löhne und Gehälter",
+            "6010": "Gesetzliche soziale Aufwendungen",
+            "6020": "Sonstige Personalkosten",
+            "6200": "Abschreibungen auf Sachanlagen",
+            "6210": "Abschreibungen auf Büroausstattung",
+            "6220": "Abschreibungen auf immaterielle Vermögensgegenstände",
+            "6240": "Leasingkosten",
+            "6300": "Betriebskosten",
+            "6310": "Miete",
+            "6320": "Nebenkosten",
+            "6400": "Versicherungen",
+            "6500": "IT-Kosten",
+            "6600": "Werbekosten",
+            "6650": "Reisekosten",
+            "6670": "Bewirtungskosten",
+            "6800": "Sonstige betriebliche Aufwendungen",
+            "6805": "Telefon und Internet",
+            "6810": "Porto",
+            "6815": "Bürobedarf",
+            "6830": "Fortbildungskosten",
+            "7300": "Zinsaufwendungen für Bankdarlehen",
+            "7310": "Zinsaufwendungen für Gesellschafterdarlehen",
+            "7600": "Körperschaftsteuer",
+            "7610": "Gewerbesteuer",
+            "7620": "Solidaritätszuschlag",
+            "7630": "Sonstige Steuern",
+
+            // Abschlusskonten (Klasse 8-9)
+            "8000": "Eröffnungsbilanzkonto",
+            "8400": "Abschlussbilanzkonto",
+            "8999": "Gewinn- und Verlustkonto"
+        },
+
+        /**
+         * Initialisierungsfunktion für abgeleitete Daten
+         * Wird automatisch beim Import aufgerufen
+         */
+        initialize() {
+            // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
+            this.bank.category = [
+                ...Object.keys(this.einnahmen.categories),
+                ...Object.keys(this.ausgaben.categories),
+                ...Object.keys(this.eigenbelege.categories),
+                ...this.gesellschafterkonto.category,
+                ...this.holdingTransfers.category,
+            ];
+
+            // Duplikate aus den Kategorien entfernen
+            this.bank.category = [...new Set(this.bank.category)];
+
+            return this;
+        }
+    };
+
+    // Initialisierung ausführen und exportieren
+    var config$1 = config.initialize();
+
+    // src/helpers.js
+
+    /**
+     * Hilfsmodule für verschiedene häufig benötigte Funktionen
+     */
+    const Helpers = {
+        /**
+         * Cache für häufig verwendete Berechnungen
+         * Verbessert die Performance bei wiederholten Aufrufen
+         */
+        _cache: {
+            dates: new Map(),
+            currency: new Map(),
+            mwstRates: new Map(),
+            columnLetters: new Map()
+        },
+
+        /**
+         * Cache leeren
+         */
+        clearCache() {
+            this._cache.dates.clear();
+            this._cache.currency.clear();
+            this._cache.mwstRates.clear();
+            this._cache.columnLetters.clear();
+        },
+
+        /**
+         * Konvertiert verschiedene Datumsformate in ein gültiges Date-Objekt
+         * @param {Date|string} value - Das zu parsende Datum
+         * @returns {Date|null} - Das geparste Datum oder null bei ungültigem Format
+         */
+        parseDate(value) {
+            // Cache-Lookup für häufig verwendete Werte
+            const cacheKey = value instanceof Date
+                ? value.getTime().toString()
+                : value ? value.toString() : '';
+
+            if (this._cache.dates.has(cacheKey)) {
+                return this._cache.dates.get(cacheKey);
+            }
+
+            let result = null;
+
+            // Wenn bereits ein Date-Objekt
+            if (value instanceof Date) {
+                result = isNaN(value.getTime()) ? null : value;
+            }
+            // Wenn String
+            else if (typeof value === "string") {
+                // Deutsche Datumsformate (DD.MM.YYYY) unterstützen
+                if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(value)) {
+                    const [day, month, year] = value.split('.').map(Number);
+                    const date = new Date(year, month - 1, day);
+                    result = isNaN(date.getTime()) ? null : date;
+                } else {
+                    const d = new Date(value);
+                    result = isNaN(d.getTime()) ? null : d;
+                }
+            }
+
+            // Ergebnis cachen
+            this._cache.dates.set(cacheKey, result);
+            return result;
+        },
+
+        /**
+         * Konvertiert einen String oder eine Zahl in einen numerischen Währungswert
+         * @param {number|string} value - Der zu parsende Wert
+         * @returns {number} - Der geparste Währungswert oder 0 bei ungültigem Format
+         */
+        parseCurrency(value) {
+            if (value === null || value === undefined || value === "") return 0;
+            if (typeof value === "number") return value;
+
+            // Cache-Lookup für String-Werte
+            const stringValue = value.toString();
+            if (this._cache.currency.has(stringValue)) {
+                return this._cache.currency.get(stringValue);
+            }
+
+            // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
+            const str = stringValue
+                .replace(/[^\d,.-]/g, "")
+                .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
+
+            // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
+            const parts = str.split('.');
+            let result;
+
+            if (parts.length > 2) {
+                const last = parts.pop();
+                result = parseFloat(parts.join('') + '.' + last);
+            } else {
+                result = parseFloat(str);
+            }
+
+            result = isNaN(result) ? 0 : result;
+
+            // Ergebnis cachen
+            this._cache.currency.set(stringValue, result);
+            return result;
+        },
+
+        /**
+         * Parst einen MwSt-Satz und normalisiert ihn
+         * @param {number|string} value - Der zu parsende MwSt-Satz
+         * @returns {number} - Der normalisierte MwSt-Satz (0-100)
+         */
+        parseMwstRate(value) {
+            const defaultMwst = config$1?.tax?.defaultMwst || 19;
+
+            if (value === null || value === undefined || value === "") {
+                return defaultMwst;
+            }
+
+            // Cache-Lookup für häufig verwendete Werte
+            const cacheKey = value.toString();
+            if (this._cache.mwstRates.has(cacheKey)) {
+                return this._cache.mwstRates.get(cacheKey);
+            }
+
+            let result;
+
+            if (typeof value === "number") {
+                // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
+                result = value < 1 ? value * 100 : value;
+            } else {
+                // String-Wert parsen und bereinigen
+                const rateStr = value.toString()
+                    .replace(/%/g, "")
+                    .replace(/,/g, ".")
+                    .trim();
+
+                const rate = parseFloat(rateStr);
+
+                // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
+                if (isNaN(rate)) {
+                    result = defaultMwst;
+                } else {
+                    // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
+                    result = rate < 1 ? rate * 100 : rate;
+                }
+            }
+
+            // Ergebnis cachen
+            this._cache.mwstRates.set(cacheKey, result);
+            return result;
+        },
+
+        /**
+         * Sucht nach einem Ordner mit bestimmtem Namen innerhalb eines übergeordneten Ordners
+         * @param {Folder} parent - Der übergeordnete Ordner
+         * @param {string} name - Der gesuchte Ordnername
+         * @returns {Folder|null} - Der gefundene Ordner oder null
+         */
+        getFolderByName(parent, name) {
+            if (!parent) return null;
+
+            try {
+                const folderIter = parent.getFoldersByName(name);
+                return folderIter.hasNext() ? folderIter.next() : null;
+            } catch (e) {
+                console.error("Fehler beim Suchen des Ordners:", e);
+                return null;
+            }
+        },
+
+        /**
+         * Extrahiert ein Datum aus einem Dateinamen in verschiedenen Formaten
+         * @param {string} filename - Der Dateiname, aus dem das Datum extrahiert werden soll
+         * @returns {string} - Das extrahierte Datum im Format DD.MM.YYYY oder leer
+         */
+        extractDateFromFilename(filename) {
+            if (!filename) return "";
+
+            // Cache-Lookup
+            if (this._cache.dates.has(`filename_${filename}`)) {
+                return this._cache.dates.get(`filename_${filename}`);
+            }
+
+            const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+            let result = "";
+
+            // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
+
+            // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
+            let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
+            if (match?.[1]) {
+                result = match[1];
+            } else {
+                // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+                match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+                if (match?.[1]) {
+                    const dateParts = match[1].split(/[-_.\/]/);
+                    if (dateParts.length === 3) {
+                        const [year, month, day] = dateParts;
+                        result = `${day}.${month}.${year}`;
+                    }
+                } else {
+                    // 3. Format: YYYY-MM-DD am Anfang oder Ende
+                    match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+                    if (match?.[2]) {
+                        const dateParts = match[2].split(/[-_.\/]/);
+                        if (dateParts.length === 3) {
+                            const [year, month, day] = dateParts;
+                            result = `${day}.${month}.${year}`;
+                        }
+                    } else {
+                        // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
+                        match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+                        if (match) {
+                            const [_, day, month, year] = match;
+                            result = `${day}.${month}.${year}`;
+                        }
+                    }
+                }
+            }
+
+            // Ergebnis cachen
+            this._cache.dates.set(`filename_${filename}`, result);
+            return result;
+        },
+
+        /**
+         * Setzt bedingte Formatierung für eine Spalte
+         * @param {Sheet} sheet - Das zu formatierende Sheet
+         * @param {string} column - Die zu formatierende Spalte (z.B. "A")
+         * @param {Array<Object>} conditions - Array mit Bedingungen ({value, background, fontColor, pattern})
+         */
+        setConditionalFormattingForColumn(sheet, column, conditions) {
+            if (!sheet || !column || !conditions || !conditions.length) return;
+
+            try {
+                const lastRow = Math.max(sheet.getLastRow(), 2);
+                const range = sheet.getRange(`${column}2:${column}${lastRow}`);
+
+                // Bestehende Regeln für die Spalte löschen
+                const existingRules = sheet.getConditionalFormatRules();
+                const newRules = existingRules.filter(rule => {
+                    const ranges = rule.getRanges();
+                    return !ranges.some(r =>
+                        r.getColumn() === range.getColumn() &&
+                        r.getRow() === range.getRow() &&
+                        r.getNumColumns() === range.getNumColumns()
+                    );
+                });
+
+                // Neue Regeln erstellen
+                const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
+                    let rule;
+
+                    if (pattern === "beginsWith") {
+                        rule = SpreadsheetApp.newConditionalFormatRule()
+                            .whenTextStartsWith(value);
+                    } else if (pattern === "contains") {
+                        rule = SpreadsheetApp.newConditionalFormatRule()
+                            .whenTextContains(value);
+                    } else {
+                        rule = SpreadsheetApp.newConditionalFormatRule()
+                            .whenTextEqualTo(value);
+                    }
+
+                    return rule
+                        .setBackground(background || "#ffffff")
+                        .setFontColor(fontColor || "#000000")
+                        .setRanges([range])
+                        .build();
+                });
+
+                // Regeln anwenden
+                sheet.setConditionalFormatRules([...newRules, ...formatRules]);
+            } catch (e) {
+                console.error("Fehler beim Setzen der bedingten Formatierung:", e);
+            }
+        },
+
+        /**
+         * Extrahiert den Monat aus einem Datum in einer Zeile
+         * @param {Array} row - Die Zeile mit dem Datum
+         * @param {string} sheetName - Der Name des Sheets (für Spaltenkonfiguration)
+         * @returns {number} - Die Monatsnummer (1-12) oder 0 bei Fehler
+         */
+        getMonthFromRow(row, sheetName = null) {
+            if (!row) return 0;
+
+            // Spalte für Zeitstempel basierend auf Sheet-Typ bestimmen
+            let timestampColumn;
+
+            if (sheetName) {
+                // Spaltenkonfiguration aus dem Sheetnamen bestimmen
+                const sheetConfig = config$1.sheets[sheetName.toLowerCase()]?.columns;
+                if (sheetConfig && sheetConfig.zeitstempel) {
+                    timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
+                } else {
+                    // Fallback auf Standardposition, falls keine Konfiguration gefunden
+                    timestampColumn = 15; // Standard: Spalte P (16. Spalte, 0-basiert: 15)
+                }
+            } else {
+                // Wenn kein Sheetname angegeben, Fallback auf Position 13
+                // (entspricht dem ursprünglichen Wert im Code)
+                timestampColumn = 13;
+            }
+
+            // Sicherstellen, dass die Zeile lang genug ist
+            if (row.length <= timestampColumn) return 0;
+
+            const d = this.parseDate(row[timestampColumn]);
+
+            // Auf das Jahr aus der Konfiguration prüfen oder das aktuelle Jahr verwenden
+            const targetYear = config$1?.tax?.year || new Date().getFullYear();
+
+            // Wenn kein Datum oder das Jahr nicht übereinstimmt
+            if (!d || d.getFullYear() !== targetYear) return 0;
+
+            return d.getMonth() + 1; // JavaScript Monate sind 0-basiert, wir geben 1-12 zurück
+        },
+
+        /**
+         * Formatiert ein Datum im deutschen Format (DD.MM.YYYY)
+         * @param {Date|string} date - Das zu formatierende Datum
+         * @returns {string} - Das formatierte Datum oder leer bei ungültigem Datum
+         */
+        formatDate(date) {
+            const d = this.parseDate(date);
+            if (!d) return "";
+
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+
+            return `${day}.${month}.${year}`;
+        },
+
+        /**
+         * Formatiert einen Währungsbetrag im deutschen Format
+         * @param {number|string} amount - Der zu formatierende Betrag
+         * @param {string} currency - Das Währungssymbol (Standard: "€")
+         * @returns {string} - Der formatierte Betrag
+         */
+        formatCurrency(amount, currency = "€") {
+            const value = this.parseCurrency(amount);
+            return value.toLocaleString('de-DE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }) + " " + currency;
+        },
+
+        /**
+         * Generiert eine eindeutige ID (für Referenzzwecke)
+         * @param {string} prefix - Optional ein Präfix für die ID
+         * @returns {string} - Eine eindeutige ID
+         */
+        generateUniqueId(prefix = "") {
+            const timestamp = new Date().getTime();
+            const random = Math.floor(Math.random() * 10000);
+            return `${prefix}${timestamp}${random}`;
+        },
+
+        /**
+         * Konvertiert einen Spaltenindex (1-basiert) in einen Spaltenbuchstaben (A, B, C, ...)
+         * @param {number} columnIndex - 1-basierter Spaltenindex
+         * @returns {string} - Spaltenbuchstabe(n)
+         */
+        getColumnLetter(columnIndex) {
+            // Cache-Lookup für häufig verwendete Indizes
+            if (this._cache.columnLetters.has(columnIndex)) {
+                return this._cache.columnLetters.get(columnIndex);
+            }
+
+            let letter = '';
+            let colIndex = columnIndex;
+
+            while (colIndex > 0) {
+                const modulo = (colIndex - 1) % 26;
+                letter = String.fromCharCode(65 + modulo) + letter;
+                colIndex = Math.floor((colIndex - modulo) / 26);
+            }
+
+            // Ergebnis cachen
+            this._cache.columnLetters.set(columnIndex, letter);
+            return letter;
+        },
+
+        /**
+         * Prüft, ob zwei Zahlenwerte im Rahmen einer bestimmten Toleranz gleich sind
+         * @param {number} a - Erster Wert
+         * @param {number} b - Zweiter Wert
+         * @param {number} tolerance - Toleranzwert (Standard: 0.01)
+         * @returns {boolean} - true wenn Werte innerhalb der Toleranz gleich sind
+         */
+        isApproximatelyEqual(a, b, tolerance = 0.01) {
+            return Math.abs(a - b) <= tolerance;
+        },
+
+        /**
+         * Sicheres Runden eines Werts auf n Dezimalstellen
+         * @param {number} value - Der zu rundende Wert
+         * @param {number} decimals - Anzahl der Dezimalstellen (Standard: 2)
+         * @returns {number} - Gerundeter Wert
+         */
+        round(value, decimals = 2) {
+            const factor = Math.pow(10, decimals);
+            return Math.round((value + Number.EPSILON) * factor) / factor;
+        },
+
+        /**
+         * Prüft, ob ein Wert leer oder undefiniert ist
+         * @param {*} value - Der zu prüfende Wert
+         * @returns {boolean} - true wenn der Wert leer ist
+         */
+        isEmpty(value) {
+            return value === null || value === undefined || value.toString().trim() === "";
+        },
+
+        /**
+         * Bereinigt einen Text von Sonderzeichen und macht ihn vergleichbar
+         * @param {string} text - Der zu bereinigende Text
+         * @returns {string} - Der bereinigte Text
+         */
+        normalizeText(text) {
+            if (!text) return "";
+            return text.toString()
+                .toLowerCase()
+                .replace(/[äöüß]/g, match => {
+                    return {
+                        'ä': 'ae',
+                        'ö': 'oe',
+                        'ü': 'ue',
+                        'ß': 'ss'
+                    }[match];
+                })
+                .replace(/[^a-z0-9]/g, '');
+        },
+
+        /**
+         * Optimierte Batch-Verarbeitung für Google Sheets API-Calls
+         * Vermeidet häufige API-Calls, die zur Drosselung führen können
+         * @param {Sheet} sheet - Das zu aktualisierende Sheet
+         * @param {Array} data - Array mit Daten-Zeilen
+         * @param {number} startRow - Startzeile (1-basiert)
+         * @param {number} startCol - Startspalte (1-basiert)
+         */
+        batchWriteToSheet(sheet, data, startRow, startCol) {
+            if (!sheet || !data || !data.length || !data[0].length) return;
+
+            try {
+                // Schreibe alle Daten in einem API-Call
+                sheet.getRange(
+                    startRow,
+                    startCol,
+                    data.length,
+                    data[0].length
+                ).setValues(data);
+            } catch (e) {
+                console.error("Fehler beim Batch-Schreiben in das Sheet:", e);
+
+                // Fallback: Schreibe in kleineren Blöcken, falls der ursprüngliche Call fehlschlägt
+                const BATCH_SIZE = 50; // Kleinere Batch-Größe für Fallback
+
+                for (let i = 0; i < data.length; i += BATCH_SIZE) {
+                    const batchData = data.slice(i, i + BATCH_SIZE);
+                    try {
+                        sheet.getRange(
+                            startRow + i,
+                            startCol,
+                            batchData.length,
+                            batchData[0].length
+                        ).setValues(batchData);
+
+                        // Kurze Pause, um API-Drosselung zu vermeiden
+                        if (i + BATCH_SIZE < data.length) {
+                            Utilities.sleep(100);
+                        }
+                    } catch (innerError) {
+                        console.error(`Fehler beim Schreiben von Batch ${i / BATCH_SIZE}:`, innerError);
+                    }
+                }
+            }
+        }
+    };
+
+    // file: src/importModule.js
+
+    /**
+     * Modul für den Import von Dateien aus Google Drive in die Buchhaltungstabelle
+     */
+    const ImportModule = (() => {
+        /**
+         * Initialisiert die Änderungshistorie, falls sie nicht existiert
+         * @param {Sheet} history - Das Änderungshistorie-Sheet
+         * @returns {boolean} - true bei erfolgreicher Initialisierung
+         */
+        const initializeHistorySheet = (history) => {
+            try {
+                if (history.getLastRow() === 0) {
+                    const historyConfig = config$1.sheets.aenderungshistorie.columns;
+                    const headerRow = Array(history.getLastColumn()).fill("");
+
+                    headerRow[historyConfig.datum - 1] = "Datum";
+                    headerRow[historyConfig.typ - 1] = "Rechnungstyp";
+                    headerRow[historyConfig.dateiname - 1] = "Dateiname";
+                    headerRow[historyConfig.dateilink - 1] = "Link zur Datei";
+
+                    history.appendRow(headerRow);
+                    history.getRange(1, 1, 1, 4).setFontWeight("bold");
+                }
+                return true;
+            } catch (e) {
+                console.error("Fehler bei der Initialisierung des History-Sheets:", e);
+                return false;
+            }
+        };
+
+        /**
+         * Sammelt bereits importierte Dateien aus der Änderungshistorie
+         * @param {Sheet} history - Das Änderungshistorie-Sheet
+         * @returns {Set} - Set mit bereits importierten Dateinamen
+         */
+        const collectExistingFiles = (history) => {
+            const existingFiles = new Set();
+            try {
+                const historyData = history.getDataRange().getValues();
+                const historyConfig = config$1.sheets.aenderungshistorie.columns;
+
+                // Überschriftenzeile überspringen und alle Dateinamen sammeln
+                for (let i = 1; i < historyData.length; i++) {
+                    const fileName = historyData[i][historyConfig.dateiname - 1];
+                    if (fileName) existingFiles.add(fileName);
+                }
+            } catch (e) {
+                console.error("Fehler beim Sammeln bereits importierter Dateien:", e);
+            }
+            return existingFiles;
+        };
+
+        /**
+         * Ruft den übergeordneten Ordner des aktuellen Spreadsheets ab
+         * @returns {Folder|null} - Der übergeordnete Ordner oder null bei Fehler
+         */
+        const getParentFolder = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const file = DriveApp.getFileById(ss.getId());
+                const parents = file.getParents();
+                return parents.hasNext() ? parents.next() : null;
+            } catch (e) {
+                console.error("Fehler beim Abrufen des übergeordneten Ordners:", e);
+                return null;
+            }
+        };
+
+        /**
+         * Findet oder erstellt einen Ordner mit dem angegebenen Namen
+         * @param {Folder} parentFolder - Der übergeordnete Ordner
+         * @param {string} folderName - Der zu findende oder erstellende Ordnername
+         * @returns {Folder|null} - Der gefundene oder erstellte Ordner oder null bei Fehler
+         */
+        const findOrCreateFolder = (parentFolder, folderName) => {
+            if (!parentFolder) return null;
+
+            try {
+                let folder = Helpers.getFolderByName(parentFolder, folderName);
+
+                if (!folder) {
+                    const ui = SpreadsheetApp.getUi();
+                    const createFolder = ui.alert(
+                        `Der Ordner '${folderName}' existiert nicht. Soll er erstellt werden?`,
+                        ui.ButtonSet.YES_NO
+                    );
+
+                    if (createFolder === ui.Button.YES) {
+                        folder = parentFolder.createFolder(folderName);
+                    }
+                }
+
+                return folder;
+            } catch (e) {
+                console.error(`Fehler beim Finden/Erstellen des Ordners ${folderName}:`, e);
+                return null;
+            }
+        };
+
+        /**
+         * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
+         *
+         * @param {Folder} folder - Google Drive Ordner mit den zu importierenden Dateien
+         * @param {Sheet} mainSheet - Hauptsheet (Einnahmen oder Ausgaben)
+         * @param {string} type - Typ der Dateien ("Einnahme" oder "Ausgabe")
+         * @param {Sheet} historySheet - Sheet für die Änderungshistorie
+         * @param {Set} existingFiles - Set mit bereits importierten Dateinamen
+         * @returns {number} - Anzahl der importierten Dateien
+         */
+        const importFilesFromFolder = (folder, mainSheet, type, historySheet, existingFiles) => {
+            if (!folder || !mainSheet || !historySheet) return 0;
+
+            const files = folder.getFiles();
+            const newMainRows = [];
+            const newHistoryRows = [];
+            const timestamp = new Date();
+            let importedCount = 0;
+
+            // Konfiguration für das richtige Sheet auswählen
+            const sheetConfig = type === "Einnahme"
+                ? config$1.sheets.einnahmen.columns
+                : config$1.sheets.ausgaben.columns;
+
+            // Konfiguration für das Änderungshistorie-Sheet
+            const historyConfig = config$1.sheets.aenderungshistorie.columns;
+
+            // Batch-Verarbeitung der Dateien
+            const batchSize = 20;
+            let fileCount = 0;
+            let currentBatch = [];
+
+            while (files.hasNext()) {
+                const file = files.next();
+                const fileName = file.getName().replace(/\.[^/.]+$/, ""); // Entfernt Dateiendung
+
+                // Prüfe, ob die Datei bereits importiert wurde
+                if (!existingFiles.has(fileName)) {
+                    // Extraktion der Rechnungsinformationen
+                    const invoiceName = fileName.replace(/^[^ ]* /, ""); // Entfernt Präfix vor erstem Leerzeichen
+                    const invoiceDate = Helpers.extractDateFromFilename(fileName);
+                    const fileUrl = file.getUrl();
+
+                    // Neue Zeile für das Hauptsheet erstellen
+                    const row = Array(mainSheet.getLastColumn()).fill("");
+
+                    // Daten in die richtigen Spalten setzen (0-basiert)
+                    row[sheetConfig.datum - 1] = invoiceDate;                  // Datum
+                    row[sheetConfig.rechnungsnummer - 1] = invoiceName;        // Rechnungsnummer
+                    row[sheetConfig.zeitstempel - 1] = timestamp;              // Zeitstempel
+                    row[sheetConfig.dateiname - 1] = fileName;                 // Dateiname
+                    row[sheetConfig.dateilink - 1] = fileUrl;                  // Link zur Originaldatei
+
+                    newMainRows.push(row);
+
+                    // Protokolliere den Import in der Änderungshistorie
+                    const historyRow = Array(historySheet.getLastColumn()).fill("");
+
+                    // Daten in die richtigen Historie-Spalten setzen (0-basiert)
+                    historyRow[historyConfig.datum - 1] = timestamp;           // Zeitstempel
+                    historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe)
+                    historyRow[historyConfig.dateiname - 1] = fileName;        // Dateiname
+                    historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
+
+                    newHistoryRows.push(historyRow);
+                    existingFiles.add(fileName); // Zur Liste der importierten Dateien hinzufügen
+                    importedCount++;
+
+                    // Batch-Verarbeitung zum Verbessern der Performance
+                    fileCount++;
+                    currentBatch.push(file);
+
+                    // Verarbeitungslimit erreicht oder letzte Datei
+                    if (fileCount % batchSize === 0 || !files.hasNext()) {
+                        // Hier könnte zusätzliche Batch-Verarbeitung erfolgen
+                        // z.B. Metadaten extrahieren, etc.
+
+                        // Batch zurücksetzen
+                        currentBatch = [];
+
+                        // Kurze Pause einfügen um API-Limits zu vermeiden
+                        Utilities.sleep(50);
+                    }
+                }
+            }
+
+            // Optimierte Schreibvorgänge mit Helpers
+            if (newMainRows.length > 0) {
+                Helpers.batchWriteToSheet(
+                    mainSheet,
+                    newMainRows,
+                    mainSheet.getLastRow() + 1,
+                    1
+                );
+            }
+
+            if (newHistoryRows.length > 0) {
+                Helpers.batchWriteToSheet(
+                    historySheet,
+                    newHistoryRows,
+                    historySheet.getLastRow() + 1,
+                    1
+                );
+            }
+
+            return importedCount;
+        };
+
+        /**
+         * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- und Ausgabenordnern
+         * @returns {number} Anzahl der importierten Dateien
+         */
+        const importDriveFiles = () => {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const ui = SpreadsheetApp.getUi();
+            let totalImported = 0;
+
+            try {
+                // Hauptsheets für Einnahmen und Ausgaben abrufen
+                const revenueMain = ss.getSheetByName("Einnahmen");
+                const expenseMain = ss.getSheetByName("Ausgaben");
+
+                if (!revenueMain || !expenseMain) {
+                    ui.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!");
+                    return 0;
+                }
+
+                // Änderungshistorie abrufen oder erstellen
+                const history = ss.getSheetByName("Änderungshistorie") || ss.insertSheet("Änderungshistorie");
+
+                // Änderungshistorie initialisieren
+                if (!initializeHistorySheet(history)) {
+                    ui.alert("Fehler: Die Änderungshistorie konnte nicht initialisiert werden!");
+                    return 0;
+                }
+
+                // Bereits importierte Dateien sammeln
+                const existingFiles = collectExistingFiles(history);
+
+                // Auf übergeordneten Ordner zugreifen
+                const parentFolder = getParentFolder();
+                if (!parentFolder) {
+                    ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
+                    return 0;
+                }
+
+                // Unterordner für Einnahmen und Ausgaben finden oder erstellen
+                const revenueFolder = findOrCreateFolder(parentFolder, "Einnahmen");
+                const expenseFolder = findOrCreateFolder(parentFolder, "Ausgaben");
+
+                // Import durchführen wenn Ordner existieren
+                let importedRevenue = 0, importedExpense = 0;
+
+                if (revenueFolder) {
+                    try {
+                        importedRevenue = importFilesFromFolder(
+                            revenueFolder,
+                            revenueMain,
+                            "Einnahme",
+                            history,
+                            existingFiles
+                        );
+                        totalImported += importedRevenue;
+                    } catch (e) {
+                        console.error("Fehler beim Import der Einnahmen:", e);
+                        ui.alert("Fehler beim Import der Einnahmen: " + e.toString());
+                    }
+                }
+
+                if (expenseFolder) {
+                    try {
+                        importedExpense = importFilesFromFolder(
+                            expenseFolder,
+                            expenseMain,
+                            "Ausgabe",
+                            history,
+                            existingFiles  // Das gleiche Set wird für beide Importe verwendet
+                        );
+                        totalImported += importedExpense;
+                    } catch (e) {
+                        console.error("Fehler beim Import der Ausgaben:", e);
+                        ui.alert("Fehler beim Import der Ausgaben: " + e.toString());
+                    }
+                }
+
+                // Abschluss-Meldung anzeigen
+                if (totalImported === 0) {
+                    ui.alert("Es wurden keine neuen Dateien gefunden.");
+                } else {
+                    ui.alert(
+                        `Import abgeschlossen.\n\n` +
+                        `${importedRevenue} Einnahmen importiert.\n` +
+                        `${importedExpense} Ausgaben importiert.`
+                    );
+                }
+
+                return totalImported;
+            } catch (e) {
+                console.error("Unerwarteter Fehler beim Import:", e);
+                ui.alert("Ein unerwarteter Fehler ist aufgetreten: " + e.toString());
+                return 0;
+            }
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            importDriveFiles
+        };
+    })();
+
+    // file: src/validator.js
+
+    /**
+     * Modul zur Validierung der Eingaben in den verschiedenen Tabellen
+     */
+    const Validator = (() => {
+        /**
+         * Erstellt eine Dropdown-Validierung für einen Bereich
+         * @param {Sheet} sheet - Das Sheet, in dem validiert werden soll
+         * @param {number} row - Die Start-Zeile
+         * @param {number} col - Die Start-Spalte
+         * @param {number} numRows - Die Anzahl der Zeilen
+         * @param {number} numCols - Die Anzahl der Spalten
+         * @param {Array<string>} list - Die Liste der gültigen Werte
+         * @returns {Range} - Der validierte Bereich
+         */
+        const validateDropdown = (sheet, row, col, numRows, numCols, list) => {
+            if (!sheet || !list || !list.length) return null;
+
+            try {
+                return sheet.getRange(row, col, numRows, numCols).setDataValidation(
+                    SpreadsheetApp.newDataValidation()
+                        .requireValueInList(list, true)
+                        .setAllowInvalid(false)
+                        .build()
+                );
+            } catch (e) {
+                console.error("Fehler beim Erstellen der Dropdown-Validierung:", e);
+                return null;
+            }
+        };
+
+        /**
+         * Validiert eine Einnahmen- oder Ausgaben-Zeile
+         * @param {Array} row - Die zu validierende Zeile
+         * @param {number} rowIndex - Der Index der Zeile (für Fehlermeldungen)
+         * @param {string} sheetType - Der Typ des Sheets ("einnahmen" oder "ausgaben")
+         * @returns {Array<string>} - Array mit Warnungen
+         */
+        const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
+            const warnings = [];
+            const columns = config$1.sheets[sheetType].columns;
+
+            /**
+             * Validiert eine Zeile anhand einer Liste von Validierungsregeln
+             * @param {Array} row - Die zu validierende Zeile
+             * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
+             * @param {Array<Object>} rules - Array mit Regeln ({check, message})
+             */
+            const validateRow = (row, idx, rules) => {
+                rules.forEach(({check, message}) => {
+                    if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+                });
+            };
+
+            // Grundlegende Validierungsregeln
+            const baseRules = [
+                {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
+                {check: r => isInvalidNumber(r[columns.nettobetrag - 1]), message: "Nettobetrag fehlt oder ungültig."},
+                {
+                    check: r => {
+                        const mwstStr = r[columns.mwstSatz - 1] == null ? "" : r[columns.mwstSatz - 1].toString().trim();
+                        if (Helpers.isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+
+                        // MwSt-Satz extrahieren und normalisieren
+                        const mwst = Helpers.parseMwstRate(mwstStr);
+                        if (isNaN(mwst)) return true;
+
+                        // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
+                        const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
+                        return !allowedRates.includes(Math.round(mwst));
+                    },
+                    message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config$1?.tax?.allowedMwst?.join('%, ')}% oder leer.`
+                }
+            ];
+
+            // Status-abhängige Regeln
+            const status = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
+
+            // Regeln für offene Zahlungen
+            const openPaymentRules = [
+                {
+                    check: r => !Helpers.isEmpty(r[columns.zahlungsart - 1]),
+                    message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'
+                },
+                {
+                    check: r => !Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
+                    message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'
+                }
+            ];
+
+            // Regeln für bezahlte Zahlungen
+            const paidPaymentRules = [
+                {
+                    check: r => Helpers.isEmpty(r[columns.zahlungsart - 1]),
+                    message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+                },
+                {
+                    check: r => Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
+                    message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+                },
+                {
+                    check: r => {
+                        if (Helpers.isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
+
+                        const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
+                        return paymentDate ? paymentDate > new Date() : false;
+                    },
+                    message: "Zahlungsdatum darf nicht in der Zukunft liegen."
+                },
+                {
+                    check: r => {
+                        if (Helpers.isEmpty(r[columns.zahlungsdatum - 1]) || Helpers.isEmpty(r[columns.datum - 1])) return false;
+
+                        const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
+                        const invoiceDate = Helpers.parseDate(r[columns.datum - 1]);
+                        return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
+                    },
+                    message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
+                }
+            ];
+
+            // Regeln basierend auf Zahlungsstatus zusammenstellen
+            const paymentRules = status === "offen" ? openPaymentRules : paidPaymentRules;
+
+            // Alle Regeln kombinieren und anwenden
+            const rules = [...baseRules, ...paymentRules];
+            validateRow(row, rowIndex, rules);
+
+            return warnings;
+        };
+
+        /**
+         * Prüft, ob ein Wert keine gültige Zahl ist
+         * @param {*} v - Der zu prüfende Wert
+         * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
+         */
+        const isInvalidNumber = v => Helpers.isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
+
+        /**
+         * Validiert das Bankbewegungen-Sheet
+         * @param {Sheet} bankSheet - Das zu validierende Sheet
+         * @returns {Array<string>} - Array mit Warnungen
+         */
+        const validateBanking = bankSheet => {
+            if (!bankSheet) return ["Bankbewegungen-Sheet nicht gefunden"];
+
+            const data = bankSheet.getDataRange().getValues();
+            const warnings = [];
+            const columns = config$1.sheets.bankbewegungen.columns;
+
+            // Regeln für Header- und Footer-Zeilen
+            const headerFooterRules = [
+                {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+                {
+                    check: r => !Helpers.isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
+                    message: "Betrag darf nicht gesetzt sein."
+                },
+                {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+                {check: r => !Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
+                {check: r => !Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
+                {check: r => !Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
+                {check: r => !Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
+            ];
+
+            // Regeln für Datenzeilen
+            const dataRowRules = [
+                {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
+                {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+                {check: r => Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
+            ];
+
+            /**
+             * Validiert eine Zeile anhand von Regeln
+             * @param {Array} row - Die zu validierende Zeile
+             * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
+             * @param {Array<Object>} rules - Array mit Regeln ({check, message})
+             */
+            const validateRow = (row, idx, rules) => {
+                rules.forEach(({check, message}) => {
+                    if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+                });
+            };
+
+            // Zeilen validieren
+            data.forEach((row, i) => {
+                const idx = i + 1;
+
+                // Header oder Footer
+                if (i === 0 || i === data.length - 1) {
+                    validateRow(row, idx, headerFooterRules);
+                }
+                // Datenzeilen
+                else if (i > 0 && i < data.length - 1) {
+                    validateRow(row, idx, dataRowRules);
+                }
+            });
+
+            return warnings;
+        };
+
+        /**
+         * Validiert alle Sheets auf Fehler
+         * @param {Sheet} revenueSheet - Das Einnahmen-Sheet
+         * @param {Sheet} expenseSheet - Das Ausgaben-Sheet
+         * @param {Sheet|null} bankSheet - Das Bankbewegungen-Sheet (optional)
+         * @returns {boolean} - True, wenn keine Fehler gefunden wurden
+         */
+        const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
+            if (!revenueSheet || !expenseSheet) {
+                SpreadsheetApp.getUi().alert("Fehler: Benötigte Sheets nicht gefunden!");
+                return false;
+            }
+
+            try {
+                // Warnungen für alle Sheets sammeln
+                const allWarnings = [];
+
+                // Einnahmen validieren (wenn Daten vorhanden)
+                if (revenueSheet.getLastRow() > 1) {
+                    const revenueData = revenueSheet.getDataRange().getValues().slice(1); // Header überspringen
+                    const revenueWarnings = validateSheet(revenueData, "einnahmen");
+                    if (revenueWarnings.length) {
+                        allWarnings.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+                    }
+                }
+
+                // Ausgaben validieren (wenn Daten vorhanden)
+                if (expenseSheet.getLastRow() > 1) {
+                    const expenseData = expenseSheet.getDataRange().getValues().slice(1); // Header überspringen
+                    const expenseWarnings = validateSheet(expenseData, "ausgaben");
+                    if (expenseWarnings.length) {
+                        allWarnings.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+                    }
+                }
+
+                // Bankbewegungen validieren (wenn vorhanden)
+                if (bankSheet) {
+                    const bankWarnings = validateBanking(bankSheet);
+                    if (bankWarnings.length) {
+                        allWarnings.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+                    }
+                }
+
+                // Fehlermeldungen anzeigen, falls vorhanden
+                if (allWarnings.length) {
+                    const ui = SpreadsheetApp.getUi();
+                    // Bei vielen Fehlern ggf. einschränken, um UI-Limits zu vermeiden
+                    const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
+                    let alertMsg = allWarnings.join("\n\n");
+
+                    if (alertMsg.length > maxMsgLength) {
+                        alertMsg = alertMsg.substring(0, maxMsgLength) +
+                            "\n\n... und weitere Fehler. Bitte beheben Sie die angezeigten Fehler zuerst.";
+                    }
+
+                    ui.alert("Validierungsfehler gefunden", alertMsg, ui.ButtonSet.OK);
+                    return false;
+                }
+
+                return true;
+            } catch (e) {
+                console.error("Fehler bei der Validierung:", e);
+                SpreadsheetApp.getUi().alert("Ein Fehler ist bei der Validierung aufgetreten: " + e.toString());
+                return false;
+            }
+        };
+
+        /**
+         * Validiert alle Zeilen in einem Sheet
+         * @param {Array} data - Zeilen-Daten (ohne Header)
+         * @param {string} sheetType - Typ des Sheets ('einnahmen' oder 'ausgaben')
+         * @returns {Array<string>} - Array mit Warnungen
+         */
+        const validateSheet = (data, sheetType) => {
+            return data.reduce((warnings, row, index) => {
+                // Nur nicht-leere Zeilen prüfen
+                if (row.some(cell => cell !== "")) {
+                    const rowWarnings = validateRevenueAndExpenses(row, index + 2, sheetType);
+                    warnings.push(...rowWarnings);
+                }
+                return warnings;
+            }, []);
+        };
+
+        /**
+         * Validiert eine einzelne Zelle anhand eines festgelegten Formats
+         * @param {*} value - Der zu validierende Wert
+         * @param {string} type - Der Validierungstyp (date, number, currency, mwst, text)
+         * @returns {Object} - Validierungsergebnis {isValid, message}
+         */
+        const validateCellValue = (value, type) => {
+            switch (type.toLowerCase()) {
+                case 'date':
+                    const date = Helpers.parseDate(value);
+                    return {
+                        isValid: !!date,
+                        message: date ? "" : "Ungültiges Datumsformat. Bitte verwenden Sie DD.MM.YYYY."
+                    };
+
+                case 'number':
+                    const num = parseFloat(value);
+                    return {
+                        isValid: !isNaN(num),
+                        message: !isNaN(num) ? "" : "Ungültige Zahl."
+                    };
+
+                case 'currency':
+                    const amount = Helpers.parseCurrency(value);
+                    return {
+                        isValid: !isNaN(amount),
+                        message: !isNaN(amount) ? "" : "Ungültiger Geldbetrag."
+                    };
+
+                case 'mwst':
+                    const mwst = Helpers.parseMwstRate(value);
+                    const allowedRates = config$1?.tax?.allowedMwst || [0, 7, 19];
+                    return {
+                        isValid: allowedRates.includes(Math.round(mwst)),
+                        message: allowedRates.includes(Math.round(mwst))
+                            ? ""
+                            : `Ungültiger MwSt-Satz. Erlaubt sind: ${allowedRates.join('%, ')}%.`
+                    };
+
+                case 'text':
+                    return {
+                        isValid: !Helpers.isEmpty(value),
+                        message: !Helpers.isEmpty(value) ? "" : "Text darf nicht leer sein."
+                    };
+
+                default:
+                    return {
+                        isValid: true,
+                        message: ""
+                    };
+            }
+        };
+
+        /**
+         * Validiert ein komplettes Sheet und liefert einen detaillierten Fehlerbericht
+         * @param {Sheet} sheet - Das zu validierende Sheet
+         * @param {Object} validationRules - Regeln für jede Spalte {spaltenIndex: {type, required}}
+         * @returns {Object} - Validierungsergebnis mit Fehlern pro Zeile/Spalte
+         */
+        const validateSheetWithRules = (sheet, validationRules) => {
+            const results = {
+                isValid: true,
+                errors: [],
+                errorsByRow: {},
+                errorsByColumn: {}
+            };
+
+            if (!sheet) {
+                results.isValid = false;
+                results.errors.push("Sheet nicht gefunden");
+                return results;
+            }
+
+            const data = sheet.getDataRange().getValues();
+            if (data.length <= 1) return results; // Nur Header oder leer
+
+            // Header-Zeile überspringen
+            for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+                const row = data[rowIdx];
+
+                // Jede Spalte mit Validierungsregeln prüfen
+                Object.entries(validationRules).forEach(([colIndex, rules]) => {
+                    const colIdx = parseInt(colIndex, 10);
+                    if (isNaN(colIdx) || colIdx >= row.length) return;
+
+                    const cellValue = row[colIdx];
+                    const { type, required } = rules;
+
+                    // Pflichtfeld-Prüfung
+                    if (required && Helpers.isEmpty(cellValue)) {
+                        const error = {
+                            row: rowIdx + 1,
+                            column: colIdx + 1,
+                            message: "Pflichtfeld nicht ausgefüllt"
+                        };
+                        addError(results, error);
+                        return;
+                    }
+
+                    // Wenn nicht leer, auf Typ prüfen
+                    if (!Helpers.isEmpty(cellValue) && type) {
+                        const validation = validateCellValue(cellValue, type);
+                        if (!validation.isValid) {
+                            const error = {
+                                row: rowIdx + 1,
+                                column: colIdx + 1,
+                                message: validation.message
+                            };
+                            addError(results, error);
+                        }
+                    }
+                });
+            }
+
+            results.isValid = results.errors.length === 0;
+            return results;
+        };
+
+        /**
+         * Fügt einen Fehler zum Validierungsergebnis hinzu
+         * @param {Object} results - Das Validierungsergebnis
+         * @param {Object} error - Der Fehler {row, column, message}
+         */
+        const addError = (results, error) => {
+            results.errors.push(error);
+
+            // Nach Zeile gruppieren
+            if (!results.errorsByRow[error.row]) {
+                results.errorsByRow[error.row] = [];
+            }
+            results.errorsByRow[error.row].push(error);
+
+            // Nach Spalte gruppieren
+            if (!results.errorsByColumn[error.column]) {
+                results.errorsByColumn[error.column] = [];
+            }
+            results.errorsByColumn[error.column].push(error);
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            validateDropdown,
+            validateRevenueAndExpenses,
+            validateBanking,
+            validateAllSheets,
+            validateCellValue,
+            validateSheetWithRules,
+            isEmpty: Helpers.isEmpty,
+            isInvalidNumber
+        };
+    })();
+
+    // file: src/refreshModule.js
+
+    /**
+     * Modul zum Aktualisieren der Tabellenblätter und Neuberechnen von Formeln
+     */
+    const RefreshModule = (() => {
+        // Cache für wiederholte Berechnungen
+        const _cache = {
+            // Sheet-Referenzen Cache, um unnötige getSheetByName-Aufrufe zu vermeiden
+            sheets: new Map(),
+            // Referenz-Maps für schnellere Suche nach Rechnungsnummern
+            references: {
+                einnahmen: null,
+                ausgaben: null
+            }
+        };
+
+        /**
+         * Cache zurücksetzen
+         */
+        const clearCache = () => {
+            _cache.sheets.clear();
+            _cache.references.einnahmen = null;
+            _cache.references.ausgaben = null;
+        };
+
+        /**
+         * Holt ein Sheet aus dem Cache oder vom Spreadsheet
+         * @param {string} name - Name des Sheets
+         * @returns {Sheet|null} - Das Sheet oder null, wenn nicht gefunden
+         */
+        const getSheet = (name) => {
+            if (_cache.sheets.has(name)) {
+                return _cache.sheets.get(name);
+            }
+
+            const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+            if (sheet) {
+                _cache.sheets.set(name, sheet);
+            }
+            return sheet;
+        };
+
+        /**
+         * Aktualisiert ein Datenblatt (Einnahmen, Ausgaben, Eigenbelege)
+         * @param {Sheet} sheet - Das zu aktualisierende Sheet
+         * @returns {boolean} - true bei erfolgreicher Aktualisierung
+         */
+        const refreshDataSheet = sheet => {
+            try {
+                const lastRow = sheet.getLastRow();
+                if (lastRow < 2) return true; // Keine Daten zum Aktualisieren
+
+                const numRows = lastRow - 1;
+                const name = sheet.getName();
+
+                // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
+                let columns;
+                if (name === "Einnahmen") {
+                    columns = config$1.sheets.einnahmen.columns;
+                } else if (name === "Ausgaben") {
+                    columns = config$1.sheets.ausgaben.columns;
+                } else if (name === "Eigenbelege") {
+                    columns = config$1.sheets.eigenbelege.columns;
+                } else {
+                    return false; // Unbekanntes Sheet
+                }
+
+                // Spaltenbuchstaben aus den Indizes generieren (mit Cache für Effizienz)
+                const columnLetters = {};
+                Object.entries(columns).forEach(([key, index]) => {
+                    columnLetters[key] = Helpers.getColumnLetter(index);
+                });
+
+                // Batch-Array für Formeln erstellen (effizienter als einzelne Range-Updates)
+                const formulasBatch = {};
+
+                // MwSt-Betrag
+                formulasBatch[columns.mwstBetrag] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}`]
+                );
+
+                // Brutto-Betrag
+                formulasBatch[columns.bruttoBetrag] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=${columnLetters.nettobetrag}${i + 2}+${columnLetters.mwstBetrag}${i + 2}`]
+                );
+
+                // Steuerbemessungsgrundlage - für Teilzahlungen
+                formulasBatch[columns.steuerbemessung] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
+                );
+
+                // Quartal
+                formulasBatch[columns.quartal] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=IF(${columnLetters.datum}${i + 2}="";"";ROUNDUP(MONTH(${columnLetters.datum}${i + 2})/3;0))`]
+                );
+
+                // Zahlungsstatus
+                formulasBatch[columns.zahlungsstatus] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
+                );
+
+                // Formeln in Batches anwenden (weniger API-Calls)
+                Object.entries(formulasBatch).forEach(([col, formulas]) => {
+                    sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
+                });
+
+                // Bezahlter Betrag - Leerzeichen durch 0 ersetzen für Berechnungen
+                const bezahltRange = sheet.getRange(2, columns.bezahlt, numRows, 1);
+                const bezahltValues = bezahltRange.getValues();
+                const updatedBezahltValues = bezahltValues.map(
+                    ([val]) => [Helpers.isEmpty(val) ? 0 : val]
+                );
+                bezahltRange.setValues(updatedBezahltValues);
+
+                // Dropdown-Validierungen je nach Sheet-Typ setzen
+                setDropdownValidations(sheet, name, numRows, columns);
+
+                // Bedingte Formatierung für Status-Spalte
+                if (name !== "Eigenbelege") {
+                    // Für Einnahmen und Ausgaben: Zahlungsstatus
+                    Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
+                        {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
+                        {value: "Teilbezahlt", background: "#FFEB9C", fontColor: "#9C6500"},
+                        {value: "Bezahlt", background: "#C6EFCE", fontColor: "#006100"}
+                    ]);
+                } else {
+                    // Für Eigenbelege: Status
+                    Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
+                        {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
+                        {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
+                        {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
+                    ]);
+                }
+
+                // Spaltenbreiten automatisch anpassen
+                sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+                return true;
+            } catch (e) {
+                console.error(`Fehler beim Aktualisieren von ${sheet.getName()}:`, e);
+                return false;
+            }
+        };
+
+        /**
+         * Setzt Dropdown-Validierungen für ein Sheet
+         * @param {Sheet} sheet - Das Sheet
+         * @param {string} sheetName - Name des Sheets
+         * @param {number} numRows - Anzahl der Datenzeilen
+         * @param {Object} columns - Spaltenkonfiguration
+         */
+        const setDropdownValidations = (sheet, sheetName, numRows, columns) => {
+            if (sheetName === "Einnahmen") {
+                Validator.validateDropdown(
+                    sheet, 2, columns.kategorie, numRows, 1,
+                    Object.keys(config$1.einnahmen.categories)
+                );
+            } else if (sheetName === "Ausgaben") {
+                Validator.validateDropdown(
+                    sheet, 2, columns.kategorie, numRows, 1,
+                    Object.keys(config$1.ausgaben.categories)
+                );
+            } else if (sheetName === "Eigenbelege") {
+                Validator.validateDropdown(
+                    sheet, 2, columns.kategorie, numRows, 1,
+                    Object.keys(config$1.eigenbelege.categories)  // categories statt category
+                );
+
+                // // Status bleibt unverändert
+                // Validator.validateDropdown(
+                //     sheet, 2, columns.status, numRows, 1,
+                //     config.eigenbelege.status
+                // );
+            }
+
+            // Zahlungsart-Dropdown für alle Blätter
+            // Validator.validateDropdown(
+            //     sheet, 2, columns.zahlungsart, numRows, 1,
+            //     config.common.paymentType
+            // );
+        };
+
+        /**
+         * Aktualisiert das Bankbewegungen-Sheet
+         * @param {Sheet} sheet - Das Bankbewegungen-Sheet
+         * @returns {boolean} - true bei erfolgreicher Aktualisierung
+         */
+        const refreshBankSheet = sheet => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const lastRow = sheet.getLastRow();
+                if (lastRow < 3) return true; // Nicht genügend Daten zum Aktualisieren
+
+                const firstDataRow = 3; // Erste Datenzeile (nach Header-Zeile)
+                const numDataRows = lastRow - firstDataRow + 1;
+                const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
+
+                // Bankbewegungen-Konfiguration für Spalten
+                const columns = config$1.sheets.bankbewegungen.columns;
+
+                // Spaltenbuchstaben aus den Indizes generieren
+                const columnLetters = {};
+                Object.entries(columns).forEach(([key, index]) => {
+                    columnLetters[key] = Helpers.getColumnLetter(index);
+                });
+
+                // 1. Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
+                if (transRows > 0) {
+                    sheet.getRange(firstDataRow, columns.saldo, transRows, 1).setFormulas(
+                        Array.from({length: transRows}, (_, i) =>
+                            [`=${columnLetters.saldo}${firstDataRow + i - 1}+${columnLetters.betrag}${firstDataRow + i}`]
+                        )
+                    );
+                }
+
+                // 2. Transaktionstyp basierend auf dem Betrag setzen (Einnahme/Ausgabe)
+                const amounts = sheet.getRange(firstDataRow, columns.betrag, numDataRows, 1).getValues();
+                const typeValues = amounts.map(([val]) => {
+                    const amt = parseFloat(val) || 0;
+                    return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
+                });
+                sheet.getRange(firstDataRow, columns.transaktionstyp, numDataRows, 1).setValues(typeValues);
+
+                // 3. Dropdown-Validierungen für Typ, Kategorie und Konten
+                applyBankSheetValidations(sheet, firstDataRow, numDataRows, columns);
+
+                // 4. Bedingte Formatierung für Transaktionstyp-Spalte
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.transaktionstyp, [
+                    {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
+                    {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
+                ]);
+
+                // 5. REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
+                performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters);
+
+                // 6. Endsaldo-Zeile aktualisieren
+                updateEndSaldoRow(sheet, lastRow, columns, columnLetters);
+
+                // 7. Spaltenbreiten anpassen
+                sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+                return true;
+            } catch (e) {
+                console.error("Fehler beim Aktualisieren des Bankbewegungen-Sheets:", e);
+                return false;
+            }
+        };
+
+        /**
+         * Wendet Validierungen auf das Bankbewegungen-Sheet an
+         * @param {Sheet} sheet - Das Sheet
+         * @param {number} firstDataRow - Erste Datenzeile
+         * @param {number} numDataRows - Anzahl der Datenzeilen
+         * @param {Object} columns - Spaltenkonfiguration
+         */
+        const applyBankSheetValidations = (sheet, firstDataRow, numDataRows, columns) => {
+            // Validierung für Transaktionstyp
+            Validator.validateDropdown(
+                sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
+                config$1.bank.type
+            );
+
+            // Validierung für Kategorie
+            Validator.validateDropdown(
+                sheet, firstDataRow, columns.kategorie, numDataRows, 1,
+                config$1.bank.category
+            );
+
+            // Konten für Dropdown-Validierung sammeln
+            const allowedKontoSoll = new Set();
+            const allowedGegenkonto = new Set();
+
+            // Konten aus Einnahmen und Ausgaben sammeln
+            Object.values(config$1.einnahmen.kontoMapping).forEach(m => {
+                if (m.soll) allowedKontoSoll.add(m.soll);
+                if (m.gegen) allowedGegenkonto.add(m.gegen);
+            });
+
+            Object.values(config$1.ausgaben.kontoMapping).forEach(m => {
+                if (m.soll) allowedKontoSoll.add(m.soll);
+                if (m.gegen) allowedGegenkonto.add(m.gegen);
+            });
+
+            // Dropdown-Validierungen für Konten setzen
+            Validator.validateDropdown(
+                sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
+                Array.from(allowedKontoSoll)
+            );
+
+            Validator.validateDropdown(
+                sheet, firstDataRow, columns.kontoHaben, numDataRows, 1,
+                Array.from(allowedGegenkonto)
+            );
+        };
+
+        /**
+         * Aktualisiert die Endsaldo-Zeile im Bankbewegungen-Sheet
+         * @param {Sheet} sheet - Das Sheet
+         * @param {number} lastRow - Letzte Zeile
+         * @param {Object} columns - Spaltenkonfiguration
+         * @param {Object} columnLetters - Buchstaben für die Spalten
+         */
+        const updateEndSaldoRow = (sheet, lastRow, columns, columnLetters) => {
+            // Endsaldo-Zeile überprüfen
+            const lastRowText = sheet.getRange(lastRow, columns.buchungstext).getDisplayValue().toString().trim().toLowerCase();
+            const formattedDate = Utilities.formatDate(
+                new Date(),
+                Session.getScriptTimeZone(),
+                "dd.MM.yyyy"
+            );
+
+            if (lastRowText === "endsaldo") {
+                // Endsaldo-Zeile aktualisieren
+                sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
+                sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
+            } else {
+                // Neue Endsaldo-Zeile erstellen
+                const newRow = Array(sheet.getLastColumn()).fill("");
+                newRow[columns.datum - 1] = formattedDate;
+                newRow[columns.buchungstext - 1] = "Endsaldo";
+                newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
+
+                sheet.appendRow(newRow);
+            }
+        };
+
+        /**
+         * Erstellt eine Map aus Referenznummern für schnellere Suche
+         * @param {Array} data - Array mit Referenznummern und Beträgen
+         * @returns {Object} - Map mit Referenznummern als Keys
+         */
+        const createReferenceMap = (data) => {
+            // Cache prüfen und nutzen
+            if (arguments.length === 1 && data === "einnahmen" && _cache.references.einnahmen) {
+                return _cache.references.einnahmen;
+            }
+            if (arguments.length === 1 && data === "ausgaben" && _cache.references.ausgaben) {
+                return _cache.references.ausgaben;
+            }
+
+            const map = {};
+
+            // Keine Daten vorhanden
+            if (!data || !data.length) {
+                return map;
+            }
+
+            // Da die Indizes bei data[] sich auf die Spalten im Range beziehen (nicht auf das komplette Sheet),
+            // müssen wir wissen, welche Spalten in welcher Reihenfolge geladen wurden
+            // In der aktuellen Implementation werden diese Spalten geladen:
+            // Rechnungsnummer(0), Nettobetrag(3), MwSt-Satz(4), Bezahlt(7)
+
+            for (let i = 0; i < data.length; i++) {
+                const ref = data[i][0]; // Referenz (erste Spalte im geladenen Range)
+                if (Helpers.isEmpty(ref)) continue;
+
+                // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
+                let key = ref.trim();
+                const isGutschrift = key.startsWith("G-");
+                if (isGutschrift) {
+                    key = key.substring(2); // Entferne "G-" Prefix für den Schlüssel
+                }
+
+                // Alternativschlüssel: Normalisierter Text für unscharfe Suche
+                const normalizedKey = Helpers.normalizeText(key);
+
+                // Netto-Betrag aus dritter Spalte im geladenen Range
+                let betrag = 0;
+                if (!Helpers.isEmpty(data[i][3])) {
+                    betrag = Helpers.parseCurrency(data[i][3]);
+
+                    // Bei Gutschriften ist der Betrag im Sheet negativ, wir speichern den Absolutwert
+                    betrag = Math.abs(betrag);
+                }
+
+                // MwSt-Satz aus vierter Spalte im geladenen Range
+                let mwstRate = 0;
+                if (!Helpers.isEmpty(data[i][4])) {
+                    mwstRate = Helpers.parseMwstRate(data[i][4]);
+                }
+
+                // Bezahlter Betrag aus achter Spalte im geladenen Range
+                let bezahlt = 0;
+                if (!Helpers.isEmpty(data[i][7])) {
+                    bezahlt = Helpers.parseCurrency(data[i][7]);
+                    // Bei Gutschriften ist der bezahlte Betrag im Sheet negativ, wir speichern den Absolutwert
+                    bezahlt = Math.abs(bezahlt);
+                }
+
+                // Bruttobetrag berechnen
+                const brutto = betrag * (1 + mwstRate/100);
+
+                // Speichere auch den Zeilen-Index und die Beträge
+                map[key] = {
+                    ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
+                    normalizedRef: normalizedKey, // Für unscharfe Suche
+                    row: i + 2,      // +2 weil wir bei Zeile 2 beginnen (erste Zeile ist Header)
+                    betrag: betrag,
+                    mwstRate: mwstRate,
+                    brutto: brutto,
+                    bezahlt: bezahlt,
+                    offen: Helpers.round(brutto - bezahlt, 2),
+                    isGutschrift: isGutschrift
+                };
+
+                // Doppelten Eintrag mit normalisiertem Schlüssel anlegen, falls nötig
+                if (normalizedKey !== key && !map[normalizedKey]) {
+                    map[normalizedKey] = map[key];
+                }
+            }
+
+            // Ergebnis cachen, wenn es sich um ein komplettes Sheet handelt
+            if (arguments.length === 1) {
+                if (data === "einnahmen") {
+                    _cache.references.einnahmen = map;
+                } else if (data === "ausgaben") {
+                    _cache.references.ausgaben = map;
+                }
+            }
+
+            return map;
+        };
+
+        /**
+         * Führt das Matching von Bankbewegungen mit Rechnungen durch
+         * @param {Spreadsheet} ss - Das Spreadsheet
+         * @param {Sheet} sheet - Das Bankbewegungen-Sheet
+         * @param {number} firstDataRow - Erste Datenzeile
+         * @param {number} numDataRows - Anzahl der Datenzeilen
+         * @param {number} lastRow - Letzte Zeile
+         * @param {Object} columns - Spaltenkonfiguration
+         * @param {Object} columnLetters - Buchstaben für die Spalten
+         */
+        const performBankReferenceMatching = (ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters) => {
+            // Konfigurationen für Spaltenindizes
+            const einnahmenCols = config$1.sheets.einnahmen.columns;
+            const ausgabenCols = config$1.sheets.ausgaben.columns;
+
+            // Referenzdaten laden für Einnahmen
+            const einnahmenSheet = getSheet("Einnahmen");
+            let einnahmenData = [], einnahmenMap = {};
+
+            if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
+                const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
+                // Die relevanten Spalten laden basierend auf der Konfiguration
+                einnahmenData = einnahmenSheet.getRange(2, einnahmenCols.rechnungsnummer, numEinnahmenRows, 8).getDisplayValues();
+                einnahmenMap = createReferenceMap(einnahmenData);
+            }
+
+            // Referenzdaten laden für Ausgaben
+            const ausgabenSheet = getSheet("Ausgaben");
+            let ausgabenData = [], ausgabenMap = {};
+
+            if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
+                const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
+                // Die relevanten Spalten laden basierend auf der Konfiguration
+                ausgabenData = ausgabenSheet.getRange(2, ausgabenCols.rechnungsnummer, numAusgabenRows, 8).getDisplayValues();
+                ausgabenMap = createReferenceMap(ausgabenData);
+            }
+
+            // Bankbewegungen Daten für Verarbeitung holen
+            const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
+
+            // Ergebnis-Arrays für Batch-Update
+            const matchResults = [];
+            const kontoSollResults = [];
+            const kontoHabenResults = [];
+
+            // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben
+            const bankZuordnungen = {};
+
+            // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
+            for (let i = 0; i < bankData.length; i++) {
+                const rowIndex = i + firstDataRow;
+                const row = bankData[i];
+
+                // Prüfe, ob es sich um die Endsaldo-Zeile handelt
+                const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
+                if (rowIndex === lastRow && label === "endsaldo") {
+                    matchResults.push([""]);
+                    kontoSollResults.push([""]);
+                    kontoHabenResults.push([""]);
+                    continue;
+                }
+
+                const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
+                const refNumber = row[columns.referenz - 1];       // Referenznummer
+                let matchInfo = "";
+
+                // Kontonummern basierend auf Kategorie vorbereiten
+                let kontoSoll = "", kontoHaben = "";
+                const category = row[columns.kategorie - 1] || "";
+
+                // Nur prüfen, wenn Referenz nicht leer ist
+                if (!Helpers.isEmpty(refNumber)) {
+                    let matchFound = false;
+                    const betragValue = Math.abs(Helpers.parseCurrency(row[columns.betrag - 1]));
+
+                    if (tranType === "Einnahme") {
+                        // Suche in Einnahmen
+                        const matchResult = findMatch(refNumber, einnahmenMap, betragValue);
+                        if (matchResult) {
+                            matchFound = true;
+                            matchInfo = processEinnahmeMatch(matchResult, betragValue, row, columns, einnahmenSheet, einnahmenCols);
+
+                            // Für spätere Markierung merken
+                            const key = `einnahme#${matchResult.row}`;
+                            bankZuordnungen[key] = {
+                                typ: "einnahme",
+                                row: matchResult.row,
+                                bankDatum: row[columns.datum - 1],
+                                matchInfo: matchInfo,
+                                transTyp: tranType
+                            };
+                        }
+                    } else if (tranType === "Ausgabe") {
+                        // Suche in Ausgaben
+                        const matchResult = findMatch(refNumber, ausgabenMap, betragValue);
+                        if (matchResult) {
+                            matchFound = true;
+                            matchInfo = processAusgabeMatch(matchResult, betragValue, row, columns, ausgabenSheet, ausgabenCols);
+
+                            // Für spätere Markierung merken
+                            const key = `ausgabe#${matchResult.row}`;
+                            bankZuordnungen[key] = {
+                                typ: "ausgabe",
+                                row: matchResult.row,
+                                bankDatum: row[columns.datum - 1],
+                                matchInfo: matchInfo,
+                                transTyp: tranType
+                            };
+                        }
+
+                        // FALLS keine Übereinstimmung, auch in Einnahmen suchen (für Gutschriften)
+                        if (!matchFound) {
+                            const gutschriftMatch = findMatch(refNumber, einnahmenMap);
+                            if (gutschriftMatch) {
+                                matchFound = true;
+                                matchInfo = processGutschriftMatch(gutschriftMatch, betragValue, row, columns, einnahmenSheet, einnahmenCols);
+
+                                // Für spätere Markierung merken
+                                const key = `einnahme#${gutschriftMatch.row}`;
+                                bankZuordnungen[key] = {
+                                    typ: "einnahme",
+                                    row: gutschriftMatch.row,
+                                    bankDatum: row[columns.datum - 1],
+                                    matchInfo: matchInfo,
+                                    transTyp: "Gutschrift"
+                                };
+                            }
+                        }
+                    }
+
+                    // Spezialfälle prüfen (Gesellschaftskonto, Holding)
+                    if (!matchFound) {
+                        const lcRef = refNumber.toString().toLowerCase();
+                        if (lcRef.includes("gesellschaftskonto")) {
+                            matchFound = true;
+                            matchInfo = tranType === "Einnahme"
+                                ? "Gesellschaftskonto (Einnahme)"
+                                : "Gesellschaftskonto (Ausgabe)";
+                        } else if (lcRef.includes("holding")) {
+                            matchFound = true;
+                            matchInfo = tranType === "Einnahme"
+                                ? "Holding (Einnahme)"
+                                : "Holding (Ausgabe)";
+                        }
+                    }
+                }
+
+                // Kontonummern basierend auf Kategorie setzen
+                if (category) {
+                    let mapping = null;
+                    if (tranType === "Einnahme") {
+                        mapping = config$1.einnahmen.kontoMapping[category];
+                    } else if (tranType === "Ausgabe") {
+                        mapping = config$1.ausgaben.kontoMapping[category];
+                    }
+
+                    if (mapping) {
+                        kontoSoll = mapping.soll || "";
+                        kontoHaben = mapping.gegen || "";
+                    } else {
+                        kontoSoll = "Manuell prüfen";
+                        kontoHaben = "Manuell prüfen";
+                    }
+                }
+
+                // Ergebnisse für Batch-Update sammeln
+                matchResults.push([matchInfo]);
+                kontoSollResults.push([kontoSoll]);
+                kontoHabenResults.push([kontoHaben]);
+            }
+
+            // Batch-Updates ausführen für bessere Performance
+            sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchResults);
+            sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
+            sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
+
+            // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
+            Utilities.sleep(500);
+
+            // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
+            formatMatchedRows(sheet, firstDataRow, matchResults, columns);
+
+            // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
+            setMatchColumnFormatting(sheet, columnLetters.matchInfo);
+
+            // Verzögerung vor dem Aufruf von markPaidInvoices
+            Utilities.sleep(500);
+
+            // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
+            markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
+        };
+
+        /**
+         * Findet eine Übereinstimmung in der Referenz-Map
+         * @param {string} reference - Zu suchende Referenz
+         * @param {Object} refMap - Map mit Referenznummern
+         * @param {number} betrag - Betrag der Bankbewegung (absoluter Wert)
+         * @returns {Object|null} - Gefundene Übereinstimmung oder null
+         */
+        const findMatch = (reference, refMap, betrag = null) => {
+            // Keine Daten
+            if (!reference || !refMap) return null;
+
+            // Normalisierte Suche vorbereiten
+            const normalizedRef = Helpers.normalizeText(reference);
+
+            // Priorität der Matching-Strategien:
+            // 1. Exakte Übereinstimmung
+            // 2. Normalisierte Übereinstimmung
+            // 3. Enthält-Beziehung (in beide Richtungen)
+
+            // 1. Exakte Übereinstimmung
+            if (refMap[reference]) {
+                return evaluateMatch(refMap[reference], betrag);
+            }
+
+            // 2. Normalisierte Übereinstimmung
+            if (normalizedRef && refMap[normalizedRef]) {
+                return evaluateMatch(refMap[normalizedRef], betrag);
+            }
+
+            // 3. Teilweise Übereinstimmung (mit Cache für Performance)
+            const candidateKeys = Object.keys(refMap);
+
+            // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
+            for (const key of candidateKeys) {
+                if (key.includes(reference) || reference.includes(key)) {
+                    return evaluateMatch(refMap[key], betrag);
+                }
+            }
+
+            // Falls keine exakten Treffer, probieren wir es mit normalisierten Werten
+            for (const key of candidateKeys) {
+                const normalizedKey = Helpers.normalizeText(key);
+                if (normalizedKey.includes(normalizedRef) || normalizedRef.includes(normalizedKey)) {
+                    return evaluateMatch(refMap[key], betrag);
+                }
+            }
+
+            return null;
+        };
+
+        /**
+         * Bewertet die Qualität einer Übereinstimmung basierend auf Beträgen
+         * @param {Object} match - Die gefundene Übereinstimmung
+         * @param {number} betrag - Der Betrag zum Vergleich
+         * @returns {Object} - Übereinstimmung mit zusätzlichen Infos
+         */
+        const evaluateMatch = (match, betrag = null) => {
+            if (!match) return null;
+
+            // Behalte die ursprüngliche Übereinstimmung
+            const result = { ...match };
+
+            // Wenn kein Betrag zum Vergleich angegeben wurde
+            if (betrag === null) {
+                result.matchType = "Referenz-Match";
+                return result;
+            }
+
+            // Hole die Beträge aus der Übereinstimmung
+            const matchBrutto = Math.abs(match.brutto);
+            const matchBezahlt = Math.abs(match.bezahlt);
+
+            // Toleranzwert für Betragsabweichungen (2 Cent)
+            const tolerance = 0.02;
+
+            // Fall 1: Betrag entspricht genau dem Bruttobetrag (Vollständige Zahlung)
+            if (Helpers.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
+                result.matchType = "Vollständige Zahlung";
+                return result;
+            }
+
+            // Fall 2: Position ist bereits vollständig bezahlt
+            if (Helpers.isApproximatelyEqual(matchBezahlt, matchBrutto, tolerance) && matchBezahlt > 0) {
+                result.matchType = "Vollständige Zahlung";
+                return result;
+            }
+
+            // Fall 3: Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
+            // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
+            if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
+                result.matchType = "Teilzahlung";
+                return result;
+            }
+
+            // Fall 4: Betrag ist größer als Bruttobetrag, aber vermutlich trotzdem die richtige Zahlung
+            // (z.B. wegen Rundungen oder kleinen Gebühren)
+            if (betrag > matchBrutto && Helpers.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
+                result.matchType = "Vollständige Zahlung";
+                return result;
+            }
+
+            // Fall 5: Bei allen anderen Fällen (Beträge weichen stärker ab)
+            result.matchType = "Unsichere Zahlung";
+            result.betragsDifferenz = Helpers.round(Math.abs(betrag - matchBrutto), 2);
+            return result;
+        };
+
+        /**
+         * Verarbeitet eine Einnahmen-Übereinstimmung
+         * @returns {string} Formatierte Match-Information
+         */
+        const processEinnahmeMatch = (matchResult, betragValue, row, columns, einnahmenSheet, einnahmenCols) => {
+            let matchStatus = "";
+
+            // Je nach Match-Typ unterschiedliche Statusinformationen
+            if (matchResult.matchType) {
+                // Bei "Unsichere Zahlung" auch die Differenz anzeigen
+                if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
+                    matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
+                } else {
+                    matchStatus = ` (${matchResult.matchType})`;
+                }
+            }
+
+            // Prüfen, ob Zahldatum in Einnahmen/Ausgaben aktualisiert werden soll
+            if ((matchResult.matchType === "Vollständige Zahlung" ||
+                    matchResult.matchType === "Teilzahlung") &&
+                einnahmenSheet) {
+                // Bankbewegungsdatum holen (aus Spalte A)
+                const zahlungsDatum = row[columns.datum - 1];
+                if (zahlungsDatum) {
+                    // Zahldatum im Einnahmen-Sheet aktualisieren (nur wenn leer)
+                    const einnahmenRow = matchResult.row;
+                    const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
+                    const aktuellDatum = zahldatumRange.getValue();
+
+                    if (Helpers.isEmpty(aktuellDatum)) {
+                        zahldatumRange.setValue(zahlungsDatum);
+                        matchStatus += " ✓ Datum aktualisiert";
+                    }
+                }
+            }
+
+            return `Einnahme #${matchResult.row}${matchStatus}`;
+        };
+
+        /**
+         * Verarbeitet eine Ausgaben-Übereinstimmung
+         * @returns {string} Formatierte Match-Information
+         */
+        const processAusgabeMatch = (matchResult, betragValue, row, columns, ausgabenSheet, ausgabenCols) => {
+            let matchStatus = "";
+
+            // Je nach Match-Typ unterschiedliche Statusinformationen für Ausgaben
+            if (matchResult.matchType) {
+                if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
+                    matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
+                } else {
+                    matchStatus = ` (${matchResult.matchType})`;
+                }
+            }
+
+            // Prüfen, ob Zahldatum in Ausgaben aktualisiert werden soll
+            if ((matchResult.matchType === "Vollständige Zahlung" ||
+                    matchResult.matchType === "Teilzahlung") &&
+                ausgabenSheet) {
+                // Bankbewegungsdatum holen (aus Spalte A)
+                const zahlungsDatum = row[columns.datum - 1];
+                if (zahlungsDatum) {
+                    // Zahldatum im Ausgaben-Sheet aktualisieren (nur wenn leer)
+                    const ausgabenRow = matchResult.row;
+                    const zahldatumRange = ausgabenSheet.getRange(ausgabenRow, ausgabenCols.zahlungsdatum);
+                    const aktuellDatum = zahldatumRange.getValue();
+
+                    if (Helpers.isEmpty(aktuellDatum)) {
+                        zahldatumRange.setValue(zahlungsDatum);
+                        matchStatus += " ✓ Datum aktualisiert";
+                    }
+                }
+            }
+
+            return `Ausgabe #${matchResult.row}${matchStatus}`;
+        };
+
+        /**
+         * Verarbeitet eine Gutschrift-Übereinstimmung
+         * @returns {string} Formatierte Match-Information
+         */
+        const processGutschriftMatch = (gutschriftMatch, betragValue, row, columns, einnahmenSheet, einnahmenCols) => {
+            let matchStatus = "";
+
+            // Bei Gutschriften könnte der Betrag abweichen (z.B. Teilgutschrift)
+            // Prüfen, ob die Beträge plausibel sind
+            const gutschriftBetrag = Math.abs(gutschriftMatch.brutto);
+
+            if (Helpers.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
+                // Beträge stimmen genau überein
+                matchStatus = " (Vollständige Gutschrift)";
+            } else if (betragValue < gutschriftBetrag) {
+                // Teilgutschrift (Gutschriftbetrag kleiner als ursprünglicher Rechnungsbetrag)
+                matchStatus = " (Teilgutschrift)";
+            } else {
+                // Ungewöhnlicher Fall - Gutschriftbetrag größer als Rechnungsbetrag
+                matchStatus = " (Ungewöhnliche Gutschrift)";
+            }
+
+            // Bei Gutschriften auch im Einnahmen-Sheet aktualisieren - hier als negative Zahlung
+            if (einnahmenSheet) {
+                // Bankbewegungsdatum holen (aus Spalte A)
+                const gutschriftDatum = row[columns.datum - 1];
+                if (gutschriftDatum) {
+                    // Gutschriftdatum im Einnahmen-Sheet aktualisieren und "G-" vor die Referenz setzen
+                    const einnahmenRow = gutschriftMatch.row;
+
+                    // Zahldatum aktualisieren (nur wenn leer)
+                    const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
+                    const aktuellDatum = zahldatumRange.getValue();
+
+                    if (Helpers.isEmpty(aktuellDatum)) {
+                        zahldatumRange.setValue(gutschriftDatum);
+                        matchStatus += " ✓ Datum aktualisiert";
+                    }
+
+                    // Optional: Die Referenz mit "G-" kennzeichnen, um Gutschrift zu markieren
+                    const refRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.rechnungsnummer);
+                    const currentRef = refRange.getValue();
+                    if (currentRef && !currentRef.toString().startsWith("G-")) {
+                        refRange.setValue("G-" + currentRef);
+                        matchStatus += " ✓ Ref. markiert";
+                    }
+                }
+            }
+
+            return `Gutschrift zu Einnahme #${gutschriftMatch.row}${matchStatus}`;
+        };
+
+        /**
+         * Formatiert Zeilen basierend auf dem Match-Typ
+         * @param {Sheet} sheet - Das Sheet
+         * @param {number} firstDataRow - Erste Datenzeile
+         * @param {Array} matchResults - Array mit Match-Infos
+         * @param {Object} columns - Spaltenkonfiguration
+         */
+        const formatMatchedRows = (sheet, firstDataRow, matchResults, columns) => {
+            // Performance-optimiertes Batch-Update vorbereiten
+            const formatBatches = {
+                'Einnahme': { rows: [], color: "#EAF1DD" },  // Helles Grün (Grundfarbe für Einnahmen)
+                'Vollständige Zahlung (Einnahme)': { rows: [], color: "#C6EFCE" },  // Kräftiges Grün
+                'Teilzahlung (Einnahme)': { rows: [], color: "#FCE4D6" },  // Helles Orange
+                'Ausgabe': { rows: [], color: "#FFCCCC" },   // Helles Rosa (Grundfarbe für Ausgaben)
+                'Vollständige Zahlung (Ausgabe)': { rows: [], color: "#FFC7CE" },  // Helles Rot
+                'Teilzahlung (Ausgabe)': { rows: [], color: "#FCE4D6" },  // Helles Orange
+                'Gutschrift': { rows: [], color: "#E6E0FF" },  // Helles Lila
+                'Gesellschaftskonto/Holding': { rows: [], color: "#FFEB9C" }  // Helles Gelb
+            };
+
+            // Zeilen nach Kategorien gruppieren
+            matchResults.forEach((matchInfo, index) => {
+                const rowIndex = firstDataRow + index;
+                const matchText = (matchInfo && matchInfo[0]) ? matchInfo[0].toString() : "";
+
+                if (!matchText) return; // Überspringe leere Matches
+
+                if (matchText.includes("Einnahme")) {
+                    if (matchText.includes("Vollständige Zahlung")) {
+                        formatBatches['Vollständige Zahlung (Einnahme)'].rows.push(rowIndex);
+                    } else if (matchText.includes("Teilzahlung")) {
+                        formatBatches['Teilzahlung (Einnahme)'].rows.push(rowIndex);
+                    } else {
+                        formatBatches['Einnahme'].rows.push(rowIndex);
+                    }
+                } else if (matchText.includes("Ausgabe")) {
+                    if (matchText.includes("Vollständige Zahlung")) {
+                        formatBatches['Vollständige Zahlung (Ausgabe)'].rows.push(rowIndex);
+                    } else if (matchText.includes("Teilzahlung")) {
+                        formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
+                    } else {
+                        formatBatches['Ausgabe'].rows.push(rowIndex);
+                    }
+                } else if (matchText.includes("Gutschrift")) {
+                    formatBatches['Gutschrift'].rows.push(rowIndex);
+                } else if (matchText.includes("Gesellschaftskonto") || matchText.includes("Holding")) {
+                    formatBatches['Gesellschaftskonto/Holding'].rows.push(rowIndex);
+                }
+            });
+
+            // Batch-Formatting anwenden
+            Object.values(formatBatches).forEach(batch => {
+                if (batch.rows.length > 0) {
+                    // Gruppen von maximal 20 Zeilen formatieren (API-Limits vermeiden)
+                    const chunkSize = 20;
+                    for (let i = 0; i < batch.rows.length; i += chunkSize) {
+                        const chunk = batch.rows.slice(i, i + chunkSize);
+                        chunk.forEach(rowIndex => {
+                            try {
+                                sheet.getRange(rowIndex, 1, 1, columns.matchInfo)
+                                    .setBackground(batch.color);
+                            } catch (e) {
+                                console.error(`Fehler beim Formatieren von Zeile ${rowIndex}:`, e);
+                            }
+                        });
+
+                        // Kurze Pause um API-Limits zu vermeiden
+                        if (i + chunkSize < batch.rows.length) {
+                            Utilities.sleep(50);
+                        }
+                    }
+                }
+            });
+        };
+
+        /**
+         * Setzt bedingte Formatierung für die Match-Spalte
+         * @param {Sheet} sheet - Das Sheet
+         * @param {string} columnLetter - Buchstabe für die Spalte
+         */
+        const setMatchColumnFormatting = (sheet, columnLetter) => {
+            Helpers.setConditionalFormattingForColumn(sheet, columnLetter, [
+                // Grundlegende Match-Typen mit beginsWith Pattern
+                {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
+                {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
+                {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
+                {value: "Gesellschaftskonto", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
+                {value: "Holding", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
+
+                // Zusätzliche Betragstypen mit contains Pattern
+                {value: "Vollständige Zahlung", background: "#C6EFCE", fontColor: "#006100", pattern: "contains"},
+                {value: "Teilzahlung", background: "#FCE4D6", fontColor: "#974706", pattern: "contains"},
+                {value: "Unsichere Zahlung", background: "#F8CBAD", fontColor: "#843C0C", pattern: "contains"},
+                {value: "Vollständige Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
+                {value: "Teilgutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
+                {value: "Ungewöhnliche Gutschrift", background: "#FFD966", fontColor: "#7F6000", pattern: "contains"}
+            ]);
+        };
+
+        /**
+         * Markiert bezahlte Einnahmen und Ausgaben farblich basierend auf dem Zahlungsstatus
+         * @param {Sheet} einnahmenSheet - Das Einnahmen-Sheet
+         * @param {Sheet} ausgabenSheet - Das Ausgaben-Sheet
+         * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
+         */
+        const markPaidInvoices = (einnahmenSheet, ausgabenSheet, bankZuordnungen) => {
+            // Markiere bezahlte Einnahmen
+            if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
+                markPaidRows(einnahmenSheet, "Einnahmen", bankZuordnungen);
+            }
+
+            // Markiere bezahlte Ausgaben
+            if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
+                markPaidRows(ausgabenSheet, "Ausgaben", bankZuordnungen);
+            }
+        };
+
+        /**
+         * Markiert bezahlte Zeilen in einem Sheet
+         * @param {Sheet} sheet - Das zu aktualisierende Sheet
+         * @param {string} sheetType - Typ des Sheets ("Einnahmen" oder "Ausgaben")
+         * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
+         */
+        const markPaidRows = (sheet, sheetType, bankZuordnungen) => {
+            // Konfiguration für das Sheet
+            const columns = sheetType === "Einnahmen"
+                ? config$1.sheets.einnahmen.columns
+                : config$1.sheets.ausgaben.columns;
+
+            // Hole Werte aus dem Sheet
+            const numRows = sheet.getLastRow() - 1;
+            const data = sheet.getRange(2, 1, numRows, columns.zahlungsdatum).getValues();
+
+            // Batch-Arrays für die verschiedenen Status
+            const fullPaidWithBankRows = [];
+            const fullPaidRows = [];
+            const partialPaidWithBankRows = [];
+            const partialPaidRows = [];
+            const gutschriftRows = [];
+            const normalRows = [];
+
+            // Bank-Abgleich-Updates sammeln
+            const bankAbgleichUpdates = [];
+
+            // Datenzeilen durchgehen und in Kategorien einteilen
+            for (let i = 0; i < data.length; i++) {
+                const row = i + 2; // Aktuelle Zeile im Sheet
+                const nettoBetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
+                const bezahltBetrag = Helpers.parseCurrency(data[i][columns.bezahlt - 1]);
+                const zahlungsDatum = data[i][columns.zahlungsdatum - 1];
+                const referenz = data[i][columns.rechnungsnummer - 1];
+
+                // Prüfe, ob es eine Gutschrift ist
+                const isGutschrift = referenz && referenz.toString().startsWith("G-");
+
+                // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
+                const zuordnungsKey = `${sheetType.toLowerCase().slice(0, -1)}#${row}`;
+                const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
+
+                // Zahlungsstatus berechnen
+                const mwst = Helpers.parseMwstRate(data[i][columns.mwstSatz - 1]) / 100;
+                const bruttoBetrag = nettoBetrag * (1 + mwst);
+                const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
+                const isPartialPaid = !isPaid && bezahltBetrag > 0;
+
+                // Kategorie bestimmen
+                if (isGutschrift) {
+                    gutschriftRows.push(row);
+                    // Bank-Abgleich-Info setzen
+                    if (hatBankzuordnung) {
+                        bankAbgleichUpdates.push({
+                            row,
+                            value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                        });
+                    }
+                } else if (isPaid) {
+                    if (zahlungsDatum) {
+                        if (hatBankzuordnung) {
+                            fullPaidWithBankRows.push(row);
+                            bankAbgleichUpdates.push({
+                                row,
+                                value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                            });
+                        } else {
+                            fullPaidRows.push(row);
+                        }
+                    } else {
+                        // Bezahlt aber kein Datum
+                        partialPaidRows.push(row);
+                    }
+                } else if (isPartialPaid) {
+                    if (hatBankzuordnung) {
+                        partialPaidWithBankRows.push(row);
+                        bankAbgleichUpdates.push({
+                            row,
+                            value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                        });
+                    } else {
+                        partialPaidRows.push(row);
+                    }
+                } else {
+                    // Unbezahlt - normale Zeile
+                    normalRows.push(row);
+                    // Vorhandene Bank-Abgleich-Info entfernen falls vorhanden
+                    if (sheet.getRange(row, columns.bankAbgleich).getValue().toString().startsWith("✓ Bank:")) {
+                        bankAbgleichUpdates.push({
+                            row,
+                            value: ""
+                        });
+                    }
+                }
+            }
+
+            // Färbe Zeilen im Batch-Modus (für bessere Performance)
+            applyColorToRows(sheet, fullPaidWithBankRows, "#C6EFCE"); // Kräftigeres Grün
+            applyColorToRows(sheet, fullPaidRows, "#EAF1DD"); // Helles Grün
+            applyColorToRows(sheet, partialPaidWithBankRows, "#FFC7AA"); // Kräftigeres Orange
+            applyColorToRows(sheet, partialPaidRows, "#FCE4D6"); // Helles Orange
+            applyColorToRows(sheet, gutschriftRows, "#E6E0FF"); // Helles Lila
+            applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
+
+            // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+            if (sheet.getRange(1, columns.bankAbgleich).getValue() === "") {
+                sheet.getRange(1, columns.bankAbgleich).setValue("Bank-Abgleich");
+            }
+
+            // Bank-Abgleich-Updates in Batches ausführen
+            if (bankAbgleichUpdates.length > 0) {
+                // Gruppiere Updates nach Wert für effizientere Batch-Updates
+                const groupedUpdates = {};
+
+                bankAbgleichUpdates.forEach(update => {
+                    const { row, value } = update;
+                    if (!groupedUpdates[value]) {
+                        groupedUpdates[value] = [];
+                    }
+                    groupedUpdates[value].push(row);
+                });
+
+                // Führe Batch-Updates für jede Gruppe aus
+                Object.entries(groupedUpdates).forEach(([value, rows]) => {
+                    // Verarbeite in Batches von maximal 20 Zeilen
+                    const batchSize = 20;
+                    for (let i = 0; i < rows.length; i += batchSize) {
+                        const batchRows = rows.slice(i, i + batchSize);
+                        batchRows.forEach(row => {
+                            sheet.getRange(row, columns.bankAbgleich).setValue(value);
+                        });
+
+                        // Kurze Pause, um API-Limits zu vermeiden
+                        if (i + batchSize < rows.length) {
+                            Utilities.sleep(50);
+                        }
+                    }
+                });
+            }
+        };
+
+        /**
+         * Wendet eine Farbe auf mehrere Zeilen an
+         * @param {Sheet} sheet - Das Sheet
+         * @param {Array} rows - Die zu färbenden Zeilennummern
+         * @param {string|null} color - Die Hintergrundfarbe oder null zum Zurücksetzen
+         */
+        const applyColorToRows = (sheet, rows, color) => {
+            if (!rows || rows.length === 0) return;
+
+            // Verarbeite in Batches von maximal 20 Zeilen
+            const batchSize = 20;
+            for (let i = 0; i < rows.length; i += batchSize) {
+                const batchRows = rows.slice(i, i + batchSize);
+                batchRows.forEach(row => {
+                    try {
+                        const range = sheet.getRange(row, 1, 1, sheet.getLastColumn());
+                        if (color) {
+                            range.setBackground(color);
+                        } else {
+                            range.setBackground(null);
+                        }
+                    } catch (e) {
+                        console.error(`Fehler beim Formatieren von Zeile ${row}:`, e);
+                    }
+                });
+
+                // Kurze Pause um API-Limits zu vermeiden
+                if (i + batchSize < rows.length) {
+                    Utilities.sleep(50);
+                }
+            }
+        };
+
+        /**
+         * Erstellt einen Informationstext für eine Bank-Zuordnung
+         * @param {Object} zuordnung - Die Zuordnungsinformation
+         * @returns {string} - Formatierter Informationstext
+         */
+        const getZuordnungsInfo = (zuordnung) => {
+            if (!zuordnung) return "";
+
+            let infoText = "✓ Bank: " + zuordnung.bankDatum;
+
+            // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
+            if (zuordnung.additional && zuordnung.additional.length > 0) {
+                infoText += " + " + zuordnung.additional.length + " weitere";
+            }
+
+            return infoText;
+        };
+
+        /**
+         * Aktualisiert das aktive Tabellenblatt
+         */
+        const refreshActiveSheet = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const sheet = ss.getActiveSheet();
+                const name = sheet.getName();
+                const ui = SpreadsheetApp.getUi();
+
+                // Cache zurücksetzen
+                clearCache();
+
+                if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
+                    refreshDataSheet(sheet);
+                    ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
+                } else if (name === "Bankbewegungen") {
+                    refreshBankSheet(sheet);
+                    ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
+                } else {
+                    ui.alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
+                }
+            } catch (e) {
+                console.error("Fehler beim Aktualisieren des aktiven Sheets:", e);
+                SpreadsheetApp.getUi().alert("Ein Fehler ist beim Aktualisieren aufgetreten: " + e.toString());
+            }
+        };
+
+        /**
+         * Aktualisiert alle relevanten Tabellenblätter
+         */
+        const refreshAllSheets = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+                // Cache zurücksetzen
+                clearCache();
+
+                // Sheets in der richtigen Reihenfolge aktualisieren, um Abhängigkeiten zu berücksichtigen
+                const refreshOrder = ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"];
+
+                for (const name of refreshOrder) {
+                    const sheet = getSheet(name);
+                    if (sheet) {
+                        name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+                        // Kurze Pause einfügen, um API-Limits zu vermeiden
+                        Utilities.sleep(100);
+                    }
+                }
+            } catch (e) {
+                console.error("Fehler beim Aktualisieren aller Sheets:", e);
+            }
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            refreshActiveSheet,
+            refreshAllSheets
+        };
+    })();
+
+    // file: src/uStVACalculator.js
+
+    /**
+     * Modul zur Berechnung der Umsatzsteuervoranmeldung (UStVA)
+     * Unterstützt die Berechnung nach SKR04 für monatliche und quartalsweise Auswertungen
+     */
+    const UStVACalculator = (() => {
+        // Zwischenspeicher für UStVA-Daten um redundante Berechnung zu vermeiden
+        const _cache = {
+            ustva: null,
+            lastUpdated: null
+        };
+
+        /**
+         * Cache leeren
+         */
+        const clearCache = () => {
+            _cache.ustva = null;
+            _cache.lastUpdated = null;
+        };
+
+        /**
+         * Erstellt ein leeres UStVA-Datenobjekt mit Nullwerten
+         * @returns {Object} Leere UStVA-Datenstruktur
+         */
+        const createEmptyUStVA = () => ({
+            steuerpflichtige_einnahmen: 0,
+            steuerfreie_inland_einnahmen: 0,
+            steuerfreie_ausland_einnahmen: 0,
+            steuerpflichtige_ausgaben: 0,
+            steuerfreie_inland_ausgaben: 0,
+            steuerfreie_ausland_ausgaben: 0,
+            eigenbelege_steuerpflichtig: 0,
+            eigenbelege_steuerfrei: 0,
+            nicht_abzugsfaehige_vst: 0,
+            ust_7: 0,
+            ust_19: 0,
+            vst_7: 0,
+            vst_19: 0
+        });
+
+        /**
+         * Verarbeitet eine Zeile aus den Einnahmen/Ausgaben/Eigenbelegen für die UStVA
+         *
+         * @param {Array} row - Datenzeile aus einem Sheet
+         * @param {Object} data - UStVA-Datenobjekt nach Monaten
+         * @param {boolean} isIncome - Handelt es sich um Einnahmen (true) oder Ausgaben (false)
+         * @param {boolean} isEigen - Handelt es sich um Eigenbelege (true oder false)
+         */
+        const processUStVARow = (row, data, isIncome, isEigen = false) => {
+            try {
+                // Sheet-Typ bestimmen
+                const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
+                const columns = config$1.sheets[sheetType].columns;
+
+                // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+                const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
+                if (!paymentDate || paymentDate > new Date()) return;
+
+                // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
+                const month = Helpers.getMonthFromRow(row, sheetType);
+                if (!month || month < 1 || month > 12) return;
+
+                // Beträge aus der Zeile extrahieren
+                const netto = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+                const restNetto = Helpers.parseCurrency(row[columns.steuerbemessung - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+                const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
+
+                // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
+                if (Helpers.isApproximatelyEqual(gezahlt, 0)) return;
+
+                // MwSt-Satz normalisieren
+                const mwstRate = Helpers.parseMwstRate(row[columns.mwstSatz - 1]);
+                const roundedRate = Math.round(mwstRate);
+
+                // Steuer berechnen
+                const tax = Helpers.round(gezahlt * (mwstRate / 100), 2);
+
+                // Kategorie ermitteln
+                const category = row[columns.kategorie - 1]?.toString().trim() || "";
+
+                // Verarbeitung basierend auf Zeilentyp
+                if (isIncome) {
+                    processIncomeRow(data, month, gezahlt, tax, roundedRate, category);
+                } else if (isEigen) {
+                    processEigenRow(data, month, gezahlt, tax, roundedRate, category);
+                } else {
+                    processExpenseRow(data, month, gezahlt, tax, roundedRate, category);
+                }
+            } catch (e) {
+                console.error("Fehler bei der Verarbeitung einer UStVA-Zeile:", e);
+            }
+        };
+
+        /**
+         * Verarbeitet eine Einnahmenzeile für die UStVA
+         * @param {Object} data - UStVA-Datenobjekt nach Monaten
+         * @param {number} month - Monat (1-12)
+         * @param {number} gezahlt - Gezahlter Betrag
+         * @param {number} tax - Berechnete Steuer
+         * @param {number} roundedRate - Gerundeter Steuersatz
+         * @param {string} category - Kategorie
+         */
+        const processIncomeRow = (data, month, gezahlt, tax, roundedRate, category) => {
+            // EINNAHMEN
+            const catCfg = config$1.einnahmen.categories[category] ?? {};
+            const taxType = catCfg.taxType ?? "steuerpflichtig";
+
+            if (taxType === "steuerfrei_inland") {
+                // Steuerfreie Einnahmen im Inland (z.B. Vermietung)
+                data[month].steuerfreie_inland_einnahmen += gezahlt;
+            } else if (taxType === "steuerfrei_ausland" || !roundedRate) {
+                // Steuerfreie Einnahmen aus dem Ausland oder ohne MwSt
+                data[month].steuerfreie_ausland_einnahmen += gezahlt;
+            } else {
+                // Steuerpflichtige Einnahmen
+                data[month].steuerpflichtige_einnahmen += gezahlt;
+
+                // USt nach Steuersatz addieren
+                // Wir prüfen ob es ein gültiger Steuersatz ist
+                if (roundedRate === 7 || roundedRate === 19) {
+                    data[month][`ust_${roundedRate}`] += tax;
+                }
+            }
+        };
+
+        /**
+         * Verarbeitet eine Eigenbeleg-Zeile für die UStVA
+         * @param {Object} data - UStVA-Datenobjekt nach Monaten
+         * @param {number} month - Monat (1-12)
+         * @param {number} gezahlt - Gezahlter Betrag
+         * @param {number} tax - Berechnete Steuer
+         * @param {number} roundedRate - Gerundeter Steuersatz
+         * @param {string} category - Kategorie
+         */
+        const processEigenRow = (data, month, gezahlt, tax, roundedRate, category) => {
+            // EIGENBELEGE
+            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+            const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+
+            if (taxType === "steuerfrei") {
+                // Steuerfreie Eigenbelege
+                data[month].eigenbelege_steuerfrei += gezahlt;
+            } else if (taxType === "eigenbeleg" && eigenCfg.besonderheit === "bewirtung") {
+                // Bewirtungsbelege (nur 70% der Vorsteuer absetzbar)
+                data[month].eigenbelege_steuerpflichtig += gezahlt;
+
+                if (roundedRate === 7 || roundedRate === 19) {
+                    const vst70 = Helpers.round(tax * 0.7, 2); // 70% absetzbare Vorsteuer
+                    const vst30 = Helpers.round(tax * 0.3, 2); // 30% nicht absetzbar
+                    data[month][`vst_${roundedRate}`] += vst70;
+                    data[month].nicht_abzugsfaehige_vst += vst30;
+                }
+            } else {
+                // Normale steuerpflichtige Eigenbelege
+                data[month].eigenbelege_steuerpflichtig += gezahlt;
+
+                if (roundedRate === 7 || roundedRate === 19) {
+                    data[month][`vst_${roundedRate}`] += tax;
+                }
+            }
+        };
+
+        /**
+         * Verarbeitet eine Ausgabenzeile für die UStVA
+         * @param {Object} data - UStVA-Datenobjekt nach Monaten
+         * @param {number} month - Monat (1-12)
+         * @param {number} gezahlt - Gezahlter Betrag
+         * @param {number} tax - Berechnete Steuer
+         * @param {number} roundedRate - Gerundeter Steuersatz
+         * @param {string} category - Kategorie
+         */
+        const processExpenseRow = (data, month, gezahlt, tax, roundedRate, category) => {
+            // AUSGABEN
+            const catCfg = config$1.ausgaben.categories[category] ?? {};
+            const taxType = catCfg.taxType ?? "steuerpflichtig";
+
+            if (taxType === "steuerfrei_inland") {
+                // Steuerfreie Ausgaben im Inland
+                data[month].steuerfreie_inland_ausgaben += gezahlt;
+            } else if (taxType === "steuerfrei_ausland") {
+                // Steuerfreie Ausgaben im Ausland
+                data[month].steuerfreie_ausland_ausgaben += gezahlt;
+            } else {
+                // Steuerpflichtige Ausgaben
+                data[month].steuerpflichtige_ausgaben += gezahlt;
+
+                if (roundedRate === 7 || roundedRate === 19) {
+                    data[month][`vst_${roundedRate}`] += tax;
+                }
+            }
+        };
+
+        /**
+         * Formatiert eine UStVA-Datenzeile für die Ausgabe
+         *
+         * @param {string} label - Bezeichnung der Zeile (z.B. Monat oder Quartal)
+         * @param {Object} d - UStVA-Datenobjekt für den Zeitraum
+         * @returns {Array} Formatierte Zeile für die Ausgabe
+         */
+        const formatUStVARow = (label, d) => {
+            // Berechnung der USt-Zahlung: USt minus VSt (abzüglich nicht abzugsfähiger VSt)
+            const ustZahlung = Helpers.round(
+                (d.ust_7 + d.ust_19) - ((d.vst_7 + d.vst_19) - d.nicht_abzugsfaehige_vst),
+                2
+            );
+
+            // Berechnung des Gesamtergebnisses: Einnahmen minus Ausgaben (ohne Steueranteil)
+            const ergebnis = Helpers.round(
+                (d.steuerpflichtige_einnahmen + d.steuerfreie_inland_einnahmen + d.steuerfreie_ausland_einnahmen) -
+                (d.steuerpflichtige_ausgaben + d.steuerfreie_inland_ausgaben + d.steuerfreie_ausland_ausgaben +
+                    d.eigenbelege_steuerpflichtig + d.eigenbelege_steuerfrei),
+                2
+            );
+
+            // Formatierte Zeile zurückgeben
+            return [
+                label,
+                d.steuerpflichtige_einnahmen,
+                d.steuerfreie_inland_einnahmen,
+                d.steuerfreie_ausland_einnahmen,
+                d.steuerpflichtige_ausgaben,
+                d.steuerfreie_inland_ausgaben,
+                d.steuerfreie_ausland_ausgaben,
+                d.eigenbelege_steuerpflichtig,
+                d.eigenbelege_steuerfrei,
+                d.nicht_abzugsfaehige_vst,
+                d.ust_7,
+                d.ust_19,
+                d.vst_7,
+                d.vst_19,
+                ustZahlung,
+                ergebnis
+            ];
+        };
+
+        /**
+         * Aggregiert UStVA-Daten für einen Zeitraum (z.B. Quartal oder Jahr)
+         *
+         * @param {Object} data - UStVA-Datenobjekt nach Monaten
+         * @param {number} start - Startmonat (1-12)
+         * @param {number} end - Endmonat (1-12)
+         * @returns {Object} Aggregiertes UStVA-Datenobjekt
+         */
+        const aggregateUStVA = (data, start, end) => {
+            const sum = createEmptyUStVA();
+
+            for (let m = start; m <= end; m++) {
+                if (!data[m]) continue; // Überspringe, falls keine Daten für den Monat
+
+                for (const key in sum) {
+                    sum[key] += data[m][key] || 0;
+                }
+            }
+
+            return sum;
+        };
+
+        /**
+         * Erfasst alle UStVA-Daten aus den verschiedenen Sheets
+         * @returns {Object|null} UStVA-Daten nach Monaten oder null bei Fehler
+         */
+        const collectUStVAData = () => {
+            // Prüfen, ob der Cache aktuelle Daten enthält
+            const now = new Date();
+            if (_cache.ustva && _cache.lastUpdated) {
+                const cacheAge = now - _cache.lastUpdated;
+                if (cacheAge < 5 * 60 * 1000) { // Cache ist jünger als 5 Minuten
+                    return _cache.ustva;
+                }
+            }
+
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+                // Benötigte Sheets abrufen
+                const revenueSheet = ss.getSheetByName("Einnahmen");
+                const expenseSheet = ss.getSheetByName("Ausgaben");
+                const eigenSheet = ss.getSheetByName("Eigenbelege");
+
+                // Prüfen, ob die wichtigsten Sheets vorhanden sind
+                if (!revenueSheet || !expenseSheet) {
+                    console.error("Fehlende Blätter: 'Einnahmen' oder 'Ausgaben' nicht gefunden");
+                    return null;
+                }
+
+                // Sheets validieren
+                if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
+                    console.error("UStVA-Berechnung abgebrochen, da Fehler in den Daten gefunden wurden");
+                    return null;
+                }
+
+                // Daten aus den Sheets laden
+                const revenueData = revenueSheet.getDataRange().getValues();
+                const expenseData = expenseSheet.getDataRange().getValues();
+                const eigenData = eigenSheet ? eigenSheet.getDataRange().getValues() : [];
+
+                // Leere UStVA-Datenstruktur für alle Monate erstellen
+                const ustvaData = Object.fromEntries(
+                    Array.from({length: 12}, (_, i) => [i + 1, createEmptyUStVA()])
+                );
+
+                // Daten für jede Zeile verarbeiten
+                revenueData.slice(1).forEach(row => processUStVARow(row, ustvaData, true));
+                expenseData.slice(1).forEach(row => processUStVARow(row, ustvaData, false));
+                if (eigenData.length) {
+                    eigenData.slice(1).forEach(row => processUStVARow(row, ustvaData, false, true));
+                }
+
+                // Daten cachen
+                _cache.ustva = ustvaData;
+                _cache.lastUpdated = now;
+
+                return ustvaData;
+            } catch (e) {
+                console.error("Fehler beim Sammeln der UStVA-Daten:", e);
+                return null;
+            }
+        };
+
+        /**
+         * Hauptfunktion zur Berechnung der UStVA
+         * Sammelt Daten aus allen relevanten Sheets und erstellt ein UStVA-Sheet
+         */
+        const calculateUStVA = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const ui = SpreadsheetApp.getUi();
+
+                // Daten sammeln
+                const ustvaData = collectUStVAData();
+                if (!ustvaData) {
+                    ui.alert("Die UStVA konnte nicht berechnet werden. Bitte prüfen Sie die Fehleranzeige.");
+                    return;
+                }
+
+                // Ausgabe-Header erstellen
+                const outputRows = [
+                    [
+                        "Zeitraum",
+                        "Steuerpflichtige Einnahmen",
+                        "Steuerfreie Inland-Einnahmen",
+                        "Steuerfreie Ausland-Einnahmen",
+                        "Steuerpflichtige Ausgaben",
+                        "Steuerfreie Inland-Ausgaben",
+                        "Steuerfreie Ausland-Ausgaben",
+                        "Eigenbelege steuerpflichtig",
+                        "Eigenbelege steuerfrei",
+                        "Nicht abzugsfähige VSt (Bewirtung)",
+                        "USt 7%",
+                        "USt 19%",
+                        "VSt 7%",
+                        "VSt 19%",
+                        "USt-Zahlung",
+                        "Ergebnis"
+                    ]
+                ];
+
+                // Monatliche Daten ausgeben
+                config$1.common.months.forEach((name, i) => {
+                    const month = i + 1;
+                    outputRows.push(formatUStVARow(name, ustvaData[month]));
+
+                    // Nach jedem Quartal eine Zusammenfassung einfügen
+                    if (month % 3 === 0) {
+                        const quartalsNummer = month / 3;
+                        const quartalsStart = month - 2;
+                        outputRows.push(formatUStVARow(
+                            `Quartal ${quartalsNummer}`,
+                            aggregateUStVA(ustvaData, quartalsStart, month)
+                        ));
+                    }
+                });
+
+                // Jahresergebnis anfügen
+                outputRows.push(formatUStVARow("Gesamtjahr", aggregateUStVA(ustvaData, 1, 12)));
+
+                // UStVA-Sheet erstellen oder aktualisieren
+                let ustvaSheet = ss.getSheetByName("UStVA");
+                if (!ustvaSheet) {
+                    ustvaSheet = ss.insertSheet("UStVA");
+                } else {
+                    ustvaSheet.clearContents();
+                }
+
+                // Daten in das Sheet schreiben mit optimiertem Batch-Update
+                const dataRange = ustvaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+                dataRange.setValues(outputRows);
+
+                // Header formatieren
+                ustvaSheet.getRange(1, 1, 1, outputRows[0].length).setFontWeight("bold");
+
+                // Quartalszellen formatieren
+                for (let i = 0; i < 4; i++) {
+                    const row = 3 * (i + 1) + 1 + i; // Position der Quartalszeile
+                    ustvaSheet.getRange(row, 1, 1, outputRows[0].length).setBackground("#e6f2ff");
+                }
+
+                // Jahreszeile formatieren
+                ustvaSheet.getRange(outputRows.length, 1, 1, outputRows[0].length)
+                    .setBackground("#d9e6f2")
+                    .setFontWeight("bold");
+
+                // Währungsformat für Beträge (Spalten 2-16)
+                ustvaSheet.getRange(2, 2, outputRows.length - 1, 15).setNumberFormat("#,##0.00 €");
+
+                // Spaltenbreiten anpassen
+                ustvaSheet.autoResizeColumns(1, outputRows[0].length);
+
+                // UStVA-Sheet aktivieren
+                ss.setActiveSheet(ustvaSheet);
+
+                ui.alert("UStVA wurde erfolgreich aktualisiert!");
+                return true;
+            } catch (e) {
+                console.error("Fehler bei der UStVA-Berechnung:", e);
+                SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
+                return false;
+            }
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            calculateUStVA,
+            clearCache,
+            // Für Testzwecke könnten hier weitere Funktionen exportiert werden
+            _internal: {
+                createEmptyUStVA,
+                processUStVARow,
+                formatUStVARow,
+                aggregateUStVA
+            }
+        };
+    })();
+
+    // file: src/bWACalculator.js
+
+    /**
+     * Modul zur Berechnung der Betriebswirtschaftlichen Auswertung (BWA)
+     */
+    const BWACalculator = (() => {
+        // Cache für berechnete BWA-Daten
+        const _cache = {
+            bwaData: null,
+            lastCalculated: null
+        };
+
+        /**
+         * Cache zurücksetzen
+         */
+        const clearCache = () => {
+            _cache.bwaData = null;
+            _cache.lastCalculated = null;
+        };
+
+        /**
+         * Erstellt ein leeres BWA-Datenobjekt mit Nullwerten
+         * @returns {Object} Leere BWA-Datenstruktur
+         */
+        const createEmptyBWA = () => ({
+            // Gruppe 1: Betriebserlöse (Einnahmen)
+            umsatzerloese: 0,
+            provisionserloese: 0,
+            steuerfreieInlandEinnahmen: 0,
+            steuerfreieAuslandEinnahmen: 0,
+            sonstigeErtraege: 0,
+            vermietung: 0,
+            zuschuesse: 0,
+            waehrungsgewinne: 0,
+            anlagenabgaenge: 0,
+            gesamtErloese: 0,
+
+            // Gruppe 2: Materialaufwand & Wareneinsatz
+            wareneinsatz: 0,
+            fremdleistungen: 0,
+            rohHilfsBetriebsstoffe: 0,
+            gesamtWareneinsatz: 0,
+
+            // Gruppe 3: Betriebsausgaben (Sachkosten)
+            bruttoLoehne: 0,
+            sozialeAbgaben: 0,
+            sonstigePersonalkosten: 0,
+            werbungMarketing: 0,
+            reisekosten: 0,
+            versicherungen: 0,
+            telefonInternet: 0,
+            buerokosten: 0,
+            fortbildungskosten: 0,
+            kfzKosten: 0,
+            sonstigeAufwendungen: 0,
+            gesamtBetriebsausgaben: 0,
+
+            // Gruppe 4: Abschreibungen & Zinsen
+            abschreibungenMaschinen: 0,
+            abschreibungenBueromaterial: 0,
+            abschreibungenImmateriell: 0,
+            zinsenBank: 0,
+            zinsenGesellschafter: 0,
+            leasingkosten: 0,
+            gesamtAbschreibungenZinsen: 0,
+
+            // Gruppe 5: Besondere Posten (Kapitalbewegungen)
+            eigenkapitalveraenderungen: 0,
+            gesellschafterdarlehen: 0,
+            ausschuettungen: 0,
+            gesamtBesonderePosten: 0,
+
+            // Gruppe 6: Rückstellungen
+            steuerrueckstellungen: 0,
+            rueckstellungenSonstige: 0,
+            gesamtRueckstellungenTransfers: 0,
+
+            // Gruppe 7: EBIT
+            ebit: 0,
+
+            // Gruppe 8: Steuern & Vorsteuer
+            umsatzsteuer: 0,
+            vorsteuer: 0,
+            nichtAbzugsfaehigeVSt: 0,
+            koerperschaftsteuer: 0,
+            solidaritaetszuschlag: 0,
+            gewerbesteuer: 0,
+            gewerbesteuerRueckstellungen: 0,
+            sonstigeSteuerrueckstellungen: 0,
+            steuerlast: 0,
+
+            // Gruppe 9: Jahresüberschuss/-fehlbetrag
+            gewinnNachSteuern: 0,
+
+            // Eigenbelege (zur Aggregation)
+            eigenbelegeSteuerfrei: 0,
+            eigenbelegeSteuerpflichtig: 0
+        });
+
+        /**
+         * Verarbeitet Einnahmen und ordnet sie den BWA-Kategorien zu
+         * @param {Array} row - Zeile aus dem Einnahmen-Sheet
+         * @param {Object} bwaData - BWA-Datenstruktur
+         */
+        const processRevenue = (row, bwaData) => {
+            try {
+                const columns = config$1.sheets.einnahmen.columns;
+
+                const m = Helpers.getMonthFromRow(row, "einnahmen");
+                if (!m) return;
+
+                const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+                if (amount === 0) return;
+
+                const category = row[columns.kategorie - 1]?.toString().trim() || "";
+
+                // Nicht-betriebliche Buchungen ignorieren
+                if (["Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) return;
+
+                // Direkte Zuordnung basierend auf der Kategorie
+                switch (category) {
+                    case "Sonstige betriebliche Erträge":
+                        bwaData[m].sonstigeErtraege += amount;
+                        return;
+                    case "Erträge aus Vermietung/Verpachtung":
+                        bwaData[m].vermietung += amount;
+                        return;
+                    case "Erträge aus Zuschüssen":
+                        bwaData[m].zuschuesse += amount;
+                        return;
+                    case "Erträge aus Währungsgewinnen":
+                        bwaData[m].waehrungsgewinne += amount;
+                        return;
+                    case "Erträge aus Anlagenabgängen":
+                        bwaData[m].anlagenabgaenge += amount;
+                        return;
+                }
+
+                // BWA-Mapping aus Konfiguration verwenden
+                const mapping = config$1.einnahmen.bwaMapping[category];
+                if (mapping === "umsatzerloese" || mapping === "provisionserloese") {
+                    bwaData[m][mapping] += amount;
+                    return;
+                }
+
+                // Kategorisierung nach Steuersatz
+                if (Helpers.parseMwstRate(row[columns.mwstSatz - 1]) === 0) {
+                    bwaData[m].steuerfreieInlandEinnahmen += amount;
+                } else {
+                    bwaData[m].umsatzerloese += amount;
+                }
+            } catch (e) {
+                console.error("Fehler bei der Verarbeitung einer Einnahme:", e);
+            }
+        };
+
+        /**
+         * Verarbeitet Ausgaben und ordnet sie den BWA-Kategorien zu
+         * @param {Array} row - Zeile aus dem Ausgaben-Sheet
+         * @param {Object} bwaData - BWA-Datenstruktur
+         */
+        const processExpense = (row, bwaData) => {
+            try {
+                const columns = config$1.sheets.ausgaben.columns;
+
+                const m = Helpers.getMonthFromRow(row, "ausgaben");
+                if (!m) return;
+
+                const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+                if (amount === 0) return;
+
+                const category = row[columns.kategorie - 1]?.toString().trim() || "";
+
+                // Nicht-betriebliche Positionen ignorieren
+                if (["Privatentnahme", "Privateinlage", "Holding Transfers",
+                    "Gewinnvortrag", "Verlustvortrag", "Gewinnvortrag/Verlustvortrag"].includes(category)) {
+                    return;
+                }
+
+                // Direkte Zuordnung basierend auf der Kategorie
+                switch (category) {
+                    case "Bruttolöhne & Gehälter":
+                        bwaData[m].bruttoLoehne += amount;
+                        return;
+                    case "Soziale Abgaben & Arbeitgeberanteile":
+                        bwaData[m].sozialeAbgaben += amount;
+                        return;
+                    case "Sonstige Personalkosten":
+                        bwaData[m].sonstigePersonalkosten += amount;
+                        return;
+                    case "Gewerbesteuerrückstellungen":
+                        bwaData[m].gewerbesteuerRueckstellungen += amount;
+                        return;
+                    case "Telefon & Internet":
+                        bwaData[m].telefonInternet += amount;
+                        return;
+                    case "Bürokosten":
+                        bwaData[m].buerokosten += amount;
+                        return;
+                    case "Fortbildungskosten":
+                        bwaData[m].fortbildungskosten += amount;
+                        return;
+                }
+
+                // BWA-Mapping aus Konfiguration verwenden
+                const mapping = config$1.ausgaben.bwaMapping[category];
+                if (!mapping) {
+                    bwaData[m].sonstigeAufwendungen += amount;
+                    return;
+                }
+
+                // Zuordnung basierend auf dem BWA-Mapping
+                switch (mapping) {
+                    case "wareneinsatz":
+                        bwaData[m].wareneinsatz += amount;
+                        break;
+                    case "fremdleistungen":
+                        bwaData[m].fremdleistungen += amount;
+                        break;
+                    case "rohHilfsBetriebsstoffe":
+                        bwaData[m].rohHilfsBetriebsstoffe += amount;
+                        break;
+                    case "werbungMarketing":
+                        bwaData[m].werbungMarketing += amount;
+                        break;
+                    case "reisekosten":
+                        bwaData[m].reisekosten += amount;
+                        break;
+                    case "versicherungen":
+                        bwaData[m].versicherungen += amount;
+                        break;
+                    case "kfzKosten":
+                        bwaData[m].kfzKosten += amount;
+                        break;
+                    case "abschreibungenMaschinen":
+                        bwaData[m].abschreibungenMaschinen += amount;
+                        break;
+                    case "abschreibungenBueromaterial":
+                        bwaData[m].abschreibungenBueromaterial += amount;
+                        break;
+                    case "abschreibungenImmateriell":
+                        bwaData[m].abschreibungenImmateriell += amount;
+                        break;
+                    case "zinsenBank":
+                        bwaData[m].zinsenBank += amount;
+                        break;
+                    case "zinsenGesellschafter":
+                        bwaData[m].zinsenGesellschafter += amount;
+                        break;
+                    case "leasingkosten":
+                        bwaData[m].leasingkosten += amount;
+                        break;
+                    case "koerperschaftsteuer":
+                        bwaData[m].koerperschaftsteuer += amount;
+                        break;
+                    case "solidaritaetszuschlag":
+                        bwaData[m].solidaritaetszuschlag += amount;
+                        break;
+                    case "gewerbesteuer":
+                        bwaData[m].gewerbesteuer += amount;
+                        break;
+                    default:
+                        bwaData[m].sonstigeAufwendungen += amount;
+                }
+            } catch (e) {
+                console.error("Fehler bei der Verarbeitung einer Ausgabe:", e);
+            }
+        };
+
+        /**
+         * Verarbeitet Eigenbelege und ordnet sie den BWA-Kategorien zu
+         * @param {Array} row - Zeile aus dem Eigenbelege-Sheet
+         * @param {Object} bwaData - BWA-Datenstruktur
+         */
+        const processEigen = (row, bwaData) => {
+            try {
+                const columns = config$1.sheets.eigenbelege.columns;
+
+                const m = Helpers.getMonthFromRow(row, "eigenbelege");
+                if (!m) return;
+
+                const amount = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
+                if (amount === 0) return;
+
+                const category = row[columns.kategorie - 1]?.toString().trim() || "";
+                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+                const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+
+                // Basierend auf Steuertyp zuordnen
+                if (taxType === "steuerfrei") {
+                    bwaData[m].eigenbelegeSteuerfrei += amount;
+                } else {
+                    bwaData[m].eigenbelegeSteuerpflichtig += amount;
+                }
+            } catch (e) {
+                console.error("Fehler bei der Verarbeitung eines Eigenbelegs:", e);
+            }
+        };
+
+        /**
+         * Berechnet Gruppensummen und abgeleitete Werte für alle Monate
+         * @param {Object} bwaData - BWA-Datenstruktur mit Rohdaten
+         */
+        const calculateAggregates = (bwaData) => {
+            for (let m = 1; m <= 12; m++) {
+                const d = bwaData[m];
+
+                // Erlöse
+                d.gesamtErloese = Helpers.round(
+                    d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen +
+                    d.steuerfreieAuslandEinnahmen + d.sonstigeErtraege + d.vermietung +
+                    d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge,
+                    2
+                );
+
+                // Materialkosten
+                d.gesamtWareneinsatz = Helpers.round(
+                    d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe,
+                    2
+                );
+
+                // Betriebsausgaben
+                d.gesamtBetriebsausgaben = Helpers.round(
+                    d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
+                    d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
+                    d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen,
+                    2
+                );
+
+                // Abschreibungen & Zinsen
+                d.gesamtAbschreibungenZinsen = Helpers.round(
+                    d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
+                    d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter +
+                    d.leasingkosten,
+                    2
+                );
+
+                // Besondere Posten
+                d.gesamtBesonderePosten = Helpers.round(
+                    d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen,
+                    2
+                );
+
+                // Rückstellungen
+                d.gesamtRueckstellungenTransfers = Helpers.round(
+                    d.steuerrueckstellungen + d.rueckstellungenSonstige,
+                    2
+                );
+
+                // EBIT
+                d.ebit = Helpers.round(
+                    d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben +
+                        d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten),
+                    2
+                );
+
+                // Steuern berechnen
+                const taxConfig = config$1.tax.isHolding ? config$1.tax.holding : config$1.tax.operative;
+
+                // Für Holdings gelten spezielle Steuersätze wegen Beteiligungsprivileg
+                const steuerfaktor = config$1.tax.isHolding
+                    ? taxConfig.gewinnUebertragSteuerpflichtig / 100
+                    : 1;
+
+                d.gewerbesteuer = Helpers.round(d.ebit * (taxConfig.gewerbesteuer / 10000) * steuerfaktor, 2);
+                d.koerperschaftsteuer = Helpers.round(d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor, 2);
+                d.solidaritaetszuschlag = Helpers.round(d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100), 2);
+
+                // Gesamte Steuerlast
+                d.steuerlast = Helpers.round(
+                    d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer,
+                    2
+                );
+
+                // Gewinn nach Steuern
+                d.gewinnNachSteuern = Helpers.round(d.ebit - d.steuerlast, 2);
+            }
+        };
+
+        /**
+         * Sammelt alle BWA-Daten aus den verschiedenen Sheets
+         * @returns {Object|null} BWA-Datenstruktur oder null bei Fehler
+         */
+        const aggregateBWAData = () => {
+            try {
+                // Prüfen ob Cache gültig ist (maximal 5 Minuten alt)
+                const now = new Date();
+                if (_cache.bwaData && _cache.lastCalculated) {
+                    const cacheAge = now - _cache.lastCalculated;
+                    if (cacheAge < 5 * 60 * 1000) { // 5 Minuten
+                        return _cache.bwaData;
+                    }
+                }
+
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const revenueSheet = ss.getSheetByName("Einnahmen");
+                const expenseSheet = ss.getSheetByName("Ausgaben");
+                const eigenSheet = ss.getSheetByName("Eigenbelege");
+
+                if (!revenueSheet || !expenseSheet) {
+                    console.error("Fehlendes Blatt: 'Einnahmen' oder 'Ausgaben'");
+                    return null;
+                }
+
+                // BWA-Daten für alle Monate initialisieren
+                const bwaData = Object.fromEntries(Array.from({length: 12}, (_, i) => [i + 1, createEmptyBWA()]));
+
+                // Daten aus den Sheets verarbeiten
+                revenueSheet.getDataRange().getValues().slice(1).forEach(row => processRevenue(row, bwaData));
+                expenseSheet.getDataRange().getValues().slice(1).forEach(row => processExpense(row, bwaData));
+                if (eigenSheet) eigenSheet.getDataRange().getValues().slice(1).forEach(row => processEigen(row, bwaData));
+
+                // Gruppensummen und weitere Berechnungen
+                calculateAggregates(bwaData);
+
+                // Daten im Cache speichern
+                _cache.bwaData = bwaData;
+                _cache.lastCalculated = now;
+
+                return bwaData;
+            } catch (e) {
+                console.error("Fehler bei der Aggregation der BWA-Daten:", e);
+                return null;
+            }
+        };
+
+        /**
+         * Erstellt den Header für die BWA mit Monats- und Quartalsspalten
+         * @returns {Array} Header-Zeile
+         */
+        const buildHeaderRow = () => {
+            const headers = ["Kategorie"];
+            for (let q = 0; q < 4; q++) {
+                for (let m = q * 3; m < q * 3 + 3; m++) {
+                    headers.push(`${config$1.common.months[m]} (€)`);
+                }
+                headers.push(`Q${q + 1} (€)`);
+            }
+            headers.push("Jahr (€)");
+            return headers;
+        };
+
+        /**
+         * Erstellt eine Ausgabezeile für eine Position
+         * @param {Object} pos - Position mit Label und Wert-Funktion
+         * @param {Object} bwaData - BWA-Daten
+         * @returns {Array} Formatierte Zeile
+         */
+        const buildOutputRow = (pos, bwaData) => {
+            const monthly = [];
+            let yearly = 0;
+
+            // Monatswerte berechnen
+            for (let m = 1; m <= 12; m++) {
+                const val = pos.get(bwaData[m]) || 0;
+                monthly.push(val);
+                yearly += val;
+            }
+
+            // Quartalswerte berechnen
+            const quarters = [0, 0, 0, 0];
+            for (let i = 0; i < 12; i++) {
+                quarters[Math.floor(i / 3)] += monthly[i];
+            }
+
+            // Runde alle Werte für bessere Darstellung
+            const roundedMonthly = monthly.map(val => Helpers.round(val, 2));
+            const roundedQuarters = quarters.map(val => Helpers.round(val, 2));
+            const roundedYearly = Helpers.round(yearly, 2);
+
+            // Zeile zusammenstellen
+            return [pos.label,
+                ...roundedMonthly.slice(0, 3), roundedQuarters[0],
+                ...roundedMonthly.slice(3, 6), roundedQuarters[1],
+                ...roundedMonthly.slice(6, 9), roundedQuarters[2],
+                ...roundedMonthly.slice(9, 12), roundedQuarters[3],
+                roundedYearly];
+        };
+
+        /**
+         * Hauptfunktion zur Berechnung der BWA
+         */
+        const calculateBWA = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const bwaData = aggregateBWAData();
+                if (!bwaData) {
+                    SpreadsheetApp.getUi().alert("Fehler: BWA-Daten konnten nicht generiert werden.");
+                    return;
+                }
+
+                // Positionen für die BWA definieren
+                const positions = [
+                    {label: "Erlöse aus Lieferungen und Leistungen", get: d => d.umsatzerloese || 0},
+                    {label: "Provisionserlöse", get: d => d.provisionserloese || 0},
+                    {label: "Steuerfreie Inland-Einnahmen", get: d => d.steuerfreieInlandEinnahmen || 0},
+                    {label: "Steuerfreie Ausland-Einnahmen", get: d => d.steuerfreieAuslandEinnahmen || 0},
+                    {label: "Sonstige betriebliche Erträge", get: d => d.sonstigeErtraege || 0},
+                    {label: "Erträge aus Vermietung/Verpachtung", get: d => d.vermietung || 0},
+                    {label: "Erträge aus Zuschüssen", get: d => d.zuschuesse || 0},
+                    {label: "Erträge aus Währungsgewinnen", get: d => d.waehrungsgewinne || 0},
+                    {label: "Erträge aus Anlagenabgängen", get: d => d.anlagenabgaenge || 0},
+                    {label: "Betriebserlöse", get: d => d.gesamtErloese || 0},
+                    {label: "Wareneinsatz", get: d => d.wareneinsatz || 0},
+                    {label: "Bezogene Leistungen", get: d => d.fremdleistungen || 0},
+                    {label: "Roh-, Hilfs- & Betriebsstoffe", get: d => d.rohHilfsBetriebsstoffe || 0},
+                    {label: "Gesamtkosten Material & Fremdleistungen", get: d => d.gesamtWareneinsatz || 0},
+                    {label: "Bruttolöhne & Gehälter", get: d => d.bruttoLoehne || 0},
+                    {label: "Soziale Abgaben & Arbeitgeberanteile", get: d => d.sozialeAbgaben || 0},
+                    {label: "Sonstige Personalkosten", get: d => d.sonstigePersonalkosten || 0},
+                    {label: "Werbung & Marketing", get: d => d.werbungMarketing || 0},
+                    {label: "Reisekosten", get: d => d.reisekosten || 0},
+                    {label: "Versicherungen", get: d => d.versicherungen || 0},
+                    {label: "Telefon & Internet", get: d => d.telefonInternet || 0},
+                    {label: "Bürokosten", get: d => d.buerokosten || 0},
+                    {label: "Fortbildungskosten", get: d => d.fortbildungskosten || 0},
+                    {label: "Kfz-Kosten", get: d => d.kfzKosten || 0},
+                    {label: "Sonstige betriebliche Aufwendungen", get: d => d.sonstigeAufwendungen || 0},
+                    {label: "Abschreibungen Maschinen", get: d => d.abschreibungenMaschinen || 0},
+                    {label: "Abschreibungen Büroausstattung", get: d => d.abschreibungenBueromaterial || 0},
+                    {label: "Abschreibungen immaterielle Wirtschaftsgüter", get: d => d.abschreibungenImmateriell || 0},
+                    {label: "Zinsen auf Bankdarlehen", get: d => d.zinsenBank || 0},
+                    {label: "Zinsen auf Gesellschafterdarlehen", get: d => d.zinsenGesellschafter || 0},
+                    {label: "Leasingkosten", get: d => d.leasingkosten || 0},
+                    {label: "Gesamt Abschreibungen & Zinsen", get: d => d.gesamtAbschreibungenZinsen || 0},
+                    {label: "Eigenkapitalveränderungen", get: d => d.eigenkapitalveraenderungen || 0},
+                    {label: "Gesellschafterdarlehen", get: d => d.gesellschafterdarlehen || 0},
+                    {label: "Ausschüttungen an Gesellschafter", get: d => d.ausschuettungen || 0},
+                    {label: "Steuerrückstellungen", get: d => d.steuerrueckstellungen || 0},
+                    {label: "Rückstellungen sonstige", get: d => d.rueckstellungenSonstige || 0},
+                    {label: "Betriebsergebnis vor Steuern (EBIT)", get: d => d.ebit || 0},
+                    {label: "Umsatzsteuer (abzuführen)", get: d => d.umsatzsteuer || 0},
+                    {label: "Vorsteuer", get: d => d.vorsteuer || 0},
+                    {label: "Nicht abzugsfähige VSt (Bewirtung)", get: d => d.nichtAbzugsfaehigeVSt || 0},
+                    {label: "Körperschaftsteuer", get: d => d.koerperschaftsteuer || 0},
+                    {label: "Solidaritätszuschlag", get: d => d.solidaritaetszuschlag || 0},
+                    {label: "Gewerbesteuer", get: d => d.gewerbesteuer || 0},
+                    {label: "Gesamtsteueraufwand", get: d => d.steuerlast || 0},
+                    {label: "Jahresüberschuss/-fehlbetrag", get: d => d.gewinnNachSteuern || 0}
+                ];
+
+                // Header-Zeile erstellen
+                const headerRow = buildHeaderRow();
+                const outputRows = [headerRow];
+
+                // Gruppenhierarchie für BWA
+                const bwaGruppen = [
+                    {titel: "Betriebserlöse (Einnahmen)", count: 10},
+                    {titel: "Materialaufwand & Wareneinsatz", count: 4},
+                    {titel: "Betriebsausgaben (Sachkosten)", count: 11},
+                    {titel: "Abschreibungen & Zinsen", count: 7},
+                    {titel: "Besondere Posten", count: 3},
+                    {titel: "Rückstellungen", count: 2},
+                    {titel: "Betriebsergebnis vor Steuern (EBIT)", count: 1},
+                    {titel: "Steuern & Vorsteuer", count: 7},
+                    {titel: "Jahresüberschuss/-fehlbetrag", count: 1}
+                ];
+
+                // Ausgabe mit Gruppenhierarchie erstellen
+                let posIndex = 0;
+                for (let gruppenIndex = 0; gruppenIndex < bwaGruppen.length; gruppenIndex++) {
+                    const gruppe = bwaGruppen[gruppenIndex];
+
+                    // Gruppenüberschrift
+                    outputRows.push([
+                        `${gruppenIndex + 1}. ${gruppe.titel}`,
+                        ...Array(headerRow.length - 1).fill("")
+                    ]);
+
+                    // Gruppenpositionen
+                    for (let i = 0; i < gruppe.count; i++) {
+                        outputRows.push(buildOutputRow(positions[posIndex++], bwaData));
+                    }
+
+                    // Leerzeile nach jeder Gruppe außer der letzten
+                    if (gruppenIndex < bwaGruppen.length - 1) {
+                        outputRows.push(Array(headerRow.length).fill(""));
+                    }
+                }
+
+                // BWA-Sheet erstellen oder aktualisieren
+                let bwaSheet = ss.getSheetByName("BWA");
+                if (!bwaSheet) {
+                    bwaSheet = ss.insertSheet("BWA");
+                } else {
+                    bwaSheet.clearContents();
+                }
+
+                // Daten in das Sheet schreiben (als Batch für Performance)
+                const dataRange = bwaSheet.getRange(1, 1, outputRows.length, outputRows[0].length);
+                dataRange.setValues(outputRows);
+
+                // Formatierungen anwenden
+                applyBwaFormatting(bwaSheet, headerRow.length, bwaGruppen, outputRows.length);
+
+                // Erfolgsbenachrichtigung
+                SpreadsheetApp.getUi().alert("BWA wurde aktualisiert!");
+
+                // BWA-Sheet aktivieren
+                ss.setActiveSheet(bwaSheet);
+
+                return true;
+
+            } catch (e) {
+                console.error("Fehler bei der BWA-Berechnung:", e);
+                SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + e.toString());
+                return false;
+            }
+        };
+
+        /**
+         * Wendet Formatierungen auf das BWA-Sheet an
+         * @param {Sheet} sheet - Das zu formatierende Sheet
+         * @param {number} headerLength - Anzahl der Spalten
+         * @param {Array} bwaGruppen - Gruppenhierarchie
+         * @param {number} totalRows - Gesamtzahl der Zeilen
+         */
+        const applyBwaFormatting = (sheet, headerLength, bwaGruppen, totalRows) => {
+            // Header formatieren
+            sheet.getRange(1, 1, 1, headerLength).setFontWeight("bold").setBackground("#f3f3f3");
+
+            // Gruppenüberschriften formatieren
+            let rowIndex = 2;
+            for (const gruppe of bwaGruppen) {
+                sheet.getRange(rowIndex, 1).setFontWeight("bold");
+                rowIndex += gruppe.count + 1; // +1 für die Leerzeile
+            }
+
+            // Währungsformat für alle Zahlenwerte
+            sheet.getRange(2, 2, totalRows - 1, headerLength - 1).setNumberFormat("#,##0.00 €");
+
+            // Summen-Zeilen hervorheben
+            const summenZeilen = [11, 15, 26, 33, 36, 38, 39, 46];
+            summenZeilen.forEach(row => {
+                if (row <= totalRows) {
+                    sheet.getRange(row, 1, 1, headerLength).setBackground("#e6f2ff");
+                }
+            });
+
+            // EBIT und Jahresüberschuss hervorheben
+            sheet.getRange(39, 1, 1, headerLength).setFontWeight("bold");
+            sheet.getRange(46, 1, 1, headerLength).setFontWeight("bold");
+
+            // Spaltenbreiten anpassen
+            sheet.autoResizeColumns(1, headerLength);
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            calculateBWA,
+            clearCache,
+            // Für Testzwecke könnten hier weitere Funktionen exportiert werden
+            _internal: {
+                createEmptyBWA,
+                processRevenue,
+                processExpense,
+                processEigen,
+                aggregateBWAData
+            }
+        };
+    })();
+
+    // file: src/bilanzCalculator.js
+
+    /**
+     * Modul zur Erstellung einer Bilanz nach SKR04
+     * Erstellt eine standardkonforme Bilanz basierend auf den Daten aus anderen Sheets
+     */
+    const BilanzCalculator = (() => {
+        // Cache für Bilanzdaten
+        const _cache = {
+            bilanzData: null,
+            lastCalculated: null
+        };
+
+        /**
+         * Cache leeren
+         */
+        const clearCache = () => {
+            _cache.bilanzData = null;
+            _cache.lastCalculated = null;
+        };
+
+        /**
+         * Erstellt eine leere Bilanz-Datenstruktur
+         * @returns {Object} Leere Bilanz-Datenstruktur
+         */
+        const createEmptyBilanz = () => ({
+            // Aktiva (Vermögenswerte)
+            aktiva: {
+                // Anlagevermögen
+                sachanlagen: 0,                 // SKR04: 0400-0699, Sachanlagen
+                immaterielleVermoegen: 0,       // SKR04: 0100-0199, Immaterielle Vermögensgegenstände
+                finanzanlagen: 0,               // SKR04: 0700-0899, Finanzanlagen
+                summeAnlagevermoegen: 0,        // Summe Anlagevermögen
+
+                // Umlaufvermögen
+                bankguthaben: 0,                // SKR04: 1200, Bank
+                kasse: 0,                       // SKR04: 1210, Kasse
+                forderungenLuL: 0,              // SKR04: 1300-1370, Forderungen aus Lieferungen und Leistungen
+                vorraete: 0,                    // SKR04: 1400-1590, Vorräte
+                summeUmlaufvermoegen: 0,        // Summe Umlaufvermögen
+
+                // Rechnungsabgrenzung
+                rechnungsabgrenzung: 0,         // SKR04: 1900-1990, Aktiver Rechnungsabgrenzungsposten
+
+                // Gesamtsumme
+                summeAktiva: 0                  // Summe aller Aktiva
+            },
+
+            // Passiva (Kapital und Schulden)
+            passiva: {
+                // Eigenkapital
+                stammkapital: 0,                // SKR04: 2000, Gezeichnetes Kapital
+                kapitalruecklagen: 0,           // SKR04: 2100, Kapitalrücklage
+                gewinnvortrag: 0,               // SKR04: 2970, Gewinnvortrag
+                verlustvortrag: 0,              // SKR04: 2978, Verlustvortrag
+                jahresueberschuss: 0,           // Jahresüberschuss aus BWA
+                summeEigenkapital: 0,           // Summe Eigenkapital
+
+                // Verbindlichkeiten
+                bankdarlehen: 0,                // SKR04: 3150, Verbindlichkeiten gegenüber Kreditinstituten
+                gesellschafterdarlehen: 0,      // SKR04: 3300, Verbindlichkeiten gegenüber Gesellschaftern
+                verbindlichkeitenLuL: 0,        // SKR04: 3200, Verbindlichkeiten aus Lieferungen und Leistungen
+                steuerrueckstellungen: 0,       // SKR04: 3060, Steuerrückstellungen
+                summeVerbindlichkeiten: 0,      // Summe Verbindlichkeiten
+
+                // Rechnungsabgrenzung
+                rechnungsabgrenzung: 0,         // SKR04: 3800-3990, Passiver Rechnungsabgrenzungsposten
+
+                // Gesamtsumme
+                summePassiva: 0                 // Summe aller Passiva
+            }
+        });
+
+        /**
+         * Sammelt Daten aus verschiedenen Sheets für die Bilanz
+         * @returns {Object} Bilanz-Datenstruktur mit befüllten Werten
+         */
+        const aggregateBilanzData = () => {
+            try {
+                // Prüfen ob Cache gültig ist (maximal 5 Minuten alt)
+                const now = new Date();
+                if (_cache.bilanzData && _cache.lastCalculated) {
+                    const cacheAge = now - _cache.lastCalculated;
+                    if (cacheAge < 5 * 60 * 1000) { // 5 Minuten
+                        return _cache.bilanzData;
+                    }
+                }
+
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const bilanzData = createEmptyBilanz();
+
+                // Spalten-Konfigurationen für die verschiedenen Sheets abrufen
+                const bankCols = config$1.sheets.bankbewegungen.columns;
+                const ausgabenCols = config$1.sheets.ausgaben.columns;
+                const gesellschafterCols = config$1.sheets.gesellschafterkonto.columns;
+
+                // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
+                const bankSheet = ss.getSheetByName("Bankbewegungen");
+                if (bankSheet) {
+                    const lastRow = bankSheet.getLastRow();
+                    if (lastRow >= 1) {
+                        const label = bankSheet.getRange(lastRow, bankCols.buchungstext).getValue().toString().toLowerCase();
+                        if (label === "endsaldo") {
+                            bilanzData.aktiva.bankguthaben = Helpers.parseCurrency(
+                                bankSheet.getRange(lastRow, bankCols.saldo).getValue()
+                            );
+                        }
+                    }
+                }
+
+                // 2. Jahresüberschuss aus "BWA" (Letzte Zeile, sofern dort "Jahresüberschuss" vorkommt)
+                const bwaSheet = ss.getSheetByName("BWA");
+                if (bwaSheet) {
+                    const data = bwaSheet.getDataRange().getValues();
+                    for (let i = data.length - 1; i >= 0; i--) {
+                        const row = data[i];
+                        if (row[0].toString().toLowerCase().includes("jahresüberschuss")) {
+                            // Letzte Spalte enthält den Jahreswert
+                            bilanzData.passiva.jahresueberschuss = Helpers.parseCurrency(row[row.length - 1]);
+                            break;
+                        }
+                    }
+                }
+
+                // 3. Stammkapital aus Konfiguration
+                bilanzData.passiva.stammkapital = config$1.tax.stammkapital || 25000;
+
+                // 4. Gesellschafterdarlehen aus dem Gesellschafterkonto-Sheet
+                bilanzData.passiva.gesellschafterdarlehen = getDarlehensumme(ss, gesellschafterCols);
+
+                // 5. Steuerrückstellungen aus dem Ausgaben-Sheet
+                bilanzData.passiva.steuerrueckstellungen = getSteuerRueckstellungen(ss, ausgabenCols);
+
+                // 6. Berechnung der Summen
+                calculateBilanzSummen(bilanzData);
+
+                // Daten im Cache speichern
+                _cache.bilanzData = bilanzData;
+                _cache.lastCalculated = now;
+
+                return bilanzData;
+            } catch (e) {
+                console.error("Fehler bei der Sammlung der Bilanzdaten:", e);
+                return null;
+            }
+        };
+
+        /**
+         * Ermittelt die Summe der Gesellschafterdarlehen
+         * @param {Spreadsheet} ss - Das Spreadsheet
+         * @param {Object} gesellschafterCols - Spaltenkonfiguration
+         * @returns {number} Summe der Gesellschafterdarlehen
+         */
+        const getDarlehensumme = (ss, gesellschafterCols) => {
+            let darlehenSumme = 0;
+
+            const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
+            if (gesellschafterSheet) {
+                const data = gesellschafterSheet.getDataRange().getValues();
+
+                // Überschrift überspringen
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
+                    if (row[gesellschafterCols.kategorie - 1] &&
+                        row[gesellschafterCols.kategorie - 1].toString().toLowerCase() === "gesellschafterdarlehen") {
+                        darlehenSumme += Helpers.parseCurrency(row[gesellschafterCols.betrag - 1] || 0);
+                    }
+                }
+            }
+
+            return darlehenSumme;
+        };
+
+        /**
+         * Ermittelt die Summe der Steuerrückstellungen
+         * @param {Spreadsheet} ss - Das Spreadsheet
+         * @param {Object} ausgabenCols - Spaltenkonfiguration
+         * @returns {number} Summe der Steuerrückstellungen
+         */
+        const getSteuerRueckstellungen = (ss, ausgabenCols) => {
+            let steuerRueckstellungen = 0;
+
+            const ausSheet = ss.getSheetByName("Ausgaben");
+            if (ausSheet) {
+                const data = ausSheet.getDataRange().getValues();
+
+                // Array mit Steuerrückstellungs-Kategorien
+                const steuerKategorien = [
+                    "Gewerbesteuerrückstellungen",
+                    "Körperschaftsteuer",
+                    "Solidaritätszuschlag",
+                    "Sonstige Steuerrückstellungen"
+                ];
+
+                // Überschrift überspringen
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    const category = row[ausgabenCols.kategorie - 1]?.toString().trim() || "";
+
+                    if (steuerKategorien.includes(category)) {
+                        steuerRueckstellungen += Helpers.parseCurrency(row[ausgabenCols.nettobetrag - 1] || 0);
+                    }
+                }
+            }
+
+            return steuerRueckstellungen;
+        };
+
+        /**
+         * Berechnet die Summen für die Bilanz
+         * @param {Object} bilanzData - Die Bilanzdaten
+         */
+        const calculateBilanzSummen = (bilanzData) => {
+            const { aktiva, passiva } = bilanzData;
+
+            // Summen für Aktiva
+            aktiva.summeAnlagevermoegen = Helpers.round(
+                aktiva.sachanlagen +
+                aktiva.immaterielleVermoegen +
+                aktiva.finanzanlagen,
+                2
+            );
+
+            aktiva.summeUmlaufvermoegen = Helpers.round(
+                aktiva.bankguthaben +
+                aktiva.kasse +
+                aktiva.forderungenLuL +
+                aktiva.vorraete,
+                2
+            );
+
+            aktiva.summeAktiva = Helpers.round(
+                aktiva.summeAnlagevermoegen +
+                aktiva.summeUmlaufvermoegen +
+                aktiva.rechnungsabgrenzung,
+                2
+            );
+
+            // Summen für Passiva
+            passiva.summeEigenkapital = Helpers.round(
+                passiva.stammkapital +
+                passiva.kapitalruecklagen +
+                passiva.gewinnvortrag -
+                passiva.verlustvortrag +
+                passiva.jahresueberschuss,
+                2
+            );
+
+            passiva.summeVerbindlichkeiten = Helpers.round(
+                passiva.bankdarlehen +
+                passiva.gesellschafterdarlehen +
+                passiva.verbindlichkeitenLuL +
+                passiva.steuerrueckstellungen,
+                2
+            );
+
+            passiva.summePassiva = Helpers.round(
+                passiva.summeEigenkapital +
+                passiva.summeVerbindlichkeiten +
+                passiva.rechnungsabgrenzung,
+                2
+            );
+        };
+
+        /**
+         * Konvertiert einen Zahlenwert in eine Zellenformel oder direkte Zahl
+         * @param {number} value - Der Wert
+         * @param {boolean} useFormula - Ob eine Formel verwendet werden soll
+         * @returns {string|number} - Formel als String oder direkter Wert
+         */
+        const valueOrFormula = (value, useFormula = false) => {
+            if (Helpers.isApproximatelyEqual(value, 0) && useFormula) {
+                return "";  // Leere Zelle für 0-Werte bei Formeln
+            }
+            return value;
+        };
+
+        /**
+         * Erstellt ein Array für die Aktiva-Seite der Bilanz
+         * @param {Object} bilanzData - Die Bilanzdaten
+         * @returns {Array} Array mit Zeilen für die Aktiva-Seite
+         */
+        const createAktivaArray = (bilanzData) => {
+            const { aktiva } = bilanzData;
+            const year = config$1.tax.year || new Date().getFullYear();
+
+            return [
+                [`Bilanz ${year} - Aktiva (Vermögenswerte)`, ""],
+                ["", ""],
+                ["1. Anlagevermögen", ""],
+                ["1.1 Sachanlagen", valueOrFormula(aktiva.sachanlagen)],
+                ["1.2 Immaterielle Vermögensgegenstände", valueOrFormula(aktiva.immaterielleVermoegen)],
+                ["1.3 Finanzanlagen", valueOrFormula(aktiva.finanzanlagen)],
+                ["Summe Anlagevermögen", "=SUM(B4:B6)"],
+                ["", ""],
+                ["2. Umlaufvermögen", ""],
+                ["2.1 Bankguthaben", valueOrFormula(aktiva.bankguthaben)],
+                ["2.2 Kasse", valueOrFormula(aktiva.kasse)],
+                ["2.3 Forderungen aus Lieferungen und Leistungen", valueOrFormula(aktiva.forderungenLuL)],
+                ["2.4 Vorräte", valueOrFormula(aktiva.vorraete)],
+                ["Summe Umlaufvermögen", "=SUM(B10:B13)"],
+                ["", ""],
+                ["3. Rechnungsabgrenzungsposten", valueOrFormula(aktiva.rechnungsabgrenzung)],
+                ["", ""],
+                ["Summe Aktiva", "=B7+B14+B16"]
+            ];
+        };
+
+        /**
+         * Erstellt ein Array für die Passiva-Seite der Bilanz
+         * @param {Object} bilanzData - Die Bilanzdaten
+         * @returns {Array} Array mit Zeilen für die Passiva-Seite
+         */
+        const createPassivaArray = (bilanzData) => {
+            const { passiva } = bilanzData;
+            const year = config$1.tax.year || new Date().getFullYear();
+
+            return [
+                [`Bilanz ${year} - Passiva (Kapital und Schulden)`, ""],
+                ["", ""],
+                ["1. Eigenkapital", ""],
+                ["1.1 Gezeichnetes Kapital (Stammkapital)", valueOrFormula(passiva.stammkapital)],
+                ["1.2 Kapitalrücklage", valueOrFormula(passiva.kapitalruecklagen)],
+                ["1.3 Gewinnvortrag", valueOrFormula(passiva.gewinnvortrag)],
+                ["1.4 Verlustvortrag (negativ)", valueOrFormula(passiva.verlustvortrag)],
+                ["1.5 Jahresüberschuss/Jahresfehlbetrag", valueOrFormula(passiva.jahresueberschuss)],
+                ["Summe Eigenkapital", "=SUM(F4:F8)"],
+                ["", ""],
+                ["2. Verbindlichkeiten", ""],
+                ["2.1 Verbindlichkeiten gegenüber Kreditinstituten", valueOrFormula(passiva.bankdarlehen)],
+                ["2.2 Verbindlichkeiten gegenüber Gesellschaftern", valueOrFormula(passiva.gesellschafterdarlehen)],
+                ["2.3 Verbindlichkeiten aus Lieferungen und Leistungen", valueOrFormula(passiva.verbindlichkeitenLuL)],
+                ["2.4 Steuerrückstellungen", valueOrFormula(passiva.steuerrueckstellungen)],
+                ["Summe Verbindlichkeiten", "=SUM(F12:F15)"],
+                ["", ""],
+                ["3. Rechnungsabgrenzungsposten", valueOrFormula(passiva.rechnungsabgrenzung)],
+                ["", ""],
+                ["Summe Passiva", "=F9+F16+F18"]
+            ];
+        };
+
+        /**
+         * Formatiert das Bilanz-Sheet
+         * @param {Sheet} bilanzSheet - Das zu formatierende Sheet
+         * @param {number} aktivaLength - Anzahl der Aktiva-Zeilen
+         * @param {number} passivaLength - Anzahl der Passiva-Zeilen
+         */
+        const formatBilanzSheet = (bilanzSheet, aktivaLength, passivaLength) => {
+            // Überschriften formatieren
+            bilanzSheet.getRange("A1").setFontWeight("bold").setFontSize(12);
+            bilanzSheet.getRange("E1").setFontWeight("bold").setFontSize(12);
+
+            // Zwischensummen und Gesamtsummen formatieren
+            const summenZeilenAktiva = [7, 14, 18]; // Zeilen mit Summen in Aktiva
+            const summenZeilenPassiva = [9, 16, 20]; // Zeilen mit Summen in Passiva
+
+            summenZeilenAktiva.forEach(row => {
+                if (row <= aktivaLength) {
+                    bilanzSheet.getRange(row, 1, 1, 2).setFontWeight("bold");
+                    if (row === 18) { // Gesamtsumme Aktiva
+                        bilanzSheet.getRange(row, 1, 1, 2).setBackground("#e6f2ff");
+                    } else {
+                        bilanzSheet.getRange(row, 1, 1, 2).setBackground("#f0f0f0");
+                    }
+                }
+            });
+
+            summenZeilenPassiva.forEach(row => {
+                if (row <= passivaLength) {
+                    bilanzSheet.getRange(row, 5, 1, 2).setFontWeight("bold");
+                    if (row === 20) { // Gesamtsumme Passiva
+                        bilanzSheet.getRange(row, 5, 1, 2).setBackground("#e6f2ff");
+                    } else {
+                        bilanzSheet.getRange(row, 5, 1, 2).setBackground("#f0f0f0");
+                    }
+                }
+            });
+
+            // Abschnittsüberschriften formatieren
+            [3, 9, 16].forEach(row => {
+                if (row <= aktivaLength) {
+                    bilanzSheet.getRange(row, 1).setFontWeight("bold");
+                }
+            });
+
+            [3, 11, 17].forEach(row => {
+                if (row <= passivaLength) {
+                    bilanzSheet.getRange(row, 5).setFontWeight("bold");
+                }
+            });
+
+            // Währungsformat für Beträge anwenden
+            bilanzSheet.getRange("B4:B18").setNumberFormat("#,##0.00 €");
+            bilanzSheet.getRange("F4:F20").setNumberFormat("#,##0.00 €");
+
+            // Spaltenbreiten anpassen
+            bilanzSheet.autoResizeColumns(1, 6);
+        };
+
+        /**
+         * Hauptfunktion zur Erstellung der Bilanz
+         * Sammelt Daten und erstellt ein Bilanz-Sheet
+         */
+        const calculateBilanz = () => {
+            try {
+                const ss = SpreadsheetApp.getActiveSpreadsheet();
+                const ui = SpreadsheetApp.getUi();
+
+                // Bilanzdaten aggregieren
+                const bilanzData = aggregateBilanzData();
+                if (!bilanzData) {
+                    ui.alert("Fehler: Bilanzdaten konnten nicht gesammelt werden.");
+                    return false;
+                }
+
+                // Bilanz-Arrays erstellen
+                const aktivaArray = createAktivaArray(bilanzData);
+                const passivaArray = createPassivaArray(bilanzData);
+
+                // Prüfen, ob Aktiva = Passiva
+                const aktivaSumme = bilanzData.aktiva.summeAktiva;
+                const passivaSumme = bilanzData.passiva.summePassiva;
+                const differenz = Math.abs(aktivaSumme - passivaSumme);
+
+                if (differenz > 0.01) {
+                    // Bei Differenz die Bilanz trotzdem erstellen, aber warnen
+                    ui.alert(
+                        "Bilanz ist nicht ausgeglichen",
+                        `Die Bilanzsummen von Aktiva (${Helpers.formatCurrency(aktivaSumme)}) und Passiva (${Helpers.formatCurrency(passivaSumme)}) ` +
+                        `stimmen nicht überein. Differenz: ${Helpers.formatCurrency(differenz)}. ` +
+                        `Bitte überprüfen Sie Ihre Buchhaltungsdaten.`,
+                        ui.ButtonSet.OK
+                    );
+                }
+
+                // Erstelle oder leere das Blatt "Bilanz"
+                let bilanzSheet = ss.getSheetByName("Bilanz");
+                if (!bilanzSheet) {
+                    bilanzSheet = ss.insertSheet("Bilanz");
+                } else {
+                    bilanzSheet.clearContents();
+                }
+
+                // Batch-Write statt einzelner Zellen-Updates
+                // Schreibe Aktiva ab Zelle A1 und Passiva ab Zelle E1
+                bilanzSheet.getRange(1, 1, aktivaArray.length, 2).setValues(aktivaArray);
+                bilanzSheet.getRange(1, 5, passivaArray.length, 2).setValues(passivaArray);
+
+                // Formatierung anwenden
+                formatBilanzSheet(bilanzSheet, aktivaArray.length, passivaArray.length);
+
+                // Erfolgsmeldung
+                ui.alert("Die Bilanz wurde erfolgreich erstellt!");
+                return true;
+            } catch (e) {
+                console.error("Fehler bei der Bilanzerstellung:", e);
+                SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + e.toString());
+                return false;
+            }
+        };
+
+        // Öffentliche API des Moduls
+        return {
+            calculateBilanz,
+            clearCache,
+            // Für Testzwecke könnten hier weitere Funktionen exportiert werden
+            _internal: {
+                createEmptyBilanz,
+                aggregateBilanzData
+            }
+        };
+    })();
+
+    // file: src/code.js
+    // imports
+
+    // =================== Globale Funktionen ===================
+    /**
+     * Erstellt das Menü in der Google Sheets UI beim Öffnen der Tabelle
+     */
+    const onOpen = () => {
+        SpreadsheetApp.getUi()
+            .createMenu("📂 Buchhaltung")
+            .addItem("📥 Dateien importieren", "importDriveFiles")
+            .addItem("🔄 Aktuelles Blatt aktualisieren", "refreshSheet")
+            .addItem("📊 UStVA berechnen", "calculateUStVA")
+            .addItem("📈 BWA berechnen", "calculateBWA")
+            .addItem("📝 Bilanz erstellen", "calculateBilanz")
+            .addToUi();
+    };
+
+    /**
+     * Wird bei jeder Bearbeitung des Spreadsheets ausgelöst
+     * Fügt Zeitstempel hinzu, wenn bestimmte Blätter bearbeitet werden
+     *
+     * @param {Object} e - Event-Objekt von Google Sheets
+     */
+    const onEdit = e => {
+
+        const {range} = e;
+        const sheet = range.getSheet();
+        const name = sheet.getName();
+
+        // Konvertieren in kleinbuchstaben und leerzeichen entfernen
+        let sheetKey = name.toLowerCase().replace(/\s+/g, '');
+
+        // Nach entsprechendem Schlüssel in config.sheets suchen (case-insensitive)
+        let configKey = null;
+        Object.keys(config$1.sheets).forEach(key => {
+            if (key.toLowerCase() === sheetKey) {
+                configKey = key;
+            }
+        });
+
+        // Wenn kein passender Schlüssel gefunden wurde, abbrechen
+        if (!configKey || !config$1.sheets[configKey].columns.zeitstempel) return;
+
+        // Spalte für Zeitstempel aus der Konfiguration
+        const timestampCol = config$1.sheets[configKey].columns.zeitstempel;
+
+        // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
+        if (range.getColumn() === timestampCol ||
+            (range.getNumColumns() > 1 && range.getColumn() <= timestampCol &&
+                range.getColumn() + range.getNumColumns() > timestampCol)) {
+            return; // Vermeide Endlosschleife
+        }
+
+        // Multi-Zellen-Editierung unterstützen
+        const numRows = range.getNumRows();
+        const timestampValues = [];
+        const now = new Date();
+
+        // Für jede bearbeitete Zeile
+        for (let i = 0; i < numRows; i++) {
+            const rowIndex = range.getRow() + i;
+            const headerLen = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length;
+
+            // Prüfen, ob die Zeile leer ist
+            const rowValues = sheet.getRange(rowIndex, 1, 1, headerLen).getValues()[0];
+            if (rowValues.every(cell => cell === "")) continue;
+
+            // Zeitstempel für diese Zeile hinzufügen
+            timestampValues.push([now]);
+        }
+
+        // Wenn es Zeitstempel zu setzen gibt
+        if (timestampValues.length > 0) {
+            sheet.getRange(range.getRow(), timestampCol, timestampValues.length, 1)
+                .setValues(timestampValues);
+        }
+    };
+
+    /**
+     * Richtet die notwendigen Trigger für das Spreadsheet ein
+     */
+    const setupTrigger = () => {
+        const triggers = ScriptApp.getProjectTriggers();
+        // Prüfe, ob der onOpen Trigger bereits existiert
+        if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
+            ScriptApp.newTrigger("onOpen")
+                .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+                .onOpen()
+                .create();
+        }
+
+        // Prüfe, ob der onEdit Trigger bereits existiert
+        if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
+            ScriptApp.newTrigger("onEdit")
+                .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+                .onEdit()
+                .create();
+        }
+    };
+
+    /**
+     * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
+     * @param {Function} fn - Die auszuführende Funktion
+     * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
+     */
+    const executeWithErrorHandling = (fn, errorMessage) => {
+        try {
+            RefreshModule.refreshAllSheets();
+            fn();
+        } catch (error) {
+            SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
+            console.error(`${errorMessage}:`, error);
+        }
+    };
+
+    /**
+     * Aktualisiert das aktive Tabellenblatt
+     */
+    const refreshSheet = () => RefreshModule.refreshActiveSheet();
+
+    /**
+     * Berechnet die Umsatzsteuervoranmeldung
+     */
+    const calculateUStVA = () => {
+        executeWithErrorHandling(
+            UStVACalculator.calculateUStVA,
+            "Fehler bei der UStVA-Berechnung"
+        );
+    };
+
+    /**
+     * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
+     */
+    const calculateBWA = () => {
+        executeWithErrorHandling(
+            BWACalculator.calculateBWA,
+            "Fehler bei der BWA-Berechnung"
+        );
+    };
+
+    /**
+     * Erstellt die Bilanz
+     */
+    const calculateBilanz = () => {
+        executeWithErrorHandling(
+            BilanzCalculator.calculateBilanz,
+            "Fehler bei der Bilanzerstellung"
+        );
+    };
+
+    /**
+     * Importiert Dateien aus Google Drive und aktualisiert alle Tabellenblätter
+     */
+    const importDriveFiles = () => {
+        try {
+            ImportModule.importDriveFiles();
+            RefreshModule.refreshAllSheets();
+        } catch (error) {
+            SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
+            console.error("Import-Fehler:", error);
+        }
+    };
+
+    // Exportiere alle relevanten Funktionen in den globalen Namensraum,
+    // damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
+    global.onOpen = onOpen;
+    global.onEdit = onEdit;
+    global.setupTrigger = setupTrigger;
+    global.refreshSheet = refreshSheet;
+    global.calculateUStVA = calculateUStVA;
+    global.calculateBWA = calculateBWA;
+    global.calculateBilanz = calculateBilanz;
+    global.importDriveFiles = importDriveFiles;
+
+}));

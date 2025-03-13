@@ -29,19 +29,27 @@ const onOpen = () => {
  * @param {Object} e - Event-Objekt von Google Sheets
  */
 const onEdit = e => {
+
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
-    const sheetKey = name.toLowerCase();
 
-    // Prüfen, ob wir für dieses Sheet eine Konfiguration haben
-    if (!config.sheets[sheetKey] || !config.sheets[sheetKey].columns.zeitstempel) return;
+    // Konvertieren in kleinbuchstaben und leerzeichen entfernen
+    let sheetKey = name.toLowerCase().replace(/\s+/g, '');
 
-    // Header-Zeile ignorieren
-    if (range.getRow() === 1) return;
+    // Nach entsprechendem Schlüssel in config.sheets suchen (case-insensitive)
+    let configKey = null;
+    Object.keys(config.sheets).forEach(key => {
+        if (key.toLowerCase() === sheetKey) {
+            configKey = key;
+        }
+    });
+
+    // Wenn kein passender Schlüssel gefunden wurde, abbrechen
+    if (!configKey || !config.sheets[configKey].columns.zeitstempel) return;
 
     // Spalte für Zeitstempel aus der Konfiguration
-    const timestampCol = config.sheets[sheetKey].columns.zeitstempel;
+    const timestampCol = config.sheets[configKey].columns.zeitstempel;
 
     // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
     if (range.getColumn() === timestampCol ||
