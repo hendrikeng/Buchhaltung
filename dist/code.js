@@ -53,142 +53,28 @@ function importDriveFiles() {};
             }
         },
 
-        // Sheet-Struktur Konfiguration - mit konstanten Spaltendefinitionen
-        sheets: {
-            // Konfiguration für das Einnahmen-Sheet
-            einnahmen: {
-                columns: {
-                    datum: 1,              // A: Rechnungsdatum
-                    rechnungsnummer: 2,    // B: Rechnungsnummer
-                    kategorie: 3,          // C: Kategorie
-                    kunde: 4,              // D: Kunde
-                    nettobetrag: 5,        // E: Nettobetrag
-                    mwstSatz: 6,           // F: MwSt-Satz in %
-                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
-                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
-                    bezahlt: 9,            // I: Bereits bezahlter Betrag
-                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
-                    quartal: 11,           // K: Berechnetes Quartal
-                    zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-                    zahlungsart: 13,       // M: Zahlungsart
-                    zahlungsdatum: 14,     // N: Zahlungsdatum
-                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
-                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
-                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
-                    dateilink: 18          // R: Link zur Originaldatei
-                }
-            },
-
-            // Konfiguration für das Ausgaben-Sheet (identisch zu Einnahmen)
-            ausgaben: {
-                columns: {
-                    datum: 1,              // A: Rechnungsdatum
-                    rechnungsnummer: 2,    // B: Rechnungsnummer
-                    kategorie: 3,          // C: Kategorie
-                    kunde: 4,              // D: Lieferant
-                    nettobetrag: 5,        // E: Nettobetrag
-                    mwstSatz: 6,           // F: MwSt-Satz in %
-                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
-                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
-                    bezahlt: 9,            // I: Bereits bezahlter Betrag
-                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
-                    quartal: 11,           // K: Berechnetes Quartal
-                    zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-                    zahlungsart: 13,       // M: Zahlungsart
-                    zahlungsdatum: 14,     // N: Zahlungsdatum
-                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
-                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
-                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
-                    dateilink: 18          // R: Link zur Originaldatei
-                }
-            },
-
-            // Konfiguration für das Eigenbelege-Sheet
-            eigenbelege: {
-                columns: {
-                    datum: 1,              // A: Belegdatum
-                    belegnummer: 2,        // B: Belegnummer
-                    kategorie: 3,          // C: Kategorie
-                    beschreibung: 4,       // D: Beschreibung
-                    nettobetrag: 5,        // E: Nettobetrag
-                    mwstSatz: 6,           // F: MwSt-Satz in %
-                    mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
-                    bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
-                    bezahlt: 9,            // I: Bereits bezahlter Betrag
-                    steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
-                    quartal: 11,           // K: Berechnetes Quartal
-                    status: 12,            // L: Status (Offen/Erstattet/Gebucht)
-                    zahlungsart: 13,       // M: Zahlungsart
-                    zahlungsdatum: 14,     // N: Erstattungsdatum
-                    bankAbgleich: 15,      // O: Bank-Abgleich-Information
-                    zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
-                    dateiname: 17,         // Q: Dateiname (für importierte Dateien)
-                    dateilink: 18          // R: Link zur Originaldatei
-                }
-            },
-
-            // Konfiguration für das Bankbewegungen-Sheet
-            bankbewegungen: {
-                columns: {
-                    datum: 1,              // A: Buchungsdatum
-                    buchungstext: 2,       // B: Buchungstext
-                    betrag: 3,             // C: Betrag
-                    saldo: 4,              // D: Saldo (berechnet)
-                    transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
-                    kategorie: 6,          // F: Kategorie
-                    kontoSoll: 7,          // G: Konto (Soll)
-                    kontoHaben: 8,         // H: Gegenkonto (Haben)
-                    referenz: 9,           // I: Referenznummer
-                    verwendungszweck: 10,  // J: Verwendungszweck
-                    matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
-                    zeitstempel: 12,       // L: Zeitstempel
-                }
-            },
-
-            // TODO: Konfiguration für das Gesellschafterkonto-Sheet
-            gesellschafterkonto: {
-                columns: {
-                    datum: 1,              // A: Datum
-                    beschreibung: 2,       // B: Beschreibung
-                    kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
-                    betrag: 4,             // D: Betrag
-                    gesellschafter: 5,     // E: Gesellschafter
-                    anmerkung: 6,          // F: Anmerkung
-                    kontoSoll: 7,          // G: Konto (Soll)
-                    kontoHaben: 8,         // H: Gegenkonto (Haben)
-                    buchungsdatum: 9,      // I: Buchungsdatum
-                    beleg: 10,             // J: Beleg/Referenz
-                    saldo: 11,             // K: Saldo (berechnet)
-                    zeitstempel: 12        // L: Zeitstempel der letzten Änderung
-                }
-            },
-
-            // TODO Konfiguration für das Holding Transfers-Sheet
-            holdingTransfers: {
-                columns: {
-                    datum: 1,              // A: Datum
-                    betrag: 2,             // B: Betrag
-                    art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
-                    buchungstext: 4,       // D: Buchungstext
-                    status: 5,             // E: Status
-                    referenz: 6,            // F: Referenznummer zur Bankbewegung
-                    zeitstempel: 7       // G: Zeitstempel der letzten Änderung
-                }
-            },
-
-            // Konfiguration für das Änderungshistorie-Sheet
-            aenderungshistorie: {
-                columns: {
-                    datum: 1,              // A: Datum/Zeitstempel
-                    typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
-                    dateiname: 3,          // C: Dateiname
-                    dateilink: 4           // D: Link zur Datei
-                }
-            }
-        },
-
         // Einnahmen-Konfiguration
         einnahmen: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Kunde
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            },
             // Kategorien mit Steuertyp
             categories: {
                 "Erlöse aus Lieferungen und Leistungen": {taxType: "steuerpflichtig"},
@@ -203,7 +89,6 @@ function importDriveFiles() {};
                 "Gewinnvortrag": {taxType: "steuerfrei_inland"},
                 "Verlustvortrag": {taxType: "steuerfrei_inland"}
             },
-
             // SKR04-konforme Konten-Zuordnung
             kontoMapping: {
                 "Erlöse aus Lieferungen und Leistungen": {soll: "1200", gegen: "4400", mwst: "1776"},
@@ -218,7 +103,6 @@ function importDriveFiles() {};
                 "Gewinnvortrag": {soll: "1200", gegen: "2970"},
                 "Verlustvortrag": {soll: "1200", gegen: "2978"}
             },
-
             // BWA-Mapping für Einnahmen-Kategorien
             bwaMapping: {
                 "Erlöse aus Lieferungen und Leistungen": "umsatzerloese",
@@ -235,6 +119,26 @@ function importDriveFiles() {};
 
         // Ausgaben-Konfiguration
         ausgaben: {
+            columns: {
+                datum: 1,              // A: Rechnungsdatum
+                rechnungsnummer: 2,    // B: Rechnungsnummer
+                kategorie: 3,          // C: Kategorie
+                kunde: 4,              // D: Lieferant
+                nettobetrag: 5,        // E: Nettobetrag
+                mwstSatz: 6,           // F: MwSt-Satz in %
+                mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
+                bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
+                bezahlt: 9,            // I: Bereits bezahlter Betrag
+                steuerbemessung: 10,   // J: Steuerbemessungsgrundlage für Teilzahlungen
+                quartal: 11,           // K: Berechnetes Quartal
+                zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+                zahlungsart: 13,       // M: Zahlungsart
+                zahlungsdatum: 14,     // N: Zahlungsdatum
+                bankAbgleich: 15,      // O: Bank-Abgleich-Information
+                zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+                dateiname: 17,         // Q: Dateiname (für importierte Dateien)
+                dateilink: 18          // R: Link zur Originaldatei
+            },
             // Kategorien mit Steuertyp
             categories: {
                 // Materialaufwand & Wareneinsatz
@@ -282,7 +186,6 @@ function importDriveFiles() {};
                 // Sonstige Aufwendungen
                 "Sonstige betriebliche Aufwendungen": {taxType: "steuerpflichtig", group: "sonstige"}
             },
-
             // SKR04-konforme Konten-Zuordnung
             kontoMapping: {
                 "Wareneinsatz": {soll: "5000", gegen: "1200", vorsteuer: "1576"},
@@ -317,7 +220,6 @@ function importDriveFiles() {};
                 "Sonstige Steuerrückstellungen": {soll: "7630", gegen: "1200"},
                 "Sonstige betriebliche Aufwendungen": {soll: "6800", gegen: "1200", vorsteuer: "1576"}
             },
-
             // BWA-Mapping für Ausgaben-Kategorien
             bwaMapping: {
                 "Wareneinsatz": "wareneinsatz",
@@ -354,23 +256,30 @@ function importDriveFiles() {};
             }
         },
 
-        // Bankbewegungen-Konfiguration
-        bank: {
-            // Typen von Bankbewegungen
-            type: ["Einnahme", "Ausgabe", "Interne Buchung"],
-
-            // Standard-Bankkonto
-            defaultAccount: "1200"
-        },
-
-        // Gesellschafterkonto-Konfiguration
-        gesellschafterkonto: {
-            category: ["Gesellschafterdarlehen", "Ausschüttungen", "Kapitalrückführung", "Privatentnahme", "Privateinlage"],
-            shareholder: ["Christopher Giebel", "Hendrik Werner"]
-        },
-
         // Eigenbelege-Konfiguration
         eigenbelege: {
+            columns: {
+                datum: 1,              // A: Belegdatum
+                belegnummer: 2,        // B: Belegnummer
+                auslegendeVon: 3,      // C: Ausgelegt von (Person)
+                kategorie: 4,          // D: Kategorie
+                beschreibung: 5,       // E: Beschreibung
+                nettobetrag: 6,        // F: Nettobetrag
+                mwstSatz: 7,           // G: MwSt-Satz in %
+                mwstBetrag: 8,         // H: MwSt-Betrag (F*G)
+                bruttoBetrag: 9,       // I: Bruttobetrag (F+H)
+                ausgelegterBetrag: 10, // J: Ausgelegter Betrag
+                restbetrag: 11,        // K: Noch zu erstattender Betrag
+                quartal: 12,           // L: Berechnetes Quartal
+                status: 13,            // M: Status (Offen/Erstattet/Gebucht)
+                erstattungsart: 14,    // N: Erstattungsart
+                erstattungsdatum: 15,  // O: Erstattungsdatum
+                bankAbgleich: 16,      // P: Bank-Abgleich-Information
+                zeitstempel: 17,       // Q: Zeitstempel der letzten Änderung
+                dateiname: 18,         // R: Dateiname (für importierte Dateien)
+                belegLink: 19          // S: Link zum Originalbeleg
+            },
+            // Kategorien mit Steuertyp
             categories: {
                 "Kleidung": {taxType: "steuerpflichtig"},
                 "Trinkgeld": {taxType: "steuerfrei"},
@@ -380,12 +289,76 @@ function importDriveFiles() {};
                 "Bewirtung": {taxType: "eigenbeleg", besonderheit: "bewirtung"},
                 "Sonstiges": {taxType: "steuerpflichtig"}
             },
-            status: ["Offen", "Erstattet", "Gebucht"]
+            // TODO: Remove
+            status: ["Offen", "Erstattet", "Gebucht"],
+            // TODO: Necessary?
+            kontoMapping: {},
+            // TODO: Necessary?
+            bwaMapping: {},
+        },
+
+        // Bankbewegungen-Konfiguration
+        bankbewegungen: {
+            columns: {
+                datum: 1,              // A: Buchungsdatum
+                buchungstext: 2,       // B: Buchungstext
+                betrag: 3,             // C: Betrag
+                saldo: 4,              // D: Saldo (berechnet)
+                transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
+                kategorie: 6,          // F: Kategorie
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                referenz: 9,           // I: Referenznummer
+                verwendungszweck: 10,  // J: Verwendungszweck
+                matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
+                zeitstempel: 12,       // L: Zeitstempel
+            },
+            types: ["Einnahme", "Ausgabe", "Interne Buchung"],
+            defaultAccount: "1200"
+        },
+
+        // Gesellschafterkonto-Konfiguration
+        gesellschafterkonto: {
+            columns: {
+                datum: 1,              // A: Datum
+                beschreibung: 2,       // B: Beschreibung
+                kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
+                betrag: 4,             // D: Betrag
+                gesellschafter: 5,     // E: Gesellschafter
+                anmerkung: 6,          // F: Anmerkung
+                kontoSoll: 7,          // G: Konto (Soll)
+                kontoHaben: 8,         // H: Gegenkonto (Haben)
+                buchungsdatum: 9,      // I: Buchungsdatum
+                beleg: 10,             // J: Beleg/Referenz
+                saldo: 11,             // K: Saldo (berechnet)
+                zeitstempel: 12        // L: Zeitstempel der letzten Änderung
+            },
+            categories: ["Gesellschafterdarlehen", "Ausschüttungen", "Kapitalrückführung", "Privatentnahme", "Privateinlage"],
+            shareholders: ["Christopher Giebel", "Hendrik Werner"]
         },
 
         // Holding Transfers-Konfiguration
         holdingTransfers: {
-            category: ["Gewinnübertrag", "Kapitalrückführung"]
+            columns: {
+                datum: 1,              // A: Datum
+                betrag: 2,             // B: Betrag
+                art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
+                buchungstext: 4,       // D: Buchungstext
+                status: 5,             // E: Status
+                referenz: 6,            // F: Referenznummer zur Bankbewegung
+                zeitstempel: 7       // G: Zeitstempel der letzten Änderung
+            },
+            categories: ["Gewinnübertrag", "Kapitalrückführung"]
+        },
+
+        // Änderungshistorie-Konfiguration
+        aenderungshistorie: {
+            columns: {
+                datum: 1,              // A: Datum/Zeitstempel
+                typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
+                dateiname: 3,          // C: Dateiname
+                dateilink: 4           // D: Link zur Datei
+            }
         },
 
         // Kontenplan SKR04 (Auszug der wichtigsten Konten)
@@ -470,16 +443,16 @@ function importDriveFiles() {};
          */
         initialize() {
             // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-            this.bank.category = [
+            this.bankbewegungen.categories = [
                 ...Object.keys(this.einnahmen.categories),
                 ...Object.keys(this.ausgaben.categories),
                 ...Object.keys(this.eigenbelege.categories),
-                ...this.gesellschafterkonto.category,
-                ...this.holdingTransfers.category,
+                ...this.gesellschafterkonto.categories,
+                ...this.holdingTransfers.categories,
             ];
 
             // Duplikate aus den Kategorien entfernen
-            this.bank.category = [...new Set(this.bank.category)];
+            this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)];
 
             return this;
         }
@@ -779,7 +752,7 @@ function importDriveFiles() {};
 
             if (sheetName) {
                 // Spaltenkonfiguration aus dem Sheetnamen bestimmen
-                const sheetConfig = config$1.sheets[sheetName.toLowerCase()]?.columns;
+                const sheetConfig = config$1[sheetName.toLowerCase()]?.columns;
                 if (sheetConfig && sheetConfig.zeitstempel) {
                     timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
                 } else {
@@ -984,7 +957,7 @@ function importDriveFiles() {};
         const initializeHistorySheet = (history) => {
             try {
                 if (history.getLastRow() === 0) {
-                    const historyConfig = config$1.sheets.aenderungshistorie.columns;
+                    const historyConfig = config$1.aenderungshistorie.columns;
                     const headerRow = Array(history.getLastColumn()).fill("");
 
                     headerRow[historyConfig.datum - 1] = "Datum";
@@ -1011,7 +984,7 @@ function importDriveFiles() {};
             const existingFiles = new Set();
             try {
                 const historyData = history.getDataRange().getValues();
-                const historyConfig = config$1.sheets.aenderungshistorie.columns;
+                const historyConfig = config$1.aenderungshistorie.columns;
 
                 // Überschriftenzeile überspringen und alle Dateinamen sammeln
                 for (let i = 1; i < historyData.length; i++) {
@@ -1092,11 +1065,11 @@ function importDriveFiles() {};
 
             // Konfiguration für das richtige Sheet auswählen
             const sheetConfig = type === "Einnahme"
-                ? config$1.sheets.einnahmen.columns
-                : config$1.sheets.ausgaben.columns;
+                ? config$1.einnahmen.columns
+                : config$1.ausgaben.columns;
 
             // Konfiguration für das Änderungshistorie-Sheet
-            const historyConfig = config$1.sheets.aenderungshistorie.columns;
+            const historyConfig = config$1.aenderungshistorie.columns;
 
             // Batch-Verarbeitung der Dateien
             const batchSize = 20;
@@ -1322,7 +1295,7 @@ function importDriveFiles() {};
          */
         const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
             const warnings = [];
-            const columns = config$1.sheets[sheetType].columns;
+            const columns = config$1[sheetType].columns;
 
             /**
              * Validiert eine Zeile anhand einer Liste von Validierungsregeln
@@ -1433,7 +1406,7 @@ function importDriveFiles() {};
 
             const data = bankSheet.getDataRange().getValues();
             const warnings = [];
-            const columns = config$1.sheets.bankbewegungen.columns;
+            const columns = config$1.bankbewegungen.columns;
 
             // Regeln für Header- und Footer-Zeilen
             const headerFooterRules = [
@@ -1786,11 +1759,11 @@ function importDriveFiles() {};
                 // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
                 let columns;
                 if (name === "Einnahmen") {
-                    columns = config$1.sheets.einnahmen.columns;
+                    columns = config$1.einnahmen.columns;
                 } else if (name === "Ausgaben") {
-                    columns = config$1.sheets.ausgaben.columns;
+                    columns = config$1.ausgaben.columns;
                 } else if (name === "Eigenbelege") {
-                    columns = config$1.sheets.eigenbelege.columns;
+                    columns = config$1.eigenbelege.columns;
                 } else {
                     return false; // Unbekanntes Sheet
                 }
@@ -1898,21 +1871,21 @@ function importDriveFiles() {};
             } else if (sheetName === "Eigenbelege") {
                 Validator.validateDropdown(
                     sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config$1.eigenbelege.categories)  // categories statt category
+                    config$1.eigenbelege.categories
                 );
 
-                // // Status bleibt unverändert
-                // Validator.validateDropdown(
-                //     sheet, 2, columns.status, numRows, 1,
-                //     config.eigenbelege.status
-                // );
+                // Für Eigenbelege: Status-Dropdown hinzufügen
+                Validator.validateDropdown(
+                    sheet, 2, columns.status, numRows, 1,
+                    config$1.eigenbelege.status
+                );
             }
 
             // Zahlungsart-Dropdown für alle Blätter
-            // Validator.validateDropdown(
-            //     sheet, 2, columns.zahlungsart, numRows, 1,
-            //     config.common.paymentType
-            // );
+            Validator.validateDropdown(
+                sheet, 2, columns.zahlungsart, numRows, 1,
+                config$1.common.paymentType
+            );
         };
 
         /**
@@ -1931,7 +1904,7 @@ function importDriveFiles() {};
                 const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
                 // Bankbewegungen-Konfiguration für Spalten
-                const columns = config$1.sheets.bankbewegungen.columns;
+                const columns = config$1.bankbewegungen.columns;
 
                 // Spaltenbuchstaben aus den Indizes generieren
                 const columnLetters = {};
@@ -1992,13 +1965,13 @@ function importDriveFiles() {};
             // Validierung für Transaktionstyp
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-                config$1.bank.type
+                config$1.bankbewegungen.types
             );
 
             // Validierung für Kategorie
             Validator.validateDropdown(
                 sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-                config$1.bank.category
+                config$1.bankbewegungen.categories
             );
 
             // Konten für Dropdown-Validierung sammeln
@@ -2168,8 +2141,8 @@ function importDriveFiles() {};
          */
         const performBankReferenceMatching = (ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters) => {
             // Konfigurationen für Spaltenindizes
-            const einnahmenCols = config$1.sheets.einnahmen.columns;
-            const ausgabenCols = config$1.sheets.ausgaben.columns;
+            const einnahmenCols = config$1.einnahmen.columns;
+            const ausgabenCols = config$1.ausgaben.columns;
 
             // Referenzdaten laden für Einnahmen
             const einnahmenSheet = getSheet("Einnahmen");
@@ -2710,8 +2683,8 @@ function importDriveFiles() {};
         const markPaidRows = (sheet, sheetType, bankZuordnungen) => {
             // Konfiguration für das Sheet
             const columns = sheetType === "Einnahmen"
-                ? config$1.sheets.einnahmen.columns
-                : config$1.sheets.ausgaben.columns;
+                ? config$1.einnahmen.columns
+                : config$1.ausgaben.columns;
 
             // Hole Werte aus dem Sheet
             const numRows = sheet.getLastRow() - 1;
@@ -3007,7 +2980,7 @@ function importDriveFiles() {};
             try {
                 // Sheet-Typ bestimmen
                 const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
-                const columns = config$1.sheets[sheetType].columns;
+                const columns = config$1[sheetType].columns;
 
                 // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
                 const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
@@ -3091,7 +3064,7 @@ function importDriveFiles() {};
          */
         const processEigenRow = (data, month, gezahlt, tax, roundedRate, category) => {
             // EIGENBELEGE
-            const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+            const eigenCfg = config$1.eigenbelege.categories[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
             if (taxType === "steuerfrei") {
@@ -3495,7 +3468,7 @@ function importDriveFiles() {};
          */
         const processRevenue = (row, bwaData) => {
             try {
-                const columns = config$1.sheets.einnahmen.columns;
+                const columns = config$1.einnahmen.columns;
 
                 const m = Helpers.getMonthFromRow(row, "einnahmen");
                 if (!m) return;
@@ -3552,7 +3525,7 @@ function importDriveFiles() {};
          */
         const processExpense = (row, bwaData) => {
             try {
-                const columns = config$1.sheets.ausgaben.columns;
+                const columns = config$1.ausgaben.columns;
 
                 const m = Helpers.getMonthFromRow(row, "ausgaben");
                 if (!m) return;
@@ -3665,7 +3638,7 @@ function importDriveFiles() {};
          */
         const processEigen = (row, bwaData) => {
             try {
-                const columns = config$1.sheets.eigenbelege.columns;
+                const columns = config$1.eigenbelege.columns;
 
                 const m = Helpers.getMonthFromRow(row, "eigenbelege");
                 if (!m) return;
@@ -3674,7 +3647,7 @@ function importDriveFiles() {};
                 if (amount === 0) return;
 
                 const category = row[columns.kategorie - 1]?.toString().trim() || "";
-                const eigenCfg = config$1.eigenbelege.mapping[category] ?? {};
+                const eigenCfg = config$1.eigenbelege.categories[category] ?? {};
                 const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
                 // Basierend auf Steuertyp zuordnen
@@ -4143,9 +4116,9 @@ function importDriveFiles() {};
                 const bilanzData = createEmptyBilanz();
 
                 // Spalten-Konfigurationen für die verschiedenen Sheets abrufen
-                const bankCols = config$1.sheets.bankbewegungen.columns;
-                const ausgabenCols = config$1.sheets.ausgaben.columns;
-                const gesellschafterCols = config$1.sheets.gesellschafterkonto.columns;
+                const bankCols = config$1.bankbewegungen.columns;
+                const ausgabenCols = config$1.ausgaben.columns;
+                const gesellschafterCols = config$1.gesellschafterkonto.columns;
 
                 // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
                 const bankSheet = ss.getSheetByName("Bankbewegungen");
@@ -4558,19 +4531,19 @@ function importDriveFiles() {};
         // Konvertieren in kleinbuchstaben und leerzeichen entfernen
         let sheetKey = name.toLowerCase().replace(/\s+/g, '');
 
-        // Nach entsprechendem Schlüssel in config.sheets suchen (case-insensitive)
+        // Nach entsprechendem Schlüssel in config suchen (case-insensitive)
         let configKey = null;
-        Object.keys(config$1.sheets).forEach(key => {
+        Object.keys(config$1).forEach(key => {
             if (key.toLowerCase() === sheetKey) {
                 configKey = key;
             }
         });
 
         // Wenn kein passender Schlüssel gefunden wurde, abbrechen
-        if (!configKey || !config$1.sheets[configKey].columns.zeitstempel) return;
+        if (!configKey || !config$1[configKey].columns.zeitstempel) return;
 
         // Spalte für Zeitstempel aus der Konfiguration
-        const timestampCol = config$1.sheets[configKey].columns.zeitstempel;
+        const timestampCol = config$1[configKey].columns.zeitstempel;
 
         // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
         if (range.getColumn() === timestampCol ||

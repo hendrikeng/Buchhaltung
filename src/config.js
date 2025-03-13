@@ -116,7 +116,7 @@ const config = {
             bezahlt: 9,            // I: Bereits bezahlter Betrag
             restbetragNetto: 10,   // J: Restbetrag Netto
             quartal: 11,           // K: Berechnetes Quartal
-            zahlungsstatus: 12,    // L: Status (Offen/Teilbezahlt/Bezahlt)
+            zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
             zahlungsart: 13,       // M: Zahlungsart
             zahlungsdatum: 14,     // N: Zahlungsdatum
             bankabgleich: 15,      // O: Bankabgleich-Information
@@ -245,18 +245,18 @@ const config = {
     eigenbelege: {
         columns: {
             datum: 1,              // A: Belegdatum
-            rechnungsnummer: 2,        // B: Belegnummer
-            ausgelegtVon: 3,      // C: Ausgelegt von (Person)
+            rechnungsnummer: 2,    // B: Belegnummer
+            ausgelegtVon: 3,       // C: Ausgelegt von (Person)
             kategorie: 4,          // D: Kategorie
             beschreibung: 5,       // E: Beschreibung
             nettobetrag: 6,        // F: Nettobetrag
             mwstSatz: 7,           // G: MwSt-Satz in %
             mwstBetrag: 8,         // H: MwSt-Betrag (F*G)
             bruttoBetrag: 9,       // I: Bruttobetrag (F+H)
-            bezahlt: 10,           // J: Bereits bezahlter Betrag
-            restbetragNetto: 11,        // K: Restbetrag Netto
+            bezahlt: 10,           // J: Bereits erstatteter Betrag
+            restbetragNetto: 11,   // K: Restbetrag Netto
             quartal: 12,           // L: Berechnetes Quartal
-            zahlungsstatus: 13,    // M: Status (Offen/Erstattet/Gebucht)
+            zahlungsstatus: 13,    // M: Erstattungsstatus (Offen/Erstattet/Gebucht)
             zahlungsart: 14,       // N: Erstattungsart
             zahlungsdatum: 15,     // O: Erstattungsdatum
             bankabgleich: 16,      // P: Bankabgleich-Information
