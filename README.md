@@ -11,6 +11,7 @@ Eine umfassende Buchhaltungslösung für kleine Unternehmen, die auf Google Shee
 - **Validierung**: Umfassende Validierung aller Eingaben mit detaillierten Fehlermeldungen
 - **Fehlertoleranz**: Robuste Fehlerbehandlung und Logging
 - **Flexibilität**: Unterstützung für verschiedene Steuerszenarien (Holding/Operativ)
+- **Performance-Optimierung**: Caching-Mechanismen und Batch-Operationen für schnellere Berechnungen
 
 ## Module
 
@@ -101,16 +102,24 @@ Die grundlegende Konfiguration erfolgt in der `config.js` Datei:
 - Automatische Erkennung von Rechnungsdaten aus Dateinamen
 - Protokollierung aller Importe in der Änderungshistorie
 - Automatische Erstellung fehlender Ordner
+- Batch-Import für bessere Performance
 
 ### Berechnungen
 - **UStVA**: Automatische Berechnung von Umsatzsteuer und Vorsteuer nach deutschem Steuerrecht
 - **BWA**: Berechnung wichtiger Kennzahlen wie Rohertrag, EBIT und EBITDA
 - **Bilanz**: Erstellung einer Bilanz mit Anlagevermögen, Umlaufvermögen, Eigenkapital und Verbindlichkeiten
+- **Caching**: Intelligentes Caching von Berechnungsergebnissen für bessere Performance
 
 ### Validierung
 - Validierung aller Eingaben auf Vollständigkeit und Korrektheit
 - Prüfung auf erlaubte MwSt-Sätze
 - Validierung von Datums- und Zahlenwerten
+- Verbesserte Fehlerberichterstattung
+
+### Performance-Optimierung
+- Effiziente Batch-Operationen für API-Calls
+- Caching-Mechanismen für rechenintensive Operationen
+- Optimierte Suche und Matching-Algorithmen
 
 ## Lizenz
 

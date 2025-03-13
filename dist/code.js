@@ -1275,20 +1275,6 @@ const ImportModule = (() => {
  */
 const Validator = (() => {
     /**
-     * Prüft, ob ein Wert leer ist
-     * @param {*} v - Der zu prüfende Wert
-     * @returns {boolean} - True, wenn der Wert leer ist
-     */
-    const isEmpty = v => v == null || v.toString().trim() === "";
-
-    /**
-     * Prüft, ob ein Wert keine gültige Zahl ist
-     * @param {*} v - Der zu prüfende Wert
-     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
-     */
-    const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
-
-    /**
      * Erstellt eine Dropdown-Validierung für einen Bereich
      * @param {Sheet} sheet - Das Sheet, in dem validiert werden soll
      * @param {number} row - Die Start-Zeile
@@ -1326,7 +1312,7 @@ const Validator = (() => {
         const columns = config$1.sheets[sheetType].columns;
 
         /**
-         * Validiert eine Zeile anhand von Regeln
+         * Validiert eine Zeile anhand einer Liste von Validierungsregeln
          * @param {Array} row - Die zu validierende Zeile
          * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
          * @param {Array<Object>} rules - Array mit Regeln ({check, message})
@@ -1339,15 +1325,15 @@ const Validator = (() => {
 
         // Grundlegende Validierungsregeln
         const baseRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
-            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
             {check: r => isInvalidNumber(r[columns.nettobetrag - 1]), message: "Nettobetrag fehlt oder ungültig."},
             {
                 check: r => {
                     const mwstStr = r[columns.mwstSatz - 1] == null ? "" : r[columns.mwstSatz - 1].toString().trim();
-                    if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+                    if (Helpers.isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
 
                     // MwSt-Satz extrahieren und normalisieren
                     const mwst = Helpers.parseMwstRate(mwstStr);
@@ -1367,11 +1353,11 @@ const Validator = (() => {
         // Regeln für offene Zahlungen
         const openPaymentRules = [
             {
-                check: r => !isEmpty(r[columns.zahlungsart - 1]),
+                check: r => !Helpers.isEmpty(r[columns.zahlungsart - 1]),
                 message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'
             },
             {
-                check: r => !isEmpty(r[columns.zahlungsdatum - 1]),
+                check: r => !Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
                 message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'
             }
         ];
@@ -1379,16 +1365,16 @@ const Validator = (() => {
         // Regeln für bezahlte Zahlungen
         const paidPaymentRules = [
             {
-                check: r => isEmpty(r[columns.zahlungsart - 1]),
+                check: r => Helpers.isEmpty(r[columns.zahlungsart - 1]),
                 message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
-                check: r => isEmpty(r[columns.zahlungsdatum - 1]),
+                check: r => Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
                 message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
                 check: r => {
-                    if (isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
+                    if (Helpers.isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
 
                     const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                     return paymentDate ? paymentDate > new Date() : false;
@@ -1397,7 +1383,7 @@ const Validator = (() => {
             },
             {
                 check: r => {
-                    if (isEmpty(r[columns.zahlungsdatum - 1]) || isEmpty(r[columns.datum - 1])) return false;
+                    if (Helpers.isEmpty(r[columns.zahlungsdatum - 1]) || Helpers.isEmpty(r[columns.datum - 1])) return false;
 
                     const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                     const invoiceDate = Helpers.parseDate(r[columns.datum - 1]);
@@ -1418,6 +1404,13 @@ const Validator = (() => {
     };
 
     /**
+     * Prüft, ob ein Wert keine gültige Zahl ist
+     * @param {*} v - Der zu prüfende Wert
+     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
+     */
+    const isInvalidNumber = v => Helpers.isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
+
+    /**
      * Validiert das Bankbewegungen-Sheet
      * @param {Sheet} bankSheet - Das zu validierende Sheet
      * @returns {Array<string>} - Array mit Warnungen
@@ -1428,6 +1421,33 @@ const Validator = (() => {
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
         const columns = config$1.sheets.bankbewegungen.columns;
+
+        // Regeln für Header- und Footer-Zeilen
+        const headerFooterRules = [
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+            {
+                check: r => !Helpers.isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
+                message: "Betrag darf nicht gesetzt sein."
+            },
+            {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => !Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
+        ];
+
+        // Regeln für Datenzeilen
+        const dataRowRules = [
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
+            {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
+        ];
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -1440,33 +1460,6 @@ const Validator = (() => {
                 if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
             });
         };
-
-        // Regeln für Header- und Footer-Zeilen
-        const headerFooterRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-            {
-                check: r => !isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
-                message: "Betrag darf nicht gesetzt sein."
-            },
-            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-            {check: r => !isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
-        ];
-
-        // Regeln für Datenzeilen
-        const dataRowRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-            {check: r => isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
-            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-            {check: r => isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
-            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
-            {check: r => isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
-        ];
 
         // Zeilen validieren
         data.forEach((row, i) => {
@@ -1499,53 +1492,41 @@ const Validator = (() => {
         }
 
         try {
-            // Daten aus den Sheets lesen
-            const revData = revenueSheet.getDataRange().getValues();
-            const expData = expenseSheet.getDataRange().getValues();
+            // Warnungen für alle Sheets sammeln
+            const allWarnings = [];
 
-            // Einnahmen validieren (Header-Zeile überspringen)
-            const revenueWarnings = revData.length > 1
-                ? revData.slice(1).reduce((acc, row, i) => {
-                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "einnahmen"));
-                    }
-                    return acc;
-                }, [])
-                : [];
-
-            // Ausgaben validieren (Header-Zeile überspringen)
-            const expenseWarnings = expData.length > 1
-                ? expData.slice(1).reduce((acc, row, i) => {
-                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "ausgaben"));
-                    }
-                    return acc;
-                }, [])
-                : [];
-
-            // Bank validieren (falls verfügbar)
-            const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
-
-            // Fehlermeldungen zusammenstellen
-            const msgArr = [];
-            if (revenueWarnings.length) {
-                msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+            // Einnahmen validieren (wenn Daten vorhanden)
+            if (revenueSheet.getLastRow() > 1) {
+                const revenueData = revenueSheet.getDataRange().getValues().slice(1); // Header überspringen
+                const revenueWarnings = validateSheet(revenueData, "einnahmen");
+                if (revenueWarnings.length) {
+                    allWarnings.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+                }
             }
 
-            if (expenseWarnings.length) {
-                msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+            // Ausgaben validieren (wenn Daten vorhanden)
+            if (expenseSheet.getLastRow() > 1) {
+                const expenseData = expenseSheet.getDataRange().getValues().slice(1); // Header überspringen
+                const expenseWarnings = validateSheet(expenseData, "ausgaben");
+                if (expenseWarnings.length) {
+                    allWarnings.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+                }
             }
 
-            if (bankWarnings.length) {
-                msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+            // Bankbewegungen validieren (wenn vorhanden)
+            if (bankSheet) {
+                const bankWarnings = validateBanking(bankSheet);
+                if (bankWarnings.length) {
+                    allWarnings.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+                }
             }
 
             // Fehlermeldungen anzeigen, falls vorhanden
-            if (msgArr.length) {
+            if (allWarnings.length) {
                 const ui = SpreadsheetApp.getUi();
                 // Bei vielen Fehlern ggf. einschränken, um UI-Limits zu vermeiden
                 const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
-                let alertMsg = msgArr.join("\n\n");
+                let alertMsg = allWarnings.join("\n\n");
 
                 if (alertMsg.length > maxMsgLength) {
                     alertMsg = alertMsg.substring(0, maxMsgLength) +
@@ -1562,6 +1543,23 @@ const Validator = (() => {
             SpreadsheetApp.getUi().alert("Ein Fehler ist bei der Validierung aufgetreten: " + e.toString());
             return false;
         }
+    };
+
+    /**
+     * Validiert alle Zeilen in einem Sheet
+     * @param {Array} data - Zeilen-Daten (ohne Header)
+     * @param {string} sheetType - Typ des Sheets ('einnahmen' oder 'ausgaben')
+     * @returns {Array<string>} - Array mit Warnungen
+     */
+    const validateSheet = (data, sheetType) => {
+        return data.reduce((warnings, row, index) => {
+            // Nur nicht-leere Zeilen prüfen
+            if (row.some(cell => cell !== "")) {
+                const rowWarnings = validateRevenueAndExpenses(row, index + 2, sheetType);
+                warnings.push(...rowWarnings);
+            }
+            return warnings;
+        }, []);
     };
 
     /**
@@ -1605,8 +1603,8 @@ const Validator = (() => {
 
             case 'text':
                 return {
-                    isValid: !isEmpty(value),
-                    message: !isEmpty(value) ? "" : "Text darf nicht leer sein."
+                    isValid: !Helpers.isEmpty(value),
+                    message: !Helpers.isEmpty(value) ? "" : "Text darf nicht leer sein."
                 };
 
             default:
@@ -1617,6 +1615,92 @@ const Validator = (() => {
         }
     };
 
+    /**
+     * Validiert ein komplettes Sheet und liefert einen detaillierten Fehlerbericht
+     * @param {Sheet} sheet - Das zu validierende Sheet
+     * @param {Object} validationRules - Regeln für jede Spalte {spaltenIndex: {type, required}}
+     * @returns {Object} - Validierungsergebnis mit Fehlern pro Zeile/Spalte
+     */
+    const validateSheetWithRules = (sheet, validationRules) => {
+        const results = {
+            isValid: true,
+            errors: [],
+            errorsByRow: {},
+            errorsByColumn: {}
+        };
+
+        if (!sheet) {
+            results.isValid = false;
+            results.errors.push("Sheet nicht gefunden");
+            return results;
+        }
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) return results; // Nur Header oder leer
+
+        // Header-Zeile überspringen
+        for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+            const row = data[rowIdx];
+
+            // Jede Spalte mit Validierungsregeln prüfen
+            Object.entries(validationRules).forEach(([colIndex, rules]) => {
+                const colIdx = parseInt(colIndex, 10);
+                if (isNaN(colIdx) || colIdx >= row.length) return;
+
+                const cellValue = row[colIdx];
+                const { type, required } = rules;
+
+                // Pflichtfeld-Prüfung
+                if (required && Helpers.isEmpty(cellValue)) {
+                    const error = {
+                        row: rowIdx + 1,
+                        column: colIdx + 1,
+                        message: "Pflichtfeld nicht ausgefüllt"
+                    };
+                    addError(results, error);
+                    return;
+                }
+
+                // Wenn nicht leer, auf Typ prüfen
+                if (!Helpers.isEmpty(cellValue) && type) {
+                    const validation = validateCellValue(cellValue, type);
+                    if (!validation.isValid) {
+                        const error = {
+                            row: rowIdx + 1,
+                            column: colIdx + 1,
+                            message: validation.message
+                        };
+                        addError(results, error);
+                    }
+                }
+            });
+        }
+
+        results.isValid = results.errors.length === 0;
+        return results;
+    };
+
+    /**
+     * Fügt einen Fehler zum Validierungsergebnis hinzu
+     * @param {Object} results - Das Validierungsergebnis
+     * @param {Object} error - Der Fehler {row, column, message}
+     */
+    const addError = (results, error) => {
+        results.errors.push(error);
+
+        // Nach Zeile gruppieren
+        if (!results.errorsByRow[error.row]) {
+            results.errorsByRow[error.row] = [];
+        }
+        results.errorsByRow[error.row].push(error);
+
+        // Nach Spalte gruppieren
+        if (!results.errorsByColumn[error.column]) {
+            results.errorsByColumn[error.column] = [];
+        }
+        results.errorsByColumn[error.column].push(error);
+    };
+
     // Öffentliche API des Moduls
     return {
         validateDropdown,
@@ -1624,7 +1708,8 @@ const Validator = (() => {
         validateBanking,
         validateAllSheets,
         validateCellValue,
-        isEmpty,
+        validateSheetWithRules,
+        isEmpty: Helpers.isEmpty,
         isInvalidNumber
     };
 })();
@@ -1635,6 +1720,43 @@ const Validator = (() => {
  * Modul zum Aktualisieren der Tabellenblätter und Neuberechnen von Formeln
  */
 const RefreshModule = (() => {
+    // Cache für wiederholte Berechnungen
+    const _cache = {
+        // Sheet-Referenzen Cache, um unnötige getSheetByName-Aufrufe zu vermeiden
+        sheets: new Map(),
+        // Referenz-Maps für schnellere Suche nach Rechnungsnummern
+        references: {
+            einnahmen: null,
+            ausgaben: null
+        }
+    };
+
+    /**
+     * Cache zurücksetzen
+     */
+    const clearCache = () => {
+        _cache.sheets.clear();
+        _cache.references.einnahmen = null;
+        _cache.references.ausgaben = null;
+    };
+
+    /**
+     * Holt ein Sheet aus dem Cache oder vom Spreadsheet
+     * @param {string} name - Name des Sheets
+     * @returns {Sheet|null} - Das Sheet oder null, wenn nicht gefunden
+     */
+    const getSheet = (name) => {
+        if (_cache.sheets.has(name)) {
+            return _cache.sheets.get(name);
+        }
+
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+        if (sheet) {
+            _cache.sheets.set(name, sheet);
+        }
+        return sheet;
+    };
+
     /**
      * Aktualisiert ein Datenblatt (Einnahmen, Ausgaben, Eigenbelege)
      * @param {Sheet} sheet - Das zu aktualisierende Sheet
@@ -1660,89 +1782,75 @@ const RefreshModule = (() => {
                 return false; // Unbekanntes Sheet
             }
 
-            // Spaltenbuchstaben aus den Indizes generieren
+            // Spaltenbuchstaben aus den Indizes generieren (mit Cache für Effizienz)
             const columnLetters = {};
             Object.entries(columns).forEach(([key, index]) => {
                 columnLetters[key] = Helpers.getColumnLetter(index);
             });
 
-            // Formeln für verschiedene Spalten setzen (mit konfigurierten Spaltenbuchstaben)
-            const formulas = {};
+            // Batch-Array für Formeln erstellen (effizienter als einzelne Range-Updates)
+            const formulasBatch = {};
 
             // MwSt-Betrag
-            formulas[columns.mwstBetrag] = row =>
-                `=${columnLetters.nettobetrag}${row}*${columnLetters.mwstSatz}${row}`;
+            formulasBatch[columns.mwstBetrag] = Array.from(
+                {length: numRows},
+                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}`]
+            );
 
             // Brutto-Betrag
-            formulas[columns.bruttoBetrag] = row =>
-                `=${columnLetters.nettobetrag}${row}+${columnLetters.mwstBetrag}${row}`;
+            formulasBatch[columns.bruttoBetrag] = Array.from(
+                {length: numRows},
+                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}+${columnLetters.mwstBetrag}${i + 2}`]
+            );
 
             // Steuerbemessungsgrundlage - für Teilzahlungen
-            formulas[columns.steuerbemessung] = row =>
-                `=(${columnLetters.bruttoBetrag}${row}-${columnLetters.bezahlt}${row})/(1+${columnLetters.mwstSatz}${row})`;
+            formulasBatch[columns.steuerbemessung] = Array.from(
+                {length: numRows},
+                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
+            );
 
             // Quartal
-            formulas[columns.quartal] = row =>
-                `=IF(${columnLetters.datum}${row}="";"";ROUNDUP(MONTH(${columnLetters.datum}${row})/3;0))`;
+            formulasBatch[columns.quartal] = Array.from(
+                {length: numRows},
+                (_, i) => [`=IF(${columnLetters.datum}${i + 2}="";"";ROUNDUP(MONTH(${columnLetters.datum}${i + 2})/3;0))`]
+            );
 
             // Zahlungsstatus
-            formulas[columns.zahlungsstatus] = row =>
-                `=IF(VALUE(${columnLetters.bezahlt}${row})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${row})>=VALUE(${columnLetters.bruttoBetrag}${row});"Bezahlt";"Teilbezahlt"))`;
+            formulasBatch[columns.zahlungsstatus] = Array.from(
+                {length: numRows},
+                (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
+            );
 
-            // Formeln für jede Spalte anwenden
-            Object.entries(formulas).forEach(([col, formulaFn]) => {
-                const formulasArray = Array.from({length: numRows}, (_, i) => [formulaFn(i + 2)]);
-                sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulasArray);
+            // Formeln in Batches anwenden (weniger API-Calls)
+            Object.entries(formulasBatch).forEach(([col, formulas]) => {
+                sheet.getRange(2, Number(col), numRows, 1).setFormulas(formulas);
             });
 
             // Bezahlter Betrag - Leerzeichen durch 0 ersetzen für Berechnungen
             const bezahltRange = sheet.getRange(2, columns.bezahlt, numRows, 1);
-            const bezahltValues = bezahltRange.getValues().map(([val]) => (val === "" || val === null ? 0 : val));
-            bezahltRange.setValues(bezahltValues.map(val => [val]));
+            const bezahltValues = bezahltRange.getValues();
+            const updatedBezahltValues = bezahltValues.map(
+                ([val]) => [Helpers.isEmpty(val) ? 0 : val]
+            );
+            bezahltRange.setValues(updatedBezahltValues);
 
             // Dropdown-Validierungen je nach Sheet-Typ setzen
-            if (name === "Einnahmen") {
-                Validator.validateDropdown(
-                    sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config$1.einnahmen.categories)
-                );
-            } else if (name === "Ausgaben") {
-                Validator.validateDropdown(
-                    sheet, 2, columns.kategorie, numRows, 1,
-                    Object.keys(config$1.ausgaben.categories)
-                );
-            } else if (name === "Eigenbelege") {
-                Validator.validateDropdown(
-                    sheet, 2, columns.kategorie, numRows, 1,
-                    config$1.eigenbelege.category
-                );
+            setDropdownValidations(sheet, name, numRows, columns);
 
-                // Für Eigenbelege: Status-Dropdown hinzufügen
-                Validator.validateDropdown(
-                    sheet, 2, columns.status, numRows, 1,
-                    config$1.eigenbelege.status
-                );
-
-                // Bedingte Formatierung für Status-Spalte (nur für Eigenbelege)
-                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
-                    {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
-                    {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
-                    {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
-                ]);
-            }
-
-            // Zahlungsart-Dropdown für alle Blätter
-            Validator.validateDropdown(
-                sheet, 2, columns.zahlungsart, numRows, 1,
-                config$1.common.paymentType
-            );
-
-            // Bedingte Formatierung für Zahlungsstatus-Spalte (für alle außer Eigenbelege)
+            // Bedingte Formatierung für Status-Spalte
             if (name !== "Eigenbelege") {
+                // Für Einnahmen und Ausgaben: Zahlungsstatus
                 Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
                     {value: "Teilbezahlt", background: "#FFEB9C", fontColor: "#9C6500"},
                     {value: "Bezahlt", background: "#C6EFCE", fontColor: "#006100"}
+                ]);
+            } else {
+                // Für Eigenbelege: Status
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
+                    {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
+                    {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
+                    {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
                 ]);
             }
 
@@ -1754,6 +1862,44 @@ const RefreshModule = (() => {
             console.error(`Fehler beim Aktualisieren von ${sheet.getName()}:`, e);
             return false;
         }
+    };
+
+    /**
+     * Setzt Dropdown-Validierungen für ein Sheet
+     * @param {Sheet} sheet - Das Sheet
+     * @param {string} sheetName - Name des Sheets
+     * @param {number} numRows - Anzahl der Datenzeilen
+     * @param {Object} columns - Spaltenkonfiguration
+     */
+    const setDropdownValidations = (sheet, sheetName, numRows, columns) => {
+        if (sheetName === "Einnahmen") {
+            Validator.validateDropdown(
+                sheet, 2, columns.kategorie, numRows, 1,
+                Object.keys(config$1.einnahmen.categories)
+            );
+        } else if (sheetName === "Ausgaben") {
+            Validator.validateDropdown(
+                sheet, 2, columns.kategorie, numRows, 1,
+                Object.keys(config$1.ausgaben.categories)
+            );
+        } else if (sheetName === "Eigenbelege") {
+            Validator.validateDropdown(
+                sheet, 2, columns.kategorie, numRows, 1,
+                config$1.eigenbelege.category
+            );
+
+            // Für Eigenbelege: Status-Dropdown hinzufügen
+            Validator.validateDropdown(
+                sheet, 2, columns.status, numRows, 1,
+                config$1.eigenbelege.status
+            );
+        }
+
+        // Zahlungsart-Dropdown für alle Blätter
+        Validator.validateDropdown(
+            sheet, 2, columns.zahlungsart, numRows, 1,
+            config$1.common.paymentType
+        );
     };
 
     /**
@@ -1771,12 +1917,8 @@ const RefreshModule = (() => {
             const numDataRows = lastRow - firstDataRow + 1;
             const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
-            // Bankbewegungen-Konfiguration für Spalten holen
+            // Bankbewegungen-Konfiguration für Spalten
             const columns = config$1.sheets.bankbewegungen.columns;
-
-            // Konfigurationen für Spalten in den verschiedenen Sheets
-            const einnahmenCols = config$1.sheets.einnahmen.columns;
-            const ausgabenCols = config$1.sheets.ausgaben.columns;
 
             // Spaltenbuchstaben aus den Indizes generieren
             const columnLetters = {};
@@ -1784,7 +1926,7 @@ const RefreshModule = (() => {
                 columnLetters[key] = Helpers.getColumnLetter(index);
             });
 
-            // Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
+            // 1. Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
             if (transRows > 0) {
                 sheet.getRange(firstDataRow, columns.saldo, transRows, 1).setFormulas(
                     Array.from({length: transRows}, (_, i) =>
@@ -1793,7 +1935,7 @@ const RefreshModule = (() => {
                 );
             }
 
-            // Transaktionstyp basierend auf dem Betrag setzen (Einnahme/Ausgabe)
+            // 2. Transaktionstyp basierend auf dem Betrag setzen (Einnahme/Ausgabe)
             const amounts = sheet.getRange(firstDataRow, columns.betrag, numDataRows, 1).getValues();
             const typeValues = amounts.map(([val]) => {
                 const amt = parseFloat(val) || 0;
@@ -1801,388 +1943,23 @@ const RefreshModule = (() => {
             });
             sheet.getRange(firstDataRow, columns.transaktionstyp, numDataRows, 1).setValues(typeValues);
 
-            // Dropdown-Validierungen für Typ, Kategorie und Konten
-            Validator.validateDropdown(
-                sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-                config$1.bank.type
-            );
+            // 3. Dropdown-Validierungen für Typ, Kategorie und Konten
+            applyBankSheetValidations(sheet, firstDataRow, numDataRows, columns);
 
-            Validator.validateDropdown(
-                sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-                config$1.bank.category
-            );
-
-            // Konten für Dropdown-Validierung sammeln
-            const allowedKontoSoll = Object.values(config$1.einnahmen.kontoMapping)
-                .concat(Object.values(config$1.ausgaben.kontoMapping))
-                .map(m => m.soll);
-
-            const allowedGegenkonto = Object.values(config$1.einnahmen.kontoMapping)
-                .concat(Object.values(config$1.ausgaben.kontoMapping))
-                .map(m => m.gegen);
-
-            // Dropdown-Validierungen für Konten setzen
-            Validator.validateDropdown(
-                sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
-                allowedKontoSoll
-            );
-
-            Validator.validateDropdown(
-                sheet, firstDataRow, columns.kontoHaben, numDataRows, 1,
-                allowedGegenkonto
-            );
-
-            // Bedingte Formatierung für Transaktionstyp-Spalte
+            // 4. Bedingte Formatierung für Transaktionstyp-Spalte
             Helpers.setConditionalFormattingForColumn(sheet, columnLetters.transaktionstyp, [
                 {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
                 {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
             ]);
 
-            // REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
+            // 5. REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
+            performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters);
 
-            // Daten aus Einnahmen-Sheet
-            const einnahmenSheet = ss.getSheetByName("Einnahmen");
-            let einnahmenData = [];
+            // 6. Endsaldo-Zeile aktualisieren
+            updateEndSaldoRow(sheet, lastRow, columns, columnLetters);
 
-            if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
-                const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
-                // Die relevanten Spalten laden basierend auf der Konfiguration
-                einnahmenData = einnahmenSheet.getRange(2, einnahmenCols.rechnungsnummer, numEinnahmenRows, 8).getDisplayValues();
-            }
-
-            // Daten aus Ausgaben-Sheet
-            const ausgabenSheet = ss.getSheetByName("Ausgaben");
-            let ausgabenData = [];
-
-            if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
-                const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
-                // Die relevanten Spalten laden basierend auf der Konfiguration
-                ausgabenData = ausgabenSheet.getRange(2, ausgabenCols.rechnungsnummer, numAusgabenRows, 8).getDisplayValues();
-            }
-
-            // Bankbewegungen Daten für Verarbeitung holen
-            const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
-
-            // Cache für schnellere Suche
-            const einnahmenMap = createReferenceMap(einnahmenData);
-            const ausgabenMap = createReferenceMap(ausgabenData);
-
-            // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
-            for (let i = 0; i < bankData.length; i++) {
-                const rowIndex = i + firstDataRow;
-                const row = bankData[i];
-
-                // Prüfe, ob es sich um die Endsaldo-Zeile handelt
-                const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
-                if (rowIndex === lastRow && label === "endsaldo") continue;
-
-                const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
-                const refNumber = row[columns.referenz - 1];       // Referenznummer
-
-                // Nur prüfen, wenn Referenz nicht leer ist
-                if (refNumber && refNumber.trim() !== "") {
-                    let matchFound = false;
-                    let matchInfo = "";
-
-                    const refTrimmed = refNumber.toString().trim();
-
-                    // Betrag für den Vergleich (als absoluter Wert)
-                    const betragValue = Math.abs(parseFloat(row[columns.betrag - 1]) || 0);
-
-                    // In Abhängigkeit vom Typ im entsprechenden Sheet suchen
-                    if (tranType === "Einnahme") {
-                        // Optimierte Suche in Einnahmen mittels Map
-                        const matchResult = findMatch(refTrimmed, einnahmenMap, betragValue);
-                        if (matchResult) {
-                            matchFound = true;
-                            let matchStatus = "";
-
-                            // Je nach Match-Typ unterschiedliche Statusinformationen
-                            if (matchResult.matchType) {
-                                // Bei "Unsichere Zahlung" auch die Differenz anzeigen
-                                if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
-                                    matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
-                                } else {
-                                    matchStatus = ` (${matchResult.matchType})`;
-                                }
-                            }
-
-                            // Prüfen, ob Zahldatum in Einnahmen/Ausgaben aktualisiert werden soll
-                            if ((matchResult.matchType === "Vollständige Zahlung" ||
-                                    matchResult.matchType === "Teilzahlung") &&
-                                tranType === "Einnahme") {
-                                // Bankbewegungsdatum holen (aus Spalte A)
-                                const zahlungsDatum = row[columns.datum - 1];
-                                if (zahlungsDatum) {
-                                    // Zahldatum im Einnahmen-Sheet aktualisieren (nur wenn leer)
-                                    const einnahmenRow = matchResult.row;
-                                    const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
-                                    const aktuellDatum = zahldatumRange.getValue();
-
-                                    if (!aktuellDatum || aktuellDatum === "") {
-                                        zahldatumRange.setValue(zahlungsDatum);
-                                        matchStatus += " ✓ Datum aktualisiert";
-                                    }
-                                }
-                            }
-
-                            matchInfo = `Einnahme #${matchResult.row}${matchStatus}`;
-                        }
-                    } else if (tranType === "Ausgabe") {
-                        // Optimierte Suche in Ausgaben mittels Map
-                        const matchResult = findMatch(refTrimmed, ausgabenMap, betragValue);
-                        if (matchResult) {
-                            matchFound = true;
-                            let matchStatus = "";
-
-                            // Je nach Match-Typ unterschiedliche Statusinformationen für Ausgaben
-                            if (matchResult.matchType) {
-                                if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
-                                    matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
-                                } else {
-                                    matchStatus = ` (${matchResult.matchType})`;
-                                }
-                            }
-
-                            // Prüfen, ob Zahldatum in Ausgaben aktualisiert werden soll
-                            if ((matchResult.matchType === "Vollständige Zahlung" ||
-                                    matchResult.matchType === "Teilzahlung") &&
-                                ausgabenSheet) {
-                                // Bankbewegungsdatum holen (aus Spalte A)
-                                const zahlungsDatum = row[columns.datum - 1];
-                                if (zahlungsDatum) {
-                                    // Zahldatum im Ausgaben-Sheet aktualisieren (nur wenn leer)
-                                    const ausgabenRow = matchResult.row;
-                                    const zahldatumRange = ausgabenSheet.getRange(ausgabenRow, ausgabenCols.zahlungsdatum);
-                                    const aktuellDatum = zahldatumRange.getValue();
-
-                                    if (!aktuellDatum || aktuellDatum === "") {
-                                        zahldatumRange.setValue(zahlungsDatum);
-                                        matchStatus += " ✓ Datum aktualisiert";
-                                    }
-                                }
-                            }
-
-                            matchInfo = `Ausgabe #${matchResult.row}${matchStatus}`;
-                        }
-
-                        // FALLS keine Übereinstimmung, auch in Einnahmen suchen (für Gutschriften)
-                        if (!matchFound) {
-                            // Bei einer Ausgabe, die möglicherweise eine Gutschrift ist,
-                            // ignorieren wir den Betrag für den ersten Vergleich, um die entsprechende Einnahme zu finden
-                            const gutschriftMatch = findMatch(refTrimmed, einnahmenMap);
-
-                            if (gutschriftMatch) {
-                                matchFound = true;
-                                let matchStatus = "";
-
-                                // Bei Gutschriften könnte der Betrag abweichen (z.B. Teilgutschrift)
-                                // Prüfen, ob die Beträge plausibel sind
-                                const gutschriftBetrag = Math.abs(gutschriftMatch.betrag);
-
-                                if (Math.abs(betragValue - gutschriftBetrag) <= 0.01) {
-                                    // Beträge stimmen genau überein
-                                    matchStatus = " (Vollständige Gutschrift)";
-                                } else if (betragValue < gutschriftBetrag) {
-                                    // Teilgutschrift (Gutschriftbetrag kleiner als ursprünglicher Rechnungsbetrag)
-                                    matchStatus = " (Teilgutschrift)";
-                                } else {
-                                    // Ungewöhnlicher Fall - Gutschriftbetrag größer als Rechnungsbetrag
-                                    matchStatus = " (Ungewöhnliche Gutschrift)";
-                                }
-
-                                // Bei Gutschriften auch im Einnahmen-Sheet aktualisieren - hier als negative Zahlung
-                                if (einnahmenSheet) {
-                                    // Bankbewegungsdatum holen (aus Spalte A)
-                                    const gutschriftDatum = row[columns.datum - 1];
-                                    if (gutschriftDatum) {
-                                        // Gutschriftdatum im Einnahmen-Sheet aktualisieren und "G-" vor die Referenz setzen
-                                        const einnahmenRow = gutschriftMatch.row;
-
-                                        // Zahldatum aktualisieren (nur wenn leer)
-                                        const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
-                                        const aktuellDatum = zahldatumRange.getValue();
-
-                                        if (!aktuellDatum || aktuellDatum === "") {
-                                            zahldatumRange.setValue(gutschriftDatum);
-                                            matchStatus += " ✓ Datum aktualisiert";
-                                        }
-
-                                        // Optional: Die Referenz mit "G-" kennzeichnen, um Gutschrift zu markieren
-                                        const refRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.rechnungsnummer);
-                                        const currentRef = refRange.getValue();
-                                        if (currentRef && !currentRef.toString().startsWith("G-")) {
-                                            refRange.setValue("G-" + currentRef);
-                                            matchStatus += " ✓ Ref. markiert";
-                                        }
-                                    }
-                                }
-
-                                matchInfo = `Gutschrift zu Einnahme #${gutschriftMatch.row}${matchStatus}`;
-                            }
-                        }
-                    }
-
-                    // Spezialfälle prüfen
-                    if (!matchFound) {
-                        const lcRef = refTrimmed.toLowerCase();
-                        if (lcRef.includes("gesellschaftskonto")) {
-                            matchFound = true;
-                            matchInfo = tranType === "Einnahme"
-                                ? "Gesellschaftskonto (Einnahme)"
-                                : "Gesellschaftskonto (Ausgabe)";
-                        } else if (lcRef.includes("holding")) {
-                            matchFound = true;
-                            matchInfo = tranType === "Einnahme"
-                                ? "Holding (Einnahme)"
-                                : "Holding (Ausgabe)";
-                        }
-                    }
-
-                    // Ergebnis in Spalte matchInfo speichern
-                    row[columns.matchInfo - 1] = matchFound ? matchInfo : "";
-                } else {
-                    row[columns.matchInfo - 1] = ""; // Leere Spalte matchInfo
-                }
-
-                // Kontonummern basierend auf Kategorie setzen
-                const category = row[columns.kategorie - 1] || "";
-                let mapping = null;
-
-                if (tranType === "Einnahme") {
-                    mapping = config$1.einnahmen.kontoMapping[category];
-                } else if (tranType === "Ausgabe") {
-                    mapping = config$1.ausgaben.kontoMapping[category];
-                }
-
-                if (!mapping) {
-                    mapping = {soll: "Manuell prüfen", gegen: "Manuell prüfen"};
-                }
-
-                row[columns.kontoSoll - 1] = mapping.soll;
-                row[columns.kontoHaben - 1] = mapping.gegen;
-            }
-
-            // Zuerst nur Spalte matchInfo aktualisieren (für bessere Performance und Fehlerbehandlung)
-            const matchColumn = bankData.map(row => [row[columns.matchInfo - 1]]);
-            sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchColumn);
-
-            // Dann die restlichen Daten zurückschreiben
-            sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo - 1).setValues(
-                bankData.map(row => row.slice(0, columns.matchInfo - 1))
-            );
-
-            // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
-            console.log("Daten wurden zurückgeschrieben, warte 1 Sekunde vor der Formatierung...");
-            Utilities.sleep(1000);
-
-            // Log zur Überprüfung
-            console.log("Beginne mit Zeilenformatierung für " + bankData.length + " Zeilen");
-
-            // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
-            // Wir verarbeiten jede Zeile einzeln, um Probleme zu isolieren
-            for (let i = 0; i < bankData.length; i++) {
-                try {
-                    const rowIndex = firstDataRow + i;
-                    const matchInfo = bankData[i][columns.matchInfo - 1]; // Spalte mit Match-Info
-
-                    // Nur formatieren, wenn die Zeile existiert und eine Match-Info hat
-                    if (rowIndex <= sheet.getLastRow() && matchInfo && matchInfo.trim() !== "") {
-                        console.log(`Versuche Formatierung für Zeile ${rowIndex}, Match: "${matchInfo}"`);
-
-                        // Zuerst den Hintergrund zurücksetzen
-                        const rowRange = sheet.getRange(rowIndex, 1, 1, columns.matchInfo);
-                        rowRange.setBackground(null);
-
-                        // Kurze Pause, um die Sheets-API nicht zu überlasten
-                        if (i % 5 === 0) Utilities.sleep(100);
-
-                        // Dann die neue Farbe anwenden, je nach Match-Typ
-                        if (matchInfo.includes("Einnahme")) {
-                            if (matchInfo.includes("Vollständige Zahlung")) {
-                                console.log(`Setze Grün für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#C6EFCE"); // Kräftiges Grün
-                            } else if (matchInfo.includes("Teilzahlung")) {
-                                console.log(`Setze Orange für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#FCE4D6"); // Helles Orange
-                            } else {
-                                console.log(`Setze Hellgrün für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#EAF1DD"); // Helles Grün
-                            }
-                        } else if (matchInfo.includes("Ausgabe")) {
-                            if (matchInfo.includes("Vollständige Zahlung")) {
-                                console.log(`Setze Rot für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#FFC7CE"); // Helles Rot
-                            } else if (matchInfo.includes("Teilzahlung")) {
-                                console.log(`Setze Orange für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#FCE4D6"); // Helles Orange
-                            } else {
-                                console.log(`Setze Rosa für Zeile ${rowIndex}`);
-                                rowRange.setBackground("#FFCCCC"); // Helles Rosa
-                            }
-                        } else if (matchInfo.includes("Gutschrift")) {
-                            console.log(`Setze Lila für Zeile ${rowIndex}`);
-                            rowRange.setBackground("#E6E0FF"); // Helles Lila
-                        } else if (matchInfo.includes("Gesellschaftskonto") || matchInfo.includes("Holding")) {
-                            console.log(`Setze Gelb für Zeile ${rowIndex}`);
-                            rowRange.setBackground("#FFEB9C"); // Helles Gelb
-                        }
-                    }
-                } catch (err) {
-                    console.error(`Fehler beim Formatieren von Zeile ${firstDataRow + i}:`, err);
-                }
-            }
-
-            console.log("Zeilenformatierung abgeschlossen");
-
-            // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
-            Helpers.setConditionalFormattingForColumn(sheet, columnLetters.matchInfo, [
-                // Grundlegende Match-Typen
-                {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
-                {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
-                {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
-                {value: "Gesellschaftskonto", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
-                {value: "Holding", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
-
-                // Zusätzliche Betragstypen
-                {value: "Vollständige Zahlung", background: "#C6EFCE", fontColor: "#006100", pattern: "contains"},
-                {value: "Teilzahlung", background: "#FCE4D6", fontColor: "#974706", pattern: "contains"},
-                {value: "Unsichere Zahlung", background: "#F8CBAD", fontColor: "#843C0C", pattern: "contains"},
-                {value: "Vollständige Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
-                {value: "Teilgutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
-                {value: "Ungewöhnliche Gutschrift", background: "#FFD966", fontColor: "#7F6000", pattern: "contains"}
-            ]);
-
-            // Endsaldo-Zeile aktualisieren
-            const lastRowText = sheet.getRange(lastRow, columns.buchungstext).getDisplayValue().toString().trim().toLowerCase();
-            const formattedDate = Utilities.formatDate(
-                new Date(),
-                Session.getScriptTimeZone(),
-                "dd.MM.yyyy"
-            );
-
-            if (lastRowText === "endsaldo") {
-                sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
-                sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
-            } else {
-                // Erstelle eine neue Endsaldo-Zeile mit den richtigen Spalten
-                const newRow = Array(sheet.getLastColumn()).fill("");
-                newRow[columns.datum - 1] = formattedDate;
-                newRow[columns.buchungstext - 1] = "Endsaldo";
-                newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
-
-                sheet.appendRow(newRow);
-            }
-
-            // Spaltenbreiten anpassen
+            // 7. Spaltenbreiten anpassen
             sheet.autoResizeColumns(1, sheet.getLastColumn());
-
-            // Verzögerung vor dem Aufruf von markPaidInvoices
-            console.log("Warte 1 Sekunde vor dem Markieren der bezahlten Rechnungen...");
-            Utilities.sleep(1000);
-
-            // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
-            markPaidInvoices(einnahmenSheet, ausgabenSheet);
 
             return true;
         } catch (e) {
@@ -2192,12 +1969,103 @@ const RefreshModule = (() => {
     };
 
     /**
+     * Wendet Validierungen auf das Bankbewegungen-Sheet an
+     * @param {Sheet} sheet - Das Sheet
+     * @param {number} firstDataRow - Erste Datenzeile
+     * @param {number} numDataRows - Anzahl der Datenzeilen
+     * @param {Object} columns - Spaltenkonfiguration
+     */
+    const applyBankSheetValidations = (sheet, firstDataRow, numDataRows, columns) => {
+        // Validierung für Transaktionstyp
+        Validator.validateDropdown(
+            sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
+            config$1.bank.type
+        );
+
+        // Validierung für Kategorie
+        Validator.validateDropdown(
+            sheet, firstDataRow, columns.kategorie, numDataRows, 1,
+            config$1.bank.category
+        );
+
+        // Konten für Dropdown-Validierung sammeln
+        const allowedKontoSoll = new Set();
+        const allowedGegenkonto = new Set();
+
+        // Konten aus Einnahmen und Ausgaben sammeln
+        Object.values(config$1.einnahmen.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
+        Object.values(config$1.ausgaben.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
+        // Dropdown-Validierungen für Konten setzen
+        Validator.validateDropdown(
+            sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
+            Array.from(allowedKontoSoll)
+        );
+
+        Validator.validateDropdown(
+            sheet, firstDataRow, columns.kontoHaben, numDataRows, 1,
+            Array.from(allowedGegenkonto)
+        );
+    };
+
+    /**
+     * Aktualisiert die Endsaldo-Zeile im Bankbewegungen-Sheet
+     * @param {Sheet} sheet - Das Sheet
+     * @param {number} lastRow - Letzte Zeile
+     * @param {Object} columns - Spaltenkonfiguration
+     * @param {Object} columnLetters - Buchstaben für die Spalten
+     */
+    const updateEndSaldoRow = (sheet, lastRow, columns, columnLetters) => {
+        // Endsaldo-Zeile überprüfen
+        const lastRowText = sheet.getRange(lastRow, columns.buchungstext).getDisplayValue().toString().trim().toLowerCase();
+        const formattedDate = Utilities.formatDate(
+            new Date(),
+            Session.getScriptTimeZone(),
+            "dd.MM.yyyy"
+        );
+
+        if (lastRowText === "endsaldo") {
+            // Endsaldo-Zeile aktualisieren
+            sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
+            sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
+        } else {
+            // Neue Endsaldo-Zeile erstellen
+            const newRow = Array(sheet.getLastColumn()).fill("");
+            newRow[columns.datum - 1] = formattedDate;
+            newRow[columns.buchungstext - 1] = "Endsaldo";
+            newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
+
+            sheet.appendRow(newRow);
+        }
+    };
+
+    /**
      * Erstellt eine Map aus Referenznummern für schnellere Suche
      * @param {Array} data - Array mit Referenznummern und Beträgen
      * @returns {Object} - Map mit Referenznummern als Keys
      */
-    function createReferenceMap(data) {
+    const createReferenceMap = (data) => {
+        // Cache prüfen und nutzen
+        if (arguments.length === 1 && data === "einnahmen" && _cache.references.einnahmen) {
+            return _cache.references.einnahmen;
+        }
+        if (arguments.length === 1 && data === "ausgaben" && _cache.references.ausgaben) {
+            return _cache.references.ausgaben;
+        }
+
         const map = {};
+
+        // Keine Daten vorhanden
+        if (!data || !data.length) {
+            return map;
+        }
 
         // Da die Indizes bei data[] sich auf die Spalten im Range beziehen (nicht auf das komplette Sheet),
         // müssen wir wissen, welche Spalten in welcher Reihenfolge geladen wurden
@@ -2206,322 +2074,266 @@ const RefreshModule = (() => {
 
         for (let i = 0; i < data.length; i++) {
             const ref = data[i][0]; // Referenz (erste Spalte im geladenen Range)
-            if (ref && ref.trim() !== "") {
-                // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
-                let key = ref.trim();
-                const isGutschrift = key.startsWith("G-");
-                if (isGutschrift) {
-                    key = key.substring(2); // Entferne "G-" Prefix für den Schlüssel
-                }
+            if (Helpers.isEmpty(ref)) continue;
 
-                // Netto-Betrag aus dritter Spalte im geladenen Range
-                let betrag = 0;
-                if (data[i][3] !== undefined && data[i][3] !== null && data[i][3] !== "") {
-                    // Betragsstring säubern
-                    const betragStr = data[i][3].toString().replace(/[^0-9.,-]/g, "").replace(",", ".");
-                    betrag = parseFloat(betragStr) || 0;
+            // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
+            let key = ref.trim();
+            const isGutschrift = key.startsWith("G-");
+            if (isGutschrift) {
+                key = key.substring(2); // Entferne "G-" Prefix für den Schlüssel
+            }
 
-                    // Bei Gutschriften ist der Betrag im Sheet negativ, wir speichern den Absolutwert
-                    betrag = Math.abs(betrag);
-                }
+            // Alternativschlüssel: Normalisierter Text für unscharfe Suche
+            const normalizedKey = Helpers.normalizeText(key);
 
-                // MwSt-Satz aus vierter Spalte im geladenen Range
-                let mwstRate = 0;
-                if (data[i][4] !== undefined && data[i][4] !== null && data[i][4] !== "") {
-                    // MwSt-Satz säubern und parsen
-                    const mwstStr = data[i][4].toString().replace(/[^0-9.,-]/g, "").replace(",", ".");
-                    mwstRate = parseFloat(mwstStr) || 0;
+            // Netto-Betrag aus dritter Spalte im geladenen Range
+            let betrag = 0;
+            if (!Helpers.isEmpty(data[i][3])) {
+                betrag = Helpers.parseCurrency(data[i][3]);
 
-                    // Wenn der Wert > 1 ist, nehmen wir an, dass es sich um einen Prozentsatz handelt
-                    if (mwstRate > 1) {
-                        mwstRate = mwstRate;
-                    } else {
-                        // Ansonsten als Dezimalwert interpretieren und in Prozent umrechnen
-                        mwstRate = mwstRate * 100;
-                    }
-                }
+                // Bei Gutschriften ist der Betrag im Sheet negativ, wir speichern den Absolutwert
+                betrag = Math.abs(betrag);
+            }
 
-                // Bezahlter Betrag aus achter Spalte im geladenen Range
-                let bezahlt = 0;
-                if (data[i][7] !== undefined && data[i][7] !== null && data[i][7] !== "") {
-                    // Betragsstring säubern
-                    const bezahltStr = data[i][7].toString().replace(/[^0-9.,-]/g, "").replace(",", ".");
-                    bezahlt = parseFloat(bezahltStr) || 0;
+            // MwSt-Satz aus vierter Spalte im geladenen Range
+            let mwstRate = 0;
+            if (!Helpers.isEmpty(data[i][4])) {
+                mwstRate = Helpers.parseMwstRate(data[i][4]);
+            }
 
-                    // Bei Gutschriften ist der bezahlte Betrag im Sheet negativ, wir speichern den Absolutwert
-                    bezahlt = Math.abs(bezahlt);
-                }
+            // Bezahlter Betrag aus achter Spalte im geladenen Range
+            let bezahlt = 0;
+            if (!Helpers.isEmpty(data[i][7])) {
+                bezahlt = Helpers.parseCurrency(data[i][7]);
+                // Bei Gutschriften ist der bezahlte Betrag im Sheet negativ, wir speichern den Absolutwert
+                bezahlt = Math.abs(bezahlt);
+            }
 
-                // Speichere auch den Zeilen-Index und die Beträge
-                map[key] = {
-                    ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
-                    row: i + 2,      // +2 weil wir bei Zeile 2 beginnen (erste Zeile ist Header)
-                    betrag: betrag,
-                    mwstRate: mwstRate,
-                    bezahlt: bezahlt,
-                    offen: betrag * (1 + mwstRate/100) - bezahlt,
-                    isGutschrift: isGutschrift
-                };
+            // Bruttobetrag berechnen
+            const brutto = betrag * (1 + mwstRate/100);
+
+            // Speichere auch den Zeilen-Index und die Beträge
+            map[key] = {
+                ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
+                normalizedRef: normalizedKey, // Für unscharfe Suche
+                row: i + 2,      // +2 weil wir bei Zeile 2 beginnen (erste Zeile ist Header)
+                betrag: betrag,
+                mwstRate: mwstRate,
+                brutto: brutto,
+                bezahlt: bezahlt,
+                offen: Helpers.round(brutto - bezahlt, 2),
+                isGutschrift: isGutschrift
+            };
+
+            // Doppelten Eintrag mit normalisiertem Schlüssel anlegen, falls nötig
+            if (normalizedKey !== key && !map[normalizedKey]) {
+                map[normalizedKey] = map[key];
             }
         }
+
+        // Ergebnis cachen, wenn es sich um ein komplettes Sheet handelt
+        if (arguments.length === 1) {
+            if (data === "einnahmen") {
+                _cache.references.einnahmen = map;
+            } else if (data === "ausgaben") {
+                _cache.references.ausgaben = map;
+            }
+        }
+
         return map;
-    }
+    };
 
     /**
-     * Markiert bezahlte Einnahmen und Ausgaben farblich basierend auf dem Zahlungsstatus
-     * @param {Sheet} einnahmenSheet - Das Einnahmen-Sheet
-     * @param {Sheet} ausgabenSheet - Das Ausgaben-Sheet
+     * Führt das Matching von Bankbewegungen mit Rechnungen durch
+     * @param {Spreadsheet} ss - Das Spreadsheet
+     * @param {Sheet} sheet - Das Bankbewegungen-Sheet
+     * @param {number} firstDataRow - Erste Datenzeile
+     * @param {number} numDataRows - Anzahl der Datenzeilen
+     * @param {number} lastRow - Letzte Zeile
+     * @param {Object} columns - Spaltenkonfiguration
+     * @param {Object} columnLetters - Buchstaben für die Spalten
      */
-    function markPaidInvoices(einnahmenSheet, ausgabenSheet) {
-        // Sammle zugeordnete Referenzen aus dem Bankbewegungen-Sheet
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const bankSheet = ss.getSheetByName("Bankbewegungen");
-
-        // Konfigurationen für Spaltenindizes aus config
-        const bankCols = config$1.sheets.bankbewegungen.columns;
+    const performBankReferenceMatching = (ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters) => {
+        // Konfigurationen für Spaltenindizes
         const einnahmenCols = config$1.sheets.einnahmen.columns;
         const ausgabenCols = config$1.sheets.ausgaben.columns;
 
-        // Map zum Speichern der zugeordneten Referenzen und ihrer Bankbewegungsinformationen
+        // Referenzdaten laden für Einnahmen
+        const einnahmenSheet = getSheet("Einnahmen");
+        let einnahmenData = [], einnahmenMap = {};
+
+        if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
+            const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
+            // Die relevanten Spalten laden basierend auf der Konfiguration
+            einnahmenData = einnahmenSheet.getRange(2, einnahmenCols.rechnungsnummer, numEinnahmenRows, 8).getDisplayValues();
+            einnahmenMap = createReferenceMap(einnahmenData);
+        }
+
+        // Referenzdaten laden für Ausgaben
+        const ausgabenSheet = getSheet("Ausgaben");
+        let ausgabenData = [], ausgabenMap = {};
+
+        if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
+            const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
+            // Die relevanten Spalten laden basierend auf der Konfiguration
+            ausgabenData = ausgabenSheet.getRange(2, ausgabenCols.rechnungsnummer, numAusgabenRows, 8).getDisplayValues();
+            ausgabenMap = createReferenceMap(ausgabenData);
+        }
+
+        // Bankbewegungen Daten für Verarbeitung holen
+        const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
+
+        // Ergebnis-Arrays für Batch-Update
+        const matchResults = [];
+        const kontoSollResults = [];
+        const kontoHabenResults = [];
+
+        // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben
         const bankZuordnungen = {};
 
-        if (bankSheet && bankSheet.getLastRow() > 2) {
-            const bankData = bankSheet.getRange(3, 1, bankSheet.getLastRow() - 2, bankCols.matchInfo).getDisplayValues();
+        // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
+        for (let i = 0; i < bankData.length; i++) {
+            const rowIndex = i + firstDataRow;
+            const row = bankData[i];
 
-            for (const row of bankData) {
-                const matchInfo = row[bankCols.matchInfo - 1]; // Match-Info
-                const transTyp = row[bankCols.transaktionstyp - 1]; // Einnahme/Ausgabe
-                const bankDatum = row[bankCols.datum - 1]; // Datum
+            // Prüfe, ob es sich um die Endsaldo-Zeile handelt
+            const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
+            if (rowIndex === lastRow && label === "endsaldo") {
+                matchResults.push([""]);
+                kontoSollResults.push([""]);
+                kontoHabenResults.push([""]);
+                continue;
+            }
 
-                if (matchInfo && matchInfo.trim() !== "") {
-                    // Spezialfall: Gutschriften zu Einnahmen
-                    // Das Format der Match-Info ist "Gutschrift zu Einnahme #12"
-                    const gutschriftPattern = matchInfo.match(/Gutschrift zu Einnahme #(\d+)/i);
+            const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
+            const refNumber = row[columns.referenz - 1];       // Referenznummer
+            let matchInfo = "";
 
-                    if (gutschriftPattern && gutschriftPattern.length >= 2) {
-                        const rowNum = parseInt(gutschriftPattern[1]);
+            // Kontonummern basierend auf Kategorie vorbereiten
+            let kontoSoll = "", kontoHaben = "";
+            const category = row[columns.kategorie - 1] || "";
 
-                        // Schlüssel für Einnahme erstellen, nicht für Gutschrift
-                        const key = `einnahme#${rowNum}`;
+            // Nur prüfen, wenn Referenz nicht leer ist
+            if (!Helpers.isEmpty(refNumber)) {
+                let matchFound = false;
+                const betragValue = Math.abs(Helpers.parseCurrency(row[columns.betrag - 1]));
 
-                        // Informationen zur Bankbewegung speichern oder aktualisieren
-                        if (!bankZuordnungen[key]) {
+                if (tranType === "Einnahme") {
+                    // Suche in Einnahmen
+                    const matchResult = findMatch(refNumber, einnahmenMap, betragValue);
+                    if (matchResult) {
+                        matchFound = true;
+                        matchInfo = processEinnahmeMatch(matchResult, betragValue, row, columns, einnahmenSheet, einnahmenCols);
+
+                        // Für spätere Markierung merken
+                        const key = `einnahme#${matchResult.row}`;
+                        bankZuordnungen[key] = {
+                            typ: "einnahme",
+                            row: matchResult.row,
+                            bankDatum: row[columns.datum - 1],
+                            matchInfo: matchInfo,
+                            transTyp: tranType
+                        };
+                    }
+                } else if (tranType === "Ausgabe") {
+                    // Suche in Ausgaben
+                    const matchResult = findMatch(refNumber, ausgabenMap, betragValue);
+                    if (matchResult) {
+                        matchFound = true;
+                        matchInfo = processAusgabeMatch(matchResult, betragValue, row, columns, ausgabenSheet, ausgabenCols);
+
+                        // Für spätere Markierung merken
+                        const key = `ausgabe#${matchResult.row}`;
+                        bankZuordnungen[key] = {
+                            typ: "ausgabe",
+                            row: matchResult.row,
+                            bankDatum: row[columns.datum - 1],
+                            matchInfo: matchInfo,
+                            transTyp: tranType
+                        };
+                    }
+
+                    // FALLS keine Übereinstimmung, auch in Einnahmen suchen (für Gutschriften)
+                    if (!matchFound) {
+                        const gutschriftMatch = findMatch(refNumber, einnahmenMap);
+                        if (gutschriftMatch) {
+                            matchFound = true;
+                            matchInfo = processGutschriftMatch(gutschriftMatch, betragValue, row, columns, einnahmenSheet, einnahmenCols);
+
+                            // Für spätere Markierung merken
+                            const key = `einnahme#${gutschriftMatch.row}`;
                             bankZuordnungen[key] = {
                                 typ: "einnahme",
-                                row: rowNum,
-                                bankDatum: bankDatum,
+                                row: gutschriftMatch.row,
+                                bankDatum: row[columns.datum - 1],
                                 matchInfo: matchInfo,
                                 transTyp: "Gutschrift"
                             };
-                        } else {
-                            // Wenn bereits ein Eintrag existiert, füge diesen als zusätzliche Info hinzu
-                            bankZuordnungen[key].additional = bankZuordnungen[key].additional || [];
-                            bankZuordnungen[key].additional.push({
-                                bankDatum: bankDatum,
-                                matchInfo: matchInfo
-                            });
                         }
                     }
-                    // Standardfall: Normale Einnahmen/Ausgaben
-                    else {
-                        // Z.B. "Einnahme #5 (Vollständige Zahlung)" oder "Ausgabe #7 (Teilzahlung)"
-                        const matchParts = matchInfo.match(/(Einnahme|Ausgabe|Gutschrift)[^#]*#(\d+)/i);
+                }
 
-                        if (matchParts && matchParts.length >= 3) {
-                            const typ = matchParts[1].toLowerCase(); // "einnahme", "ausgabe", "gutschrift"
-                            const rowNum = parseInt(matchParts[2]);  // Zeilennummer im Sheet
-
-                            // Schlüssel für die Map erstellen
-                            const key = `${typ}#${rowNum}`;
-
-                            // Informationen zur Bankbewegung speichern oder aktualisieren
-                            if (!bankZuordnungen[key]) {
-                                bankZuordnungen[key] = {
-                                    typ: typ,
-                                    row: rowNum,
-                                    bankDatum: bankDatum,
-                                    matchInfo: matchInfo,
-                                    transTyp: transTyp
-                                };
-                            } else {
-                                // Wenn bereits ein Eintrag existiert, füge diesen als zusätzliche Info hinzu
-                                bankZuordnungen[key].additional = bankZuordnungen[key].additional || [];
-                                bankZuordnungen[key].additional.push({
-                                    bankDatum: bankDatum,
-                                    matchInfo: matchInfo
-                                });
-                            }
-                        }
+                // Spezialfälle prüfen (Gesellschaftskonto, Holding)
+                if (!matchFound) {
+                    const lcRef = refNumber.toString().toLowerCase();
+                    if (lcRef.includes("gesellschaftskonto")) {
+                        matchFound = true;
+                        matchInfo = tranType === "Einnahme"
+                            ? "Gesellschaftskonto (Einnahme)"
+                            : "Gesellschaftskonto (Ausgabe)";
+                    } else if (lcRef.includes("holding")) {
+                        matchFound = true;
+                        matchInfo = tranType === "Einnahme"
+                            ? "Holding (Einnahme)"
+                            : "Holding (Ausgabe)";
                     }
                 }
             }
-        }
 
-        // Markiere bezahlte Einnahmen
-        if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
-            const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
-
-            // Hole Werte aus dem Einnahmen-Sheet
-            const einnahmenData = einnahmenSheet.getRange(2, 1, numEinnahmenRows, einnahmenCols.zahlungsdatum).getValues();
-
-            // Für jede Zeile prüfen
-            for (let i = 0; i < einnahmenData.length; i++) {
-                const row = i + 2; // Aktuelle Zeile im Sheet
-                const nettoBetrag = parseFloat(einnahmenData[i][einnahmenCols.nettobetrag - 1]) || 0;
-                const bezahltBetrag = parseFloat(einnahmenData[i][einnahmenCols.bezahlt - 1]) || 0;
-                const zahlungsDatum = einnahmenData[i][einnahmenCols.zahlungsdatum - 1];
-                const referenz = einnahmenData[i][einnahmenCols.rechnungsnummer - 1];
-
-                // Prüfe, ob es eine Gutschrift ist
-                const isGutschrift = referenz && referenz.toString().startsWith("G-");
-
-                // Prüfe, ob diese Einnahme im Banking-Sheet zugeordnet wurde
-                const zuordnungsKey = `einnahme#${row}`;
-                const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
-
-                // Zeilenbereich für die Formatierung
-                const rowRange = einnahmenSheet.getRange(row, 1, 1, einnahmenCols.zahlungsdatum);
-
-                // Status basierend auf Zahlung setzen
-                if (Math.abs(bezahltBetrag) >= Math.abs(nettoBetrag) * 0.999) { // 99.9% bezahlt wegen Rundungsfehlern
-                    // Vollständig bezahlt
-                    if (zahlungsDatum) {
-                        if (isGutschrift) {
-                            // Gutschriften in Lila markieren
-                            rowRange.setBackground("#E6E0FF"); // Helles Lila
-                        } else if (hatBankzuordnung) {
-                            // Bezahlte Rechnungen mit Bank-Zuordnung in kräftigerem Grün markieren
-                            rowRange.setBackground("#C6EFCE"); // Kräftigeres Grün
-                        } else {
-                            // Bezahlte Rechnungen ohne Bank-Zuordnung in hellerem Grün markieren
-                            rowRange.setBackground("#EAF1DD"); // Helles Grün
-                        }
-                    } else {
-                        // Bezahlt aber kein Datum - in Orange markieren
-                        rowRange.setBackground("#FCE4D6"); // Helles Orange
-                    }
-                } else if (bezahltBetrag > 0) {
-                    // Teilzahlung
-                    if (hatBankzuordnung) {
-                        rowRange.setBackground("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
-                    } else {
-                        rowRange.setBackground("#FCE4D6"); // Helles Orange für normale Teilzahlungen
-                    }
-                } else {
-                    // Unbezahlt - keine spezielle Farbe
-                    rowRange.setBackground(null);
+            // Kontonummern basierend auf Kategorie setzen
+            if (category) {
+                let mapping = null;
+                if (tranType === "Einnahme") {
+                    mapping = config$1.einnahmen.kontoMapping[category];
+                } else if (tranType === "Ausgabe") {
+                    mapping = config$1.ausgaben.kontoMapping[category];
                 }
 
-                // Optional: Wenn eine Bankzuordnung existiert, in Spalte Bank-Abgleich einen Hinweis setzen
-                if (hatBankzuordnung) {
-                    const zuordnungsInfo = bankZuordnungen[zuordnungsKey];
-                    let infoText = "✓ Bank: " + zuordnungsInfo.bankDatum;
-
-                    // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
-                    if (zuordnungsInfo.additional && zuordnungsInfo.additional.length > 0) {
-                        infoText += " + " + zuordnungsInfo.additional.length + " weitere";
-                    }
-
-                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-                    if (einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).getValue() === "") {
-                        einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).setValue("Bank-Abgleich");
-                    }
-
-                    einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).setValue(infoText);
+                if (mapping) {
+                    kontoSoll = mapping.soll || "";
+                    kontoHaben = mapping.gegen || "";
                 } else {
-                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-                    if (einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).getValue() === "") {
-                        einnahmenSheet.getRange(1, einnahmenCols.bankAbgleich).setValue("Bank-Abgleich");
-                    }
-
-                    // Setze die Zelle leer, falls keine Zuordnung existiert
-                    const currentValue = einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).getValue();
-                    if (currentValue && currentValue.toString().startsWith("✓ Bank:")) {
-                        einnahmenSheet.getRange(row, einnahmenCols.bankAbgleich).setValue("");
-                    }
+                    kontoSoll = "Manuell prüfen";
+                    kontoHaben = "Manuell prüfen";
                 }
             }
+
+            // Ergebnisse für Batch-Update sammeln
+            matchResults.push([matchInfo]);
+            kontoSollResults.push([kontoSoll]);
+            kontoHabenResults.push([kontoHaben]);
         }
 
-        // Markiere bezahlte Ausgaben (ähnliche Logik wie bei Einnahmen)
-        if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
-            const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
+        // Batch-Updates ausführen für bessere Performance
+        sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchResults);
+        sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
+        sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
 
-            // Hole Werte aus dem Ausgaben-Sheet
-            const ausgabenData = ausgabenSheet.getRange(2, 1, numAusgabenRows, ausgabenCols.zahlungsdatum).getValues();
+        // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
+        Utilities.sleep(500);
 
-            // Für jede Zeile prüfen
-            for (let i = 0; i < ausgabenData.length; i++) {
-                const row = i + 2; // Aktuelle Zeile im Sheet
-                const nettoBetrag = parseFloat(ausgabenData[i][ausgabenCols.nettobetrag - 1]) || 0;
-                const bezahltBetrag = parseFloat(ausgabenData[i][ausgabenCols.bezahlt - 1]) || 0;
-                const zahlungsDatum = ausgabenData[i][ausgabenCols.zahlungsdatum - 1];
+        // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
+        formatMatchedRows(sheet, firstDataRow, matchResults, columns);
 
-                // Prüfe, ob diese Ausgabe im Banking-Sheet zugeordnet wurde
-                const zuordnungsKey = `ausgabe#${row}`;
-                const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
+        // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
+        setMatchColumnFormatting(sheet, columnLetters.matchInfo);
 
-                // Zeilenbereich für die Formatierung
-                const rowRange = ausgabenSheet.getRange(row, 1, 1, ausgabenCols.zahlungsdatum);
+        // Verzögerung vor dem Aufruf von markPaidInvoices
+        Utilities.sleep(500);
 
-                // Status basierend auf Zahlung setzen
-                if (Math.abs(bezahltBetrag) >= Math.abs(nettoBetrag) * 0.999) { // 99.9% bezahlt wegen Rundungsfehlern
-                    // Vollständig bezahlt
-                    if (zahlungsDatum) {
-                        if (hatBankzuordnung) {
-                            // Bezahlte Ausgaben mit Bank-Zuordnung in kräftigerem Grün markieren
-                            rowRange.setBackground("#C6EFCE"); // Kräftigeres Grün
-                        } else {
-                            // Bezahlte Ausgaben ohne Bank-Zuordnung in hellerem Grün markieren
-                            rowRange.setBackground("#EAF1DD"); // Helles Grün
-                        }
-                    } else {
-                        // Bezahlt aber kein Datum - in Orange markieren
-                        rowRange.setBackground("#FCE4D6"); // Helles Orange
-                    }
-                } else if (bezahltBetrag > 0) {
-                    // Teilzahlung
-                    if (hatBankzuordnung) {
-                        rowRange.setBackground("#FFC7AA"); // Kräftigeres Orange für Teilzahlungen mit Bank-Zuordnung
-                    } else {
-                        rowRange.setBackground("#FCE4D6"); // Helles Orange für normale Teilzahlungen
-                    }
-                } else {
-                    // Unbezahlt - keine spezielle Farbe
-                    rowRange.setBackground(null);
-                }
-
-                // Optional: Wenn eine Bankzuordnung existiert, in Spalte Bank-Abgleich einen Hinweis setzen
-                if (hatBankzuordnung) {
-                    const zuordnungsInfo = bankZuordnungen[zuordnungsKey];
-                    let infoText = "✓ Bank: " + zuordnungsInfo.bankDatum;
-
-                    // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
-                    if (zuordnungsInfo.additional && zuordnungsInfo.additional.length > 0) {
-                        infoText += " + " + zuordnungsInfo.additional.length + " weitere";
-                    }
-
-                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-                    if (ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).getValue() === "") {
-                        ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).setValue("Bank-Abgleich");
-                    }
-
-                    ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).setValue(infoText);
-                } else {
-                    // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-                    if (ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).getValue() === "") {
-                        ausgabenSheet.getRange(1, ausgabenCols.bankAbgleich).setValue("Bank-Abgleich");
-                    }
-
-                    // Setze die Zelle leer, falls keine Zuordnung existiert
-                    const currentValue = ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).getValue();
-                    if (currentValue && currentValue.toString().startsWith("✓ Bank:")) {
-                        ausgabenSheet.getRange(row, ausgabenCols.bankAbgleich).setValue("");
-                    }
-                }
-            }
-        }
-    }
+        // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
+        markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
+    };
 
     /**
      * Findet eine Übereinstimmung in der Referenz-Map
@@ -2530,110 +2342,545 @@ const RefreshModule = (() => {
      * @param {number} betrag - Betrag der Bankbewegung (absoluter Wert)
      * @returns {Object|null} - Gefundene Übereinstimmung oder null
      */
-    function findMatch(reference, refMap, betrag = null) {
+    const findMatch = (reference, refMap, betrag = null) => {
+        // Keine Daten
+        if (!reference || !refMap) return null;
+
+        // Normalisierte Suche vorbereiten
+        const normalizedRef = Helpers.normalizeText(reference);
+
+        // Priorität der Matching-Strategien:
+        // 1. Exakte Übereinstimmung
+        // 2. Normalisierte Übereinstimmung
+        // 3. Enthält-Beziehung (in beide Richtungen)
+
         // 1. Exakte Übereinstimmung
         if (refMap[reference]) {
-            const match = refMap[reference];
+            return evaluateMatch(refMap[reference], betrag);
+        }
 
-            // Wenn ein Betrag angegeben ist
-            if (betrag !== null) {
-                const matchNetto = Math.abs(match.betrag);
-                const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
+        // 2. Normalisierte Übereinstimmung
+        if (normalizedRef && refMap[normalizedRef]) {
+            return evaluateMatch(refMap[normalizedRef], betrag);
+        }
 
-                // Bruttobetrag berechnen (Netto + MwSt)
-                const matchBrutto = matchNetto * (1 + matchMwstRate);
-                const matchBezahlt = Math.abs(match.bezahlt);
+        // 3. Teilweise Übereinstimmung (mit Cache für Performance)
+        const candidateKeys = Object.keys(refMap);
 
-                // Beträge mit größerer Toleranz vergleichen (2 Cent Unterschied erlauben)
-                const tolerance = 0.02;
-
-                // Fall 1: Betrag entspricht genau dem Bruttobetrag (Vollständige Zahlung)
-                if (Math.abs(betrag - matchBrutto) <= tolerance) {
-                    match.matchType = "Vollständige Zahlung";
-                    return match;
-                }
-
-                // Fall 2: Position ist bereits vollständig bezahlt
-                if (Math.abs(matchBezahlt - matchBrutto) <= tolerance && matchBezahlt > 0) {
-                    match.matchType = "Vollständige Zahlung";
-                    return match;
-                }
-
-                // Fall 3: Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
-                // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
-                if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
-                    match.matchType = "Teilzahlung";
-                    return match;
-                }
-
-                // Fall 4: Betrag ist größer als Bruttobetrag, aber vermutlich trotzdem die richtige Zahlung
-                // (z.B. wegen Rundungen oder kleinen Gebühren)
-                if (betrag > matchBrutto && (betrag - matchBrutto) <= tolerance) {
-                    match.matchType = "Vollständige Zahlung";
-                    return match;
-                }
-
-                // Fall 5: Bei allen anderen Fällen (Beträge weichen stärker ab)
-                match.matchType = "Unsichere Zahlung";
-                match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
-                return match;
-            } else {
-                // Ohne Betragsvergleich
-                match.matchType = "Referenz-Match";
-                return match;
+        // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
+        for (const key of candidateKeys) {
+            if (key.includes(reference) || reference.includes(key)) {
+                return evaluateMatch(refMap[key], betrag);
             }
         }
 
-        // 2. Teilweise Übereinstimmung (in beide Richtungen)
-        for (const key in refMap) {
-            if (reference.includes(key) || key.includes(reference)) {
-                const match = refMap[key];
-
-                // Nur Betragsvergleich wenn nötig
-                if (betrag !== null) {
-                    const matchNetto = Math.abs(match.betrag);
-                    const matchMwstRate = parseFloat(match.mwstRate || 0) / 100;
-
-                    // Bruttobetrag berechnen (Netto + MwSt)
-                    const matchBrutto = matchNetto * (1 + matchMwstRate);
-                    const matchBezahlt = Math.abs(match.bezahlt);
-
-                    // Größere Toleranz für Teilweise Übereinstimmungen
-                    const tolerance = 0.02;
-
-                    // Beträge stimmen mit Toleranz überein
-                    if (Math.abs(betrag - matchBrutto) <= tolerance) {
-                        match.matchType = "Vollständige Zahlung";
-                        return match;
-                    }
-
-                    // Wenn Position bereits vollständig bezahlt ist
-                    if (Math.abs(matchBezahlt - matchBrutto) <= tolerance && matchBezahlt > 0) {
-                        match.matchType = "Vollständige Zahlung";
-                        return match;
-                    }
-
-                    // Teilzahlung mit größerer Toleranz für nicht-exakte Referenzen
-                    // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
-                    if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
-                        match.matchType = "Teilzahlung";
-                        return match;
-                    }
-
-                    // Bei allen anderen Fällen: Unsichere Zahlung
-                    match.matchType = "Unsichere Zahlung";
-                    match.betragsDifferenz = Math.abs(betrag - matchBrutto).toFixed(2);
-                    return match;
-                } else {
-                    // Ohne Betragsvergleich
-                    match.matchType = "Teilw. Match";
-                    return match;
-                }
+        // Falls keine exakten Treffer, probieren wir es mit normalisierten Werten
+        for (const key of candidateKeys) {
+            const normalizedKey = Helpers.normalizeText(key);
+            if (normalizedKey.includes(normalizedRef) || normalizedRef.includes(normalizedKey)) {
+                return evaluateMatch(refMap[key], betrag);
             }
         }
 
         return null;
-    }
+    };
+
+    /**
+     * Bewertet die Qualität einer Übereinstimmung basierend auf Beträgen
+     * @param {Object} match - Die gefundene Übereinstimmung
+     * @param {number} betrag - Der Betrag zum Vergleich
+     * @returns {Object} - Übereinstimmung mit zusätzlichen Infos
+     */
+    const evaluateMatch = (match, betrag = null) => {
+        if (!match) return null;
+
+        // Behalte die ursprüngliche Übereinstimmung
+        const result = { ...match };
+
+        // Wenn kein Betrag zum Vergleich angegeben wurde
+        if (betrag === null) {
+            result.matchType = "Referenz-Match";
+            return result;
+        }
+
+        // Hole die Beträge aus der Übereinstimmung
+        const matchBrutto = Math.abs(match.brutto);
+        const matchBezahlt = Math.abs(match.bezahlt);
+
+        // Toleranzwert für Betragsabweichungen (2 Cent)
+        const tolerance = 0.02;
+
+        // Fall 1: Betrag entspricht genau dem Bruttobetrag (Vollständige Zahlung)
+        if (Helpers.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
+            result.matchType = "Vollständige Zahlung";
+            return result;
+        }
+
+        // Fall 2: Position ist bereits vollständig bezahlt
+        if (Helpers.isApproximatelyEqual(matchBezahlt, matchBrutto, tolerance) && matchBezahlt > 0) {
+            result.matchType = "Vollständige Zahlung";
+            return result;
+        }
+
+        // Fall 3: Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
+        // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
+        if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
+            result.matchType = "Teilzahlung";
+            return result;
+        }
+
+        // Fall 4: Betrag ist größer als Bruttobetrag, aber vermutlich trotzdem die richtige Zahlung
+        // (z.B. wegen Rundungen oder kleinen Gebühren)
+        if (betrag > matchBrutto && Helpers.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
+            result.matchType = "Vollständige Zahlung";
+            return result;
+        }
+
+        // Fall 5: Bei allen anderen Fällen (Beträge weichen stärker ab)
+        result.matchType = "Unsichere Zahlung";
+        result.betragsDifferenz = Helpers.round(Math.abs(betrag - matchBrutto), 2);
+        return result;
+    };
+
+    /**
+     * Verarbeitet eine Einnahmen-Übereinstimmung
+     * @returns {string} Formatierte Match-Information
+     */
+    const processEinnahmeMatch = (matchResult, betragValue, row, columns, einnahmenSheet, einnahmenCols) => {
+        let matchInfo = "";
+        let matchStatus = "";
+
+        // Je nach Match-Typ unterschiedliche Statusinformationen
+        if (matchResult.matchType) {
+            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
+            if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
+                matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
+            } else {
+                matchStatus = ` (${matchResult.matchType})`;
+            }
+        }
+
+        // Prüfen, ob Zahldatum in Einnahmen/Ausgaben aktualisiert werden soll
+        if ((matchResult.matchType === "Vollständige Zahlung" ||
+                matchResult.matchType === "Teilzahlung") &&
+            einnahmenSheet) {
+            // Bankbewegungsdatum holen (aus Spalte A)
+            const zahlungsDatum = row[columns.datum - 1];
+            if (zahlungsDatum) {
+                // Zahldatum im Einnahmen-Sheet aktualisieren (nur wenn leer)
+                const einnahmenRow = matchResult.row;
+                const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
+                const aktuellDatum = zahldatumRange.getValue();
+
+                if (Helpers.isEmpty(aktuellDatum)) {
+                    zahldatumRange.setValue(zahlungsDatum);
+                    matchStatus += " ✓ Datum aktualisiert";
+                }
+            }
+        }
+
+        return `Einnahme #${matchResult.row}${matchStatus}`;
+    };
+
+    /**
+     * Verarbeitet eine Ausgaben-Übereinstimmung
+     * @returns {string} Formatierte Match-Information
+     */
+    const processAusgabeMatch = (matchResult, betragValue, row, columns, ausgabenSheet, ausgabenCols) => {
+        let matchInfo = "";
+        let matchStatus = "";
+
+        // Je nach Match-Typ unterschiedliche Statusinformationen für Ausgaben
+        if (matchResult.matchType) {
+            if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
+                matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
+            } else {
+                matchStatus = ` (${matchResult.matchType})`;
+            }
+        }
+
+        // Prüfen, ob Zahldatum in Ausgaben aktualisiert werden soll
+        if ((matchResult.matchType === "Vollständige Zahlung" ||
+                matchResult.matchType === "Teilzahlung") &&
+            ausgabenSheet) {
+            // Bankbewegungsdatum holen (aus Spalte A)
+            const zahlungsDatum = row[columns.datum - 1];
+            if (zahlungsDatum) {
+                // Zahldatum im Ausgaben-Sheet aktualisieren (nur wenn leer)
+                const ausgabenRow = matchResult.row;
+                const zahldatumRange = ausgabenSheet.getRange(ausgabenRow, ausgabenCols.zahlungsdatum);
+                const aktuellDatum = zahldatumRange.getValue();
+
+                if (Helpers.isEmpty(aktuellDatum)) {
+                    zahldatumRange.setValue(zahlungsDatum);
+                    matchStatus += " ✓ Datum aktualisiert";
+                }
+            }
+        }
+
+        return `Ausgabe #${matchResult.row}${matchStatus}`;
+    };
+
+    /**
+     * Verarbeitet eine Gutschrift-Übereinstimmung
+     * @returns {string} Formatierte Match-Information
+     */
+    const processGutschriftMatch = (gutschriftMatch, betragValue, row, columns, einnahmenSheet, einnahmenCols) => {
+        let matchStatus = "";
+
+        // Bei Gutschriften könnte der Betrag abweichen (z.B. Teilgutschrift)
+        // Prüfen, ob die Beträge plausibel sind
+        const gutschriftBetrag = Math.abs(gutschriftMatch.brutto);
+
+        if (Helpers.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
+            // Beträge stimmen genau überein
+            matchStatus = " (Vollständige Gutschrift)";
+        } else if (betragValue < gutschriftBetrag) {
+            // Teilgutschrift (Gutschriftbetrag kleiner als ursprünglicher Rechnungsbetrag)
+            matchStatus = " (Teilgutschrift)";
+        } else {
+            // Ungewöhnlicher Fall - Gutschriftbetrag größer als Rechnungsbetrag
+            matchStatus = " (Ungewöhnliche Gutschrift)";
+        }
+
+        // Bei Gutschriften auch im Einnahmen-Sheet aktualisieren - hier als negative Zahlung
+        if (einnahmenSheet) {
+            // Bankbewegungsdatum holen (aus Spalte A)
+            const gutschriftDatum = row[columns.datum - 1];
+            if (gutschriftDatum) {
+                // Gutschriftdatum im Einnahmen-Sheet aktualisieren und "G-" vor die Referenz setzen
+                const einnahmenRow = gutschriftMatch.row;
+
+                // Zahldatum aktualisieren (nur wenn leer)
+                const zahldatumRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.zahlungsdatum);
+                const aktuellDatum = zahldatumRange.getValue();
+
+                if (Helpers.isEmpty(aktuellDatum)) {
+                    zahldatumRange.setValue(gutschriftDatum);
+                    matchStatus += " ✓ Datum aktualisiert";
+                }
+
+                // Optional: Die Referenz mit "G-" kennzeichnen, um Gutschrift zu markieren
+                const refRange = einnahmenSheet.getRange(einnahmenRow, einnahmenCols.rechnungsnummer);
+                const currentRef = refRange.getValue();
+                if (currentRef && !currentRef.toString().startsWith("G-")) {
+                    refRange.setValue("G-" + currentRef);
+                    matchStatus += " ✓ Ref. markiert";
+                }
+            }
+        }
+
+        return `Gutschrift zu Einnahme #${gutschriftMatch.row}${matchStatus}`;
+    };
+
+    /**
+     * Formatiert Zeilen basierend auf dem Match-Typ
+     * @param {Sheet} sheet - Das Sheet
+     * @param {number} firstDataRow - Erste Datenzeile
+     * @param {Array} matchResults - Array mit Match-Infos
+     * @param {Object} columns - Spaltenkonfiguration
+     */
+    const formatMatchedRows = (sheet, firstDataRow, matchResults, columns) => {
+        // Performance-optimiertes Batch-Update vorbereiten
+        const formatBatches = {
+            'Einnahme': { rows: [], color: "#EAF1DD" },  // Helles Grün (Grundfarbe für Einnahmen)
+            'Vollständige Zahlung (Einnahme)': { rows: [], color: "#C6EFCE" },  // Kräftiges Grün
+            'Teilzahlung (Einnahme)': { rows: [], color: "#FCE4D6" },  // Helles Orange
+            'Ausgabe': { rows: [], color: "#FFCCCC" },   // Helles Rosa (Grundfarbe für Ausgaben)
+            'Vollständige Zahlung (Ausgabe)': { rows: [], color: "#FFC7CE" },  // Helles Rot
+            'Teilzahlung (Ausgabe)': { rows: [], color: "#FCE4D6" },  // Helles Orange
+            'Gutschrift': { rows: [], color: "#E6E0FF" },  // Helles Lila
+            'Gesellschaftskonto/Holding': { rows: [], color: "#FFEB9C" }  // Helles Gelb
+        };
+
+        // Zeilen nach Kategorien gruppieren
+        matchResults.forEach((matchInfo, index) => {
+            const rowIndex = firstDataRow + index;
+            const matchText = (matchInfo && matchInfo[0]) ? matchInfo[0].toString() : "";
+
+            if (!matchText) return; // Überspringe leere Matches
+
+            if (matchText.includes("Einnahme")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Einnahme)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Einnahme)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Einnahme'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Ausgabe")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Ausgabe)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Ausgabe'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Gutschrift")) {
+                formatBatches['Gutschrift'].rows.push(rowIndex);
+            } else if (matchText.includes("Gesellschaftskonto") || matchText.includes("Holding")) {
+                formatBatches['Gesellschaftskonto/Holding'].rows.push(rowIndex);
+            }
+        });
+
+        // Batch-Formatting anwenden
+        Object.values(formatBatches).forEach(batch => {
+            if (batch.rows.length > 0) {
+                // Gruppen von maximal 20 Zeilen formatieren (API-Limits vermeiden)
+                const chunkSize = 20;
+                for (let i = 0; i < batch.rows.length; i += chunkSize) {
+                    const chunk = batch.rows.slice(i, i + chunkSize);
+                    chunk.forEach(rowIndex => {
+                        try {
+                            sheet.getRange(rowIndex, 1, 1, columns.matchInfo)
+                                .setBackground(batch.color);
+                        } catch (e) {
+                            console.error(`Fehler beim Formatieren von Zeile ${rowIndex}:`, e);
+                        }
+                    });
+
+                    // Kurze Pause um API-Limits zu vermeiden
+                    if (i + chunkSize < batch.rows.length) {
+                        Utilities.sleep(50);
+                    }
+                }
+            }
+        });
+    };
+
+    /**
+     * Setzt bedingte Formatierung für die Match-Spalte
+     * @param {Sheet} sheet - Das Sheet
+     * @param {string} columnLetter - Buchstabe für die Spalte
+     */
+    const setMatchColumnFormatting = (sheet, columnLetter) => {
+        Helpers.setConditionalFormattingForColumn(sheet, columnLetter, [
+            // Grundlegende Match-Typen mit beginsWith Pattern
+            {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
+            {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
+            {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
+            {value: "Gesellschaftskonto", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
+            {value: "Holding", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
+
+            // Zusätzliche Betragstypen mit contains Pattern
+            {value: "Vollständige Zahlung", background: "#C6EFCE", fontColor: "#006100", pattern: "contains"},
+            {value: "Teilzahlung", background: "#FCE4D6", fontColor: "#974706", pattern: "contains"},
+            {value: "Unsichere Zahlung", background: "#F8CBAD", fontColor: "#843C0C", pattern: "contains"},
+            {value: "Vollständige Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
+            {value: "Teilgutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
+            {value: "Ungewöhnliche Gutschrift", background: "#FFD966", fontColor: "#7F6000", pattern: "contains"}
+        ]);
+    };
+
+    /**
+     * Markiert bezahlte Einnahmen und Ausgaben farblich basierend auf dem Zahlungsstatus
+     * @param {Sheet} einnahmenSheet - Das Einnahmen-Sheet
+     * @param {Sheet} ausgabenSheet - Das Ausgaben-Sheet
+     * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
+     */
+    const markPaidInvoices = (einnahmenSheet, ausgabenSheet, bankZuordnungen) => {
+        // Markiere bezahlte Einnahmen
+        if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
+            markPaidRows(einnahmenSheet, "Einnahmen", bankZuordnungen);
+        }
+
+        // Markiere bezahlte Ausgaben
+        if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
+            markPaidRows(ausgabenSheet, "Ausgaben", bankZuordnungen);
+        }
+    };
+
+    /**
+     * Markiert bezahlte Zeilen in einem Sheet
+     * @param {Sheet} sheet - Das zu aktualisierende Sheet
+     * @param {string} sheetType - Typ des Sheets ("Einnahmen" oder "Ausgaben")
+     * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
+     */
+    const markPaidRows = (sheet, sheetType, bankZuordnungen) => {
+        // Konfiguration für das Sheet
+        const columns = sheetType === "Einnahmen"
+            ? config$1.sheets.einnahmen.columns
+            : config$1.sheets.ausgaben.columns;
+
+        // Hole Werte aus dem Sheet
+        const numRows = sheet.getLastRow() - 1;
+        const data = sheet.getRange(2, 1, numRows, columns.zahlungsdatum).getValues();
+
+        // Batch-Arrays für die verschiedenen Status
+        const fullPaidWithBankRows = [];
+        const fullPaidRows = [];
+        const partialPaidWithBankRows = [];
+        const partialPaidRows = [];
+        const gutschriftRows = [];
+        const normalRows = [];
+
+        // Bank-Abgleich-Updates sammeln
+        const bankAbgleichUpdates = [];
+
+        // Datenzeilen durchgehen und in Kategorien einteilen
+        for (let i = 0; i < data.length; i++) {
+            const row = i + 2; // Aktuelle Zeile im Sheet
+            const nettoBetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
+            const bezahltBetrag = Helpers.parseCurrency(data[i][columns.bezahlt - 1]);
+            const zahlungsDatum = data[i][columns.zahlungsdatum - 1];
+            const referenz = data[i][columns.rechnungsnummer - 1];
+
+            // Prüfe, ob es eine Gutschrift ist
+            const isGutschrift = referenz && referenz.toString().startsWith("G-");
+
+            // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
+            const zuordnungsKey = `${sheetType.toLowerCase().slice(0, -1)}#${row}`;
+            const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
+
+            // Zahlungsstatus berechnen
+            const mwst = Helpers.parseMwstRate(data[i][columns.mwstSatz - 1]) / 100;
+            const bruttoBetrag = nettoBetrag * (1 + mwst);
+            const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
+            const isPartialPaid = !isPaid && bezahltBetrag > 0;
+
+            // Kategorie bestimmen
+            if (isGutschrift) {
+                gutschriftRows.push(row);
+                // Bank-Abgleich-Info setzen
+                if (hatBankzuordnung) {
+                    bankAbgleichUpdates.push({
+                        row,
+                        value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                    });
+                }
+            } else if (isPaid) {
+                if (zahlungsDatum) {
+                    if (hatBankzuordnung) {
+                        fullPaidWithBankRows.push(row);
+                        bankAbgleichUpdates.push({
+                            row,
+                            value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                        });
+                    } else {
+                        fullPaidRows.push(row);
+                    }
+                } else {
+                    // Bezahlt aber kein Datum
+                    partialPaidRows.push(row);
+                }
+            } else if (isPartialPaid) {
+                if (hatBankzuordnung) {
+                    partialPaidWithBankRows.push(row);
+                    bankAbgleichUpdates.push({
+                        row,
+                        value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
+                    });
+                } else {
+                    partialPaidRows.push(row);
+                }
+            } else {
+                // Unbezahlt - normale Zeile
+                normalRows.push(row);
+                // Vorhandene Bank-Abgleich-Info entfernen falls vorhanden
+                if (sheet.getRange(row, columns.bankAbgleich).getValue().toString().startsWith("✓ Bank:")) {
+                    bankAbgleichUpdates.push({
+                        row,
+                        value: ""
+                    });
+                }
+            }
+        }
+
+        // Färbe Zeilen im Batch-Modus (für bessere Performance)
+        applyColorToRows(sheet, fullPaidWithBankRows, "#C6EFCE"); // Kräftigeres Grün
+        applyColorToRows(sheet, fullPaidRows, "#EAF1DD"); // Helles Grün
+        applyColorToRows(sheet, partialPaidWithBankRows, "#FFC7AA"); // Kräftigeres Orange
+        applyColorToRows(sheet, partialPaidRows, "#FCE4D6"); // Helles Orange
+        applyColorToRows(sheet, gutschriftRows, "#E6E0FF"); // Helles Lila
+        applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
+
+        // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
+        if (sheet.getRange(1, columns.bankAbgleich).getValue() === "") {
+            sheet.getRange(1, columns.bankAbgleich).setValue("Bank-Abgleich");
+        }
+
+        // Bank-Abgleich-Updates in Batches ausführen
+        if (bankAbgleichUpdates.length > 0) {
+            // Gruppiere Updates nach Wert für effizientere Batch-Updates
+            const groupedUpdates = {};
+
+            bankAbgleichUpdates.forEach(update => {
+                const { row, value } = update;
+                if (!groupedUpdates[value]) {
+                    groupedUpdates[value] = [];
+                }
+                groupedUpdates[value].push(row);
+            });
+
+            // Führe Batch-Updates für jede Gruppe aus
+            Object.entries(groupedUpdates).forEach(([value, rows]) => {
+                // Verarbeite in Batches von maximal 20 Zeilen
+                const batchSize = 20;
+                for (let i = 0; i < rows.length; i += batchSize) {
+                    const batchRows = rows.slice(i, i + batchSize);
+                    batchRows.forEach(row => {
+                        sheet.getRange(row, columns.bankAbgleich).setValue(value);
+                    });
+
+                    // Kurze Pause, um API-Limits zu vermeiden
+                    if (i + batchSize < rows.length) {
+                        Utilities.sleep(50);
+                    }
+                }
+            });
+        }
+    };
+
+    /**
+     * Wendet eine Farbe auf mehrere Zeilen an
+     * @param {Sheet} sheet - Das Sheet
+     * @param {Array} rows - Die zu färbenden Zeilennummern
+     * @param {string|null} color - Die Hintergrundfarbe oder null zum Zurücksetzen
+     */
+    const applyColorToRows = (sheet, rows, color) => {
+        if (!rows || rows.length === 0) return;
+
+        // Verarbeite in Batches von maximal 20 Zeilen
+        const batchSize = 20;
+        for (let i = 0; i < rows.length; i += batchSize) {
+            const batchRows = rows.slice(i, i + batchSize);
+            batchRows.forEach(row => {
+                try {
+                    const range = sheet.getRange(row, 1, 1, sheet.getLastColumn());
+                    if (color) {
+                        range.setBackground(color);
+                    } else {
+                        range.setBackground(null);
+                    }
+                } catch (e) {
+                    console.error(`Fehler beim Formatieren von Zeile ${row}:`, e);
+                }
+            });
+
+            // Kurze Pause um API-Limits zu vermeiden
+            if (i + batchSize < rows.length) {
+                Utilities.sleep(50);
+            }
+        }
+    };
+
+    /**
+     * Erstellt einen Informationstext für eine Bank-Zuordnung
+     * @param {Object} zuordnung - Die Zuordnungsinformation
+     * @returns {string} - Formatierter Informationstext
+     */
+    const getZuordnungsInfo = (zuordnung) => {
+        if (!zuordnung) return "";
+
+        let infoText = "✓ Bank: " + zuordnung.bankDatum;
+
+        // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
+        if (zuordnung.additional && zuordnung.additional.length > 0) {
+            infoText += " + " + zuordnung.additional.length + " weitere";
+        }
+
+        return infoText;
+    };
 
     /**
      * Aktualisiert das aktive Tabellenblatt
@@ -2644,6 +2891,9 @@ const RefreshModule = (() => {
             const sheet = ss.getActiveSheet();
             const name = sheet.getName();
             const ui = SpreadsheetApp.getUi();
+
+            // Cache zurücksetzen
+            clearCache();
 
             if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
                 refreshDataSheet(sheet);
@@ -2667,12 +2917,20 @@ const RefreshModule = (() => {
         try {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-            ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"].forEach(name => {
-                const sheet = ss.getSheetByName(name);
+            // Cache zurücksetzen
+            clearCache();
+
+            // Sheets in der richtigen Reihenfolge aktualisieren, um Abhängigkeiten zu berücksichtigen
+            const refreshOrder = ["Einnahmen", "Ausgaben", "Eigenbelege", "Bankbewegungen"];
+
+            for (const name of refreshOrder) {
+                const sheet = getSheet(name);
                 if (sheet) {
                     name === "Bankbewegungen" ? refreshBankSheet(sheet) : refreshDataSheet(sheet);
+                    // Kurze Pause einfügen, um API-Limits zu vermeiden
+                    Utilities.sleep(100);
                 }
-            });
+            }
         } catch (e) {
             console.error("Fehler beim Aktualisieren aller Sheets:", e);
         }
