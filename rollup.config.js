@@ -1,6 +1,7 @@
 // file: rollup.config.js
 import resolve from '@rollup/plugin-node-resolve';
-import terser from '@rollup/plugin-terser';
+// import rollupPluginGas from "rollup-plugin-google-apps-script";
+// import terser from '@rollup/plugin-terser';
 
 export default {
     input: 'src/code.js',       // Dein Haupt-Einstiegspunkt
@@ -11,6 +12,7 @@ export default {
     },
     treeshake: false,
     plugins: [
+        // rollupPluginGas(),
         resolve(),                // Auflösen von Modul-Importen
         // terser({                  // Minimieren des Codes
         //     format: {

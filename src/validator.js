@@ -7,20 +7,6 @@ import config from "./config.js";
  */
 const Validator = (() => {
     /**
-     * Prüft, ob ein Wert leer ist
-     * @param {*} v - Der zu prüfende Wert
-     * @returns {boolean} - True, wenn der Wert leer ist
-     */
-    const isEmpty = v => v == null || v.toString().trim() === "";
-
-    /**
-     * Prüft, ob ein Wert keine gültige Zahl ist
-     * @param {*} v - Der zu prüfende Wert
-     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
-     */
-    const isInvalidNumber = v => isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
-
-    /**
      * Erstellt eine Dropdown-Validierung für einen Bereich
      * @param {Sheet} sheet - Das Sheet, in dem validiert werden soll
      * @param {number} row - Die Start-Zeile
@@ -58,7 +44,7 @@ const Validator = (() => {
         const columns = config.sheets[sheetType].columns;
 
         /**
-         * Validiert eine Zeile anhand von Regeln
+         * Validiert eine Zeile anhand einer Liste von Validierungsregeln
          * @param {Array} row - Die zu validierende Zeile
          * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
          * @param {Array<Object>} rules - Array mit Regeln ({check, message})
@@ -71,15 +57,15 @@ const Validator = (() => {
 
         // Grundlegende Validierungsregeln
         const baseRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
-            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
             {check: r => isInvalidNumber(r[columns.nettobetrag - 1]), message: "Nettobetrag fehlt oder ungültig."},
             {
                 check: r => {
                     const mwstStr = r[columns.mwstSatz - 1] == null ? "" : r[columns.mwstSatz - 1].toString().trim();
-                    if (isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+                    if (Helpers.isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
 
                     // MwSt-Satz extrahieren und normalisieren
                     const mwst = Helpers.parseMwstRate(mwstStr);
@@ -99,11 +85,11 @@ const Validator = (() => {
         // Regeln für offene Zahlungen
         const openPaymentRules = [
             {
-                check: r => !isEmpty(r[columns.zahlungsart - 1]),
+                check: r => !Helpers.isEmpty(r[columns.zahlungsart - 1]),
                 message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'
             },
             {
-                check: r => !isEmpty(r[columns.zahlungsdatum - 1]),
+                check: r => !Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
                 message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'
             }
         ];
@@ -111,16 +97,16 @@ const Validator = (() => {
         // Regeln für bezahlte Zahlungen
         const paidPaymentRules = [
             {
-                check: r => isEmpty(r[columns.zahlungsart - 1]),
+                check: r => Helpers.isEmpty(r[columns.zahlungsart - 1]),
                 message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
-                check: r => isEmpty(r[columns.zahlungsdatum - 1]),
+                check: r => Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
                 message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
             },
             {
                 check: r => {
-                    if (isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
+                    if (Helpers.isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
 
                     const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                     return paymentDate ? paymentDate > new Date() : false;
@@ -129,7 +115,7 @@ const Validator = (() => {
             },
             {
                 check: r => {
-                    if (isEmpty(r[columns.zahlungsdatum - 1]) || isEmpty(r[columns.datum - 1])) return false;
+                    if (Helpers.isEmpty(r[columns.zahlungsdatum - 1]) || Helpers.isEmpty(r[columns.datum - 1])) return false;
 
                     const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                     const invoiceDate = Helpers.parseDate(r[columns.datum - 1]);
@@ -150,6 +136,13 @@ const Validator = (() => {
     };
 
     /**
+     * Prüft, ob ein Wert keine gültige Zahl ist
+     * @param {*} v - Der zu prüfende Wert
+     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
+     */
+    const isInvalidNumber = v => Helpers.isEmpty(v) || isNaN(parseFloat(v.toString().trim()));
+
+    /**
      * Validiert das Bankbewegungen-Sheet
      * @param {Sheet} bankSheet - Das zu validierende Sheet
      * @returns {Array<string>} - Array mit Warnungen
@@ -160,6 +153,33 @@ const Validator = (() => {
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
         const columns = config.sheets.bankbewegungen.columns;
+
+        // Regeln für Header- und Footer-Zeilen
+        const headerFooterRules = [
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+            {
+                check: r => !Helpers.isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
+                message: "Betrag darf nicht gesetzt sein."
+            },
+            {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => !Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
+            {check: r => !Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
+        ];
+
+        // Regeln für Datenzeilen
+        const dataRowRules = [
+            {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
+            {check: r => Helpers.isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
+            {check: r => Helpers.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
+            {check: r => Helpers.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
+        ];
 
         /**
          * Validiert eine Zeile anhand von Regeln
@@ -172,33 +192,6 @@ const Validator = (() => {
                 if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
             });
         };
-
-        // Regeln für Header- und Footer-Zeilen
-        const headerFooterRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-            {
-                check: r => !isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
-                message: "Betrag darf nicht gesetzt sein."
-            },
-            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-            {check: r => !isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
-            {check: r => !isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
-        ];
-
-        // Regeln für Datenzeilen
-        const dataRowRules = [
-            {check: r => isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-            {check: r => isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-            {check: r => isEmpty(r[columns.betrag - 1]) || isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
-            {check: r => isEmpty(r[columns.saldo - 1]) || isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-            {check: r => isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
-            {check: r => isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-            {check: r => isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
-            {check: r => isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
-        ];
 
         // Zeilen validieren
         data.forEach((row, i) => {
@@ -231,53 +224,41 @@ const Validator = (() => {
         }
 
         try {
-            // Daten aus den Sheets lesen
-            const revData = revenueSheet.getDataRange().getValues();
-            const expData = expenseSheet.getDataRange().getValues();
+            // Warnungen für alle Sheets sammeln
+            const allWarnings = [];
 
-            // Einnahmen validieren (Header-Zeile überspringen)
-            const revenueWarnings = revData.length > 1
-                ? revData.slice(1).reduce((acc, row, i) => {
-                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "einnahmen"));
-                    }
-                    return acc;
-                }, [])
-                : [];
-
-            // Ausgaben validieren (Header-Zeile überspringen)
-            const expenseWarnings = expData.length > 1
-                ? expData.slice(1).reduce((acc, row, i) => {
-                    if (row.some(cell => cell !== "")) { // Nur nicht-leere Zeilen prüfen
-                        return acc.concat(validateRevenueAndExpenses(row, i + 2, "ausgaben"));
-                    }
-                    return acc;
-                }, [])
-                : [];
-
-            // Bank validieren (falls verfügbar)
-            const bankWarnings = bankSheet ? validateBanking(bankSheet) : [];
-
-            // Fehlermeldungen zusammenstellen
-            const msgArr = [];
-            if (revenueWarnings.length) {
-                msgArr.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+            // Einnahmen validieren (wenn Daten vorhanden)
+            if (revenueSheet.getLastRow() > 1) {
+                const revenueData = revenueSheet.getDataRange().getValues().slice(1); // Header überspringen
+                const revenueWarnings = validateSheet(revenueData, "einnahmen");
+                if (revenueWarnings.length) {
+                    allWarnings.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join("\n"));
+                }
             }
 
-            if (expenseWarnings.length) {
-                msgArr.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+            // Ausgaben validieren (wenn Daten vorhanden)
+            if (expenseSheet.getLastRow() > 1) {
+                const expenseData = expenseSheet.getDataRange().getValues().slice(1); // Header überspringen
+                const expenseWarnings = validateSheet(expenseData, "ausgaben");
+                if (expenseWarnings.length) {
+                    allWarnings.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+                }
             }
 
-            if (bankWarnings.length) {
-                msgArr.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+            // Bankbewegungen validieren (wenn vorhanden)
+            if (bankSheet) {
+                const bankWarnings = validateBanking(bankSheet);
+                if (bankWarnings.length) {
+                    allWarnings.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join("\n"));
+                }
             }
 
             // Fehlermeldungen anzeigen, falls vorhanden
-            if (msgArr.length) {
+            if (allWarnings.length) {
                 const ui = SpreadsheetApp.getUi();
                 // Bei vielen Fehlern ggf. einschränken, um UI-Limits zu vermeiden
                 const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
-                let alertMsg = msgArr.join("\n\n");
+                let alertMsg = allWarnings.join("\n\n");
 
                 if (alertMsg.length > maxMsgLength) {
                     alertMsg = alertMsg.substring(0, maxMsgLength) +
@@ -294,6 +275,23 @@ const Validator = (() => {
             SpreadsheetApp.getUi().alert("Ein Fehler ist bei der Validierung aufgetreten: " + e.toString());
             return false;
         }
+    };
+
+    /**
+     * Validiert alle Zeilen in einem Sheet
+     * @param {Array} data - Zeilen-Daten (ohne Header)
+     * @param {string} sheetType - Typ des Sheets ('einnahmen' oder 'ausgaben')
+     * @returns {Array<string>} - Array mit Warnungen
+     */
+    const validateSheet = (data, sheetType) => {
+        return data.reduce((warnings, row, index) => {
+            // Nur nicht-leere Zeilen prüfen
+            if (row.some(cell => cell !== "")) {
+                const rowWarnings = validateRevenueAndExpenses(row, index + 2, sheetType);
+                warnings.push(...rowWarnings);
+            }
+            return warnings;
+        }, []);
     };
 
     /**
@@ -337,8 +335,8 @@ const Validator = (() => {
 
             case 'text':
                 return {
-                    isValid: !isEmpty(value),
-                    message: !isEmpty(value) ? "" : "Text darf nicht leer sein."
+                    isValid: !Helpers.isEmpty(value),
+                    message: !Helpers.isEmpty(value) ? "" : "Text darf nicht leer sein."
                 };
 
             default:
@@ -349,6 +347,92 @@ const Validator = (() => {
         }
     };
 
+    /**
+     * Validiert ein komplettes Sheet und liefert einen detaillierten Fehlerbericht
+     * @param {Sheet} sheet - Das zu validierende Sheet
+     * @param {Object} validationRules - Regeln für jede Spalte {spaltenIndex: {type, required}}
+     * @returns {Object} - Validierungsergebnis mit Fehlern pro Zeile/Spalte
+     */
+    const validateSheetWithRules = (sheet, validationRules) => {
+        const results = {
+            isValid: true,
+            errors: [],
+            errorsByRow: {},
+            errorsByColumn: {}
+        };
+
+        if (!sheet) {
+            results.isValid = false;
+            results.errors.push("Sheet nicht gefunden");
+            return results;
+        }
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) return results; // Nur Header oder leer
+
+        // Header-Zeile überspringen
+        for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+            const row = data[rowIdx];
+
+            // Jede Spalte mit Validierungsregeln prüfen
+            Object.entries(validationRules).forEach(([colIndex, rules]) => {
+                const colIdx = parseInt(colIndex, 10);
+                if (isNaN(colIdx) || colIdx >= row.length) return;
+
+                const cellValue = row[colIdx];
+                const { type, required } = rules;
+
+                // Pflichtfeld-Prüfung
+                if (required && Helpers.isEmpty(cellValue)) {
+                    const error = {
+                        row: rowIdx + 1,
+                        column: colIdx + 1,
+                        message: "Pflichtfeld nicht ausgefüllt"
+                    };
+                    addError(results, error);
+                    return;
+                }
+
+                // Wenn nicht leer, auf Typ prüfen
+                if (!Helpers.isEmpty(cellValue) && type) {
+                    const validation = validateCellValue(cellValue, type);
+                    if (!validation.isValid) {
+                        const error = {
+                            row: rowIdx + 1,
+                            column: colIdx + 1,
+                            message: validation.message
+                        };
+                        addError(results, error);
+                    }
+                }
+            });
+        }
+
+        results.isValid = results.errors.length === 0;
+        return results;
+    };
+
+    /**
+     * Fügt einen Fehler zum Validierungsergebnis hinzu
+     * @param {Object} results - Das Validierungsergebnis
+     * @param {Object} error - Der Fehler {row, column, message}
+     */
+    const addError = (results, error) => {
+        results.errors.push(error);
+
+        // Nach Zeile gruppieren
+        if (!results.errorsByRow[error.row]) {
+            results.errorsByRow[error.row] = [];
+        }
+        results.errorsByRow[error.row].push(error);
+
+        // Nach Spalte gruppieren
+        if (!results.errorsByColumn[error.column]) {
+            results.errorsByColumn[error.column] = [];
+        }
+        results.errorsByColumn[error.column].push(error);
+    };
+
     // Öffentliche API des Moduls
     return {
         validateDropdown,
@@ -356,7 +440,8 @@ const Validator = (() => {
         validateBanking,
         validateAllSheets,
         validateCellValue,
-        isEmpty,
+        validateSheetWithRules,
+        isEmpty: Helpers.isEmpty,
         isInvalidNumber
     };
 })();

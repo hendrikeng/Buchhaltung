@@ -7,6 +7,20 @@ import config from "./config.js";
  * Erstellt eine standardkonforme Bilanz basierend auf den Daten aus anderen Sheets
  */
 const BilanzCalculator = (() => {
+    // Cache für Bilanzdaten
+    const _cache = {
+        bilanzData: null,
+        lastCalculated: null
+    };
+
+    /**
+     * Cache leeren
+     */
+    const clearCache = () => {
+        _cache.bilanzData = null;
+        _cache.lastCalculated = null;
+    };
+
     /**
      * Erstellt eine leere Bilanz-Datenstruktur
      * @returns {Object} Leere Bilanz-Datenstruktur
@@ -61,15 +75,23 @@ const BilanzCalculator = (() => {
 
     /**
      * Sammelt Daten aus verschiedenen Sheets für die Bilanz
-     *
      * @returns {Object} Bilanz-Datenstruktur mit befüllten Werten
      */
     const aggregateBilanzData = () => {
         try {
+            // Prüfen ob Cache gültig ist (maximal 5 Minuten alt)
+            const now = new Date();
+            if (_cache.bilanzData && _cache.lastCalculated) {
+                const cacheAge = now - _cache.lastCalculated;
+                if (cacheAge < 5 * 60 * 1000) { // 5 Minuten
+                    return _cache.bilanzData;
+                }
+            }
+
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const bilanzData = createEmptyBilanz();
 
-            // Spalten-Konfigurationen für die verschiedenen Sheets
+            // Spalten-Konfigurationen für die verschiedenen Sheets abrufen
             const bankCols = config.sheets.bankbewegungen.columns;
             const ausgabenCols = config.sheets.ausgaben.columns;
             const gesellschafterCols = config.sheets.gesellschafterkonto.columns;
@@ -105,85 +127,142 @@ const BilanzCalculator = (() => {
             // 3. Stammkapital aus Konfiguration
             bilanzData.passiva.stammkapital = config.tax.stammkapital || 25000;
 
-            // 4. Suche nach Gesellschafterdarlehen im Gesellschafterkonto-Sheet
-            const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
-            if (gesellschafterSheet) {
-                let darlehenSumme = 0;
-                const data = gesellschafterSheet.getDataRange().getValues();
+            // 4. Gesellschafterdarlehen aus dem Gesellschafterkonto-Sheet
+            bilanzData.passiva.gesellschafterdarlehen = getDarlehensumme(ss, gesellschafterCols);
 
-                // Überschrift überspringen
-                for (let i = 1; i < data.length; i++) {
-                    const row = data[i];
-                    // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
-                    if (row[gesellschafterCols.kategorie - 1] &&
-                        row[gesellschafterCols.kategorie - 1].toString().toLowerCase() === "gesellschafterdarlehen") {
-                        darlehenSumme += Helpers.parseCurrency(row[gesellschafterCols.betrag - 1] || 0);
-                    }
-                }
-
-                bilanzData.passiva.gesellschafterdarlehen = darlehenSumme;
-            }
-
-            // 5. Steuerrückstellungen aus BWA oder Ausgaben-Sheet
-            const ausSheet = ss.getSheetByName("Ausgaben");
-            if (ausSheet) {
-                let steuerRueckstellungen = 0;
-                const data = ausSheet.getDataRange().getValues();
-
-                // Überschrift überspringen
-                for (let i = 1; i < data.length; i++) {
-                    const row = data[i];
-                    const category = row[ausgabenCols.kategorie - 1]?.toString().trim() || "";
-
-                    if (["Gewerbesteuerrückstellungen", "Körperschaftsteuer", "Solidaritätszuschlag", "Sonstige Steuerrückstellungen"].includes(category)) {
-                        steuerRueckstellungen += Helpers.parseCurrency(row[ausgabenCols.nettobetrag - 1] || 0);
-                    }
-                }
-
-                bilanzData.passiva.steuerrueckstellungen = steuerRueckstellungen;
-            }
+            // 5. Steuerrückstellungen aus dem Ausgaben-Sheet
+            bilanzData.passiva.steuerrueckstellungen = getSteuerRueckstellungen(ss, ausgabenCols);
 
             // 6. Berechnung der Summen
-            bilanzData.aktiva.summeAnlagevermoegen =
-                bilanzData.aktiva.sachanlagen +
-                bilanzData.aktiva.immaterielleVermoegen +
-                bilanzData.aktiva.finanzanlagen;
+            calculateBilanzSummen(bilanzData);
 
-            bilanzData.aktiva.summeUmlaufvermoegen =
-                bilanzData.aktiva.bankguthaben +
-                bilanzData.aktiva.kasse +
-                bilanzData.aktiva.forderungenLuL +
-                bilanzData.aktiva.vorraete;
-
-            bilanzData.aktiva.summeAktiva =
-                bilanzData.aktiva.summeAnlagevermoegen +
-                bilanzData.aktiva.summeUmlaufvermoegen +
-                bilanzData.aktiva.rechnungsabgrenzung;
-
-            bilanzData.passiva.summeEigenkapital =
-                bilanzData.passiva.stammkapital +
-                bilanzData.passiva.kapitalruecklagen +
-                bilanzData.passiva.gewinnvortrag -
-                bilanzData.passiva.verlustvortrag +
-                bilanzData.passiva.jahresueberschuss;
-
-            bilanzData.passiva.summeVerbindlichkeiten =
-                bilanzData.passiva.bankdarlehen +
-                bilanzData.passiva.gesellschafterdarlehen +
-                bilanzData.passiva.verbindlichkeitenLuL +
-                bilanzData.passiva.steuerrueckstellungen;
-
-            bilanzData.passiva.summePassiva =
-                bilanzData.passiva.summeEigenkapital +
-                bilanzData.passiva.summeVerbindlichkeiten +
-                bilanzData.passiva.rechnungsabgrenzung;
+            // Daten im Cache speichern
+            _cache.bilanzData = bilanzData;
+            _cache.lastCalculated = now;
 
             return bilanzData;
         } catch (e) {
             console.error("Fehler bei der Sammlung der Bilanzdaten:", e);
-            SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + e.toString());
             return null;
         }
+    };
+
+    /**
+     * Ermittelt die Summe der Gesellschafterdarlehen
+     * @param {Spreadsheet} ss - Das Spreadsheet
+     * @param {Object} gesellschafterCols - Spaltenkonfiguration
+     * @returns {number} Summe der Gesellschafterdarlehen
+     */
+    const getDarlehensumme = (ss, gesellschafterCols) => {
+        let darlehenSumme = 0;
+
+        const gesellschafterSheet = ss.getSheetByName("Gesellschafterkonto");
+        if (gesellschafterSheet) {
+            const data = gesellschafterSheet.getDataRange().getValues();
+
+            // Überschrift überspringen
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                // Prüfen, ob es sich um ein Gesellschafterdarlehen handelt
+                if (row[gesellschafterCols.kategorie - 1] &&
+                    row[gesellschafterCols.kategorie - 1].toString().toLowerCase() === "gesellschafterdarlehen") {
+                    darlehenSumme += Helpers.parseCurrency(row[gesellschafterCols.betrag - 1] || 0);
+                }
+            }
+        }
+
+        return darlehenSumme;
+    };
+
+    /**
+     * Ermittelt die Summe der Steuerrückstellungen
+     * @param {Spreadsheet} ss - Das Spreadsheet
+     * @param {Object} ausgabenCols - Spaltenkonfiguration
+     * @returns {number} Summe der Steuerrückstellungen
+     */
+    const getSteuerRueckstellungen = (ss, ausgabenCols) => {
+        let steuerRueckstellungen = 0;
+
+        const ausSheet = ss.getSheetByName("Ausgaben");
+        if (ausSheet) {
+            const data = ausSheet.getDataRange().getValues();
+
+            // Array mit Steuerrückstellungs-Kategorien
+            const steuerKategorien = [
+                "Gewerbesteuerrückstellungen",
+                "Körperschaftsteuer",
+                "Solidaritätszuschlag",
+                "Sonstige Steuerrückstellungen"
+            ];
+
+            // Überschrift überspringen
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                const category = row[ausgabenCols.kategorie - 1]?.toString().trim() || "";
+
+                if (steuerKategorien.includes(category)) {
+                    steuerRueckstellungen += Helpers.parseCurrency(row[ausgabenCols.nettobetrag - 1] || 0);
+                }
+            }
+        }
+
+        return steuerRueckstellungen;
+    };
+
+    /**
+     * Berechnet die Summen für die Bilanz
+     * @param {Object} bilanzData - Die Bilanzdaten
+     */
+    const calculateBilanzSummen = (bilanzData) => {
+        const { aktiva, passiva } = bilanzData;
+
+        // Summen für Aktiva
+        aktiva.summeAnlagevermoegen = Helpers.round(
+            aktiva.sachanlagen +
+            aktiva.immaterielleVermoegen +
+            aktiva.finanzanlagen,
+            2
+        );
+
+        aktiva.summeUmlaufvermoegen = Helpers.round(
+            aktiva.bankguthaben +
+            aktiva.kasse +
+            aktiva.forderungenLuL +
+            aktiva.vorraete,
+            2
+        );
+
+        aktiva.summeAktiva = Helpers.round(
+            aktiva.summeAnlagevermoegen +
+            aktiva.summeUmlaufvermoegen +
+            aktiva.rechnungsabgrenzung,
+            2
+        );
+
+        // Summen für Passiva
+        passiva.summeEigenkapital = Helpers.round(
+            passiva.stammkapital +
+            passiva.kapitalruecklagen +
+            passiva.gewinnvortrag -
+            passiva.verlustvortrag +
+            passiva.jahresueberschuss,
+            2
+        );
+
+        passiva.summeVerbindlichkeiten = Helpers.round(
+            passiva.bankdarlehen +
+            passiva.gesellschafterdarlehen +
+            passiva.verbindlichkeitenLuL +
+            passiva.steuerrueckstellungen,
+            2
+        );
+
+        passiva.summePassiva = Helpers.round(
+            passiva.summeEigenkapital +
+            passiva.summeVerbindlichkeiten +
+            passiva.rechnungsabgrenzung,
+            2
+        );
     };
 
     /**
@@ -193,7 +272,7 @@ const BilanzCalculator = (() => {
      * @returns {string|number} - Formel als String oder direkter Wert
      */
     const valueOrFormula = (value, useFormula = false) => {
-        if (value === 0 && useFormula) {
+        if (Helpers.isApproximatelyEqual(value, 0) && useFormula) {
             return "";  // Leere Zelle für 0-Werte bei Formeln
         }
         return value;
@@ -264,6 +343,64 @@ const BilanzCalculator = (() => {
     };
 
     /**
+     * Formatiert das Bilanz-Sheet
+     * @param {Sheet} bilanzSheet - Das zu formatierende Sheet
+     * @param {number} aktivaLength - Anzahl der Aktiva-Zeilen
+     * @param {number} passivaLength - Anzahl der Passiva-Zeilen
+     */
+    const formatBilanzSheet = (bilanzSheet, aktivaLength, passivaLength) => {
+        // Überschriften formatieren
+        bilanzSheet.getRange("A1").setFontWeight("bold").setFontSize(12);
+        bilanzSheet.getRange("E1").setFontWeight("bold").setFontSize(12);
+
+        // Zwischensummen und Gesamtsummen formatieren
+        const summenZeilenAktiva = [7, 14, 18]; // Zeilen mit Summen in Aktiva
+        const summenZeilenPassiva = [9, 16, 20]; // Zeilen mit Summen in Passiva
+
+        summenZeilenAktiva.forEach(row => {
+            if (row <= aktivaLength) {
+                bilanzSheet.getRange(row, 1, 1, 2).setFontWeight("bold");
+                if (row === 18) { // Gesamtsumme Aktiva
+                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#e6f2ff");
+                } else {
+                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#f0f0f0");
+                }
+            }
+        });
+
+        summenZeilenPassiva.forEach(row => {
+            if (row <= passivaLength) {
+                bilanzSheet.getRange(row, 5, 1, 2).setFontWeight("bold");
+                if (row === 20) { // Gesamtsumme Passiva
+                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#e6f2ff");
+                } else {
+                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#f0f0f0");
+                }
+            }
+        });
+
+        // Abschnittsüberschriften formatieren
+        [3, 9, 16].forEach(row => {
+            if (row <= aktivaLength) {
+                bilanzSheet.getRange(row, 1).setFontWeight("bold");
+            }
+        });
+
+        [3, 11, 17].forEach(row => {
+            if (row <= passivaLength) {
+                bilanzSheet.getRange(row, 5).setFontWeight("bold");
+            }
+        });
+
+        // Währungsformat für Beträge anwenden
+        bilanzSheet.getRange("B4:B18").setNumberFormat("#,##0.00 €");
+        bilanzSheet.getRange("F4:F20").setNumberFormat("#,##0.00 €");
+
+        // Spaltenbreiten anpassen
+        bilanzSheet.autoResizeColumns(1, 6);
+    };
+
+    /**
      * Hauptfunktion zur Erstellung der Bilanz
      * Sammelt Daten und erstellt ein Bilanz-Sheet
      */
@@ -274,7 +411,10 @@ const BilanzCalculator = (() => {
 
             // Bilanzdaten aggregieren
             const bilanzData = aggregateBilanzData();
-            if (!bilanzData) return;
+            if (!bilanzData) {
+                ui.alert("Fehler: Bilanzdaten konnten nicht gesammelt werden.");
+                return false;
+            }
 
             // Bilanz-Arrays erstellen
             const aktivaArray = createAktivaArray(bilanzData);
@@ -289,8 +429,8 @@ const BilanzCalculator = (() => {
                 // Bei Differenz die Bilanz trotzdem erstellen, aber warnen
                 ui.alert(
                     "Bilanz ist nicht ausgeglichen",
-                    `Die Bilanzsummen von Aktiva (${aktivaSumme} €) und Passiva (${passivaSumme} €) ` +
-                    `stimmen nicht überein. Differenz: ${differenz.toFixed(2)} €. ` +
+                    `Die Bilanzsummen von Aktiva (${Helpers.formatCurrency(aktivaSumme)}) und Passiva (${Helpers.formatCurrency(passivaSumme)}) ` +
+                    `stimmen nicht überein. Differenz: ${Helpers.formatCurrency(differenz)}. ` +
                     `Bitte überprüfen Sie Ihre Buchhaltungsdaten.`,
                     ui.ButtonSet.OK
                 );
@@ -304,64 +444,28 @@ const BilanzCalculator = (() => {
                 bilanzSheet.clearContents();
             }
 
+            // Batch-Write statt einzelner Zellen-Updates
             // Schreibe Aktiva ab Zelle A1 und Passiva ab Zelle E1
             bilanzSheet.getRange(1, 1, aktivaArray.length, 2).setValues(aktivaArray);
             bilanzSheet.getRange(1, 5, passivaArray.length, 2).setValues(passivaArray);
 
             // Formatierung anwenden
-            // Überschriften formatieren
-            bilanzSheet.getRange("A1").setFontWeight("bold").setFontSize(12);
-            bilanzSheet.getRange("E1").setFontWeight("bold").setFontSize(12);
-
-            // Zwischensummen und Gesamtsummen formatieren
-            const summenZeilenAktiva = [7, 14, 18]; // Zeilen mit Summen in Aktiva
-            const summenZeilenPassiva = [9, 16, 20]; // Zeilen mit Summen in Passiva
-
-            summenZeilenAktiva.forEach(row => {
-                bilanzSheet.getRange(row, 1, 1, 2).setFontWeight("bold");
-                if (row === 18) { // Gesamtsumme Aktiva
-                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#e6f2ff");
-                } else {
-                    bilanzSheet.getRange(row, 1, 1, 2).setBackground("#f0f0f0");
-                }
-            });
-
-            summenZeilenPassiva.forEach(row => {
-                bilanzSheet.getRange(row, 5, 1, 2).setFontWeight("bold");
-                if (row === 20) { // Gesamtsumme Passiva
-                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#e6f2ff");
-                } else {
-                    bilanzSheet.getRange(row, 5, 1, 2).setBackground("#f0f0f0");
-                }
-            });
-
-            // Abschnittsüberschriften formatieren
-            [3, 9, 11, 16].forEach(row => {
-                bilanzSheet.getRange(row, 1).setFontWeight("bold");
-            });
-
-            [3, 11, 17].forEach(row => {
-                bilanzSheet.getRange(row, 5).setFontWeight("bold");
-            });
-
-            // Währungsformat für Beträge anwenden
-            bilanzSheet.getRange("B4:B18").setNumberFormat("#,##0.00 €");
-            bilanzSheet.getRange("F4:F20").setNumberFormat("#,##0.00 €");
-
-            // Spaltenbreiten anpassen
-            bilanzSheet.autoResizeColumns(1, 6);
+            formatBilanzSheet(bilanzSheet, aktivaArray.length, passivaArray.length);
 
             // Erfolgsmeldung
             ui.alert("Die Bilanz wurde erfolgreich erstellt!");
+            return true;
         } catch (e) {
             console.error("Fehler bei der Bilanzerstellung:", e);
             SpreadsheetApp.getUi().alert("Fehler bei der Bilanzerstellung: " + e.toString());
+            return false;
         }
     };
 
     // Öffentliche API des Moduls
     return {
         calculateBilanz,
+        clearCache,
         // Für Testzwecke könnten hier weitere Funktionen exportiert werden
         _internal: {
             createEmptyBilanz,
