@@ -290,7 +290,7 @@ const Helpers = {
 
         if (sheetName) {
             // Spaltenkonfiguration aus dem Sheetnamen bestimmen
-            const sheetConfig = config.sheets[sheetName.toLowerCase()]?.columns;
+            const sheetConfig = config[sheetName.toLowerCase()]?.columns;
             if (sheetConfig && sheetConfig.zeitstempel) {
                 timestampColumn = sheetConfig.zeitstempel - 1; // 0-basiert
             } else {

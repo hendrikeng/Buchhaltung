@@ -14,7 +14,7 @@ const ImportModule = (() => {
     const initializeHistorySheet = (history) => {
         try {
             if (history.getLastRow() === 0) {
-                const historyConfig = config.sheets.aenderungshistorie.columns;
+                const historyConfig = config.aenderungshistorie.columns;
                 const headerRow = Array(history.getLastColumn()).fill("");
 
                 headerRow[historyConfig.datum - 1] = "Datum";
@@ -41,7 +41,7 @@ const ImportModule = (() => {
         const existingFiles = new Set();
         try {
             const historyData = history.getDataRange().getValues();
-            const historyConfig = config.sheets.aenderungshistorie.columns;
+            const historyConfig = config.aenderungshistorie.columns;
 
             // Überschriftenzeile überspringen und alle Dateinamen sammeln
             for (let i = 1; i < historyData.length; i++) {
@@ -122,11 +122,11 @@ const ImportModule = (() => {
 
         // Konfiguration für das richtige Sheet auswählen
         const sheetConfig = type === "Einnahme"
-            ? config.sheets.einnahmen.columns
-            : config.sheets.ausgaben.columns;
+            ? config.einnahmen.columns
+            : config.ausgaben.columns;
 
         // Konfiguration für das Änderungshistorie-Sheet
-        const historyConfig = config.sheets.aenderungshistorie.columns;
+        const historyConfig = config.aenderungshistorie.columns;
 
         // Batch-Verarbeitung der Dateien
         const batchSize = 20;

@@ -92,9 +92,9 @@ const BilanzCalculator = (() => {
             const bilanzData = createEmptyBilanz();
 
             // Spalten-Konfigurationen für die verschiedenen Sheets abrufen
-            const bankCols = config.sheets.bankbewegungen.columns;
-            const ausgabenCols = config.sheets.ausgaben.columns;
-            const gesellschafterCols = config.sheets.gesellschafterkonto.columns;
+            const bankCols = config.bankbewegungen.columns;
+            const ausgabenCols = config.ausgaben.columns;
+            const gesellschafterCols = config.gesellschafterkonto.columns;
 
             // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
             const bankSheet = ss.getSheetByName("Bankbewegungen");

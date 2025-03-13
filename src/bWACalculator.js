@@ -106,7 +106,7 @@ const BWACalculator = (() => {
      */
     const processRevenue = (row, bwaData) => {
         try {
-            const columns = config.sheets.einnahmen.columns;
+            const columns = config.einnahmen.columns;
 
             const m = Helpers.getMonthFromRow(row, "einnahmen");
             if (!m) return;
@@ -163,7 +163,7 @@ const BWACalculator = (() => {
      */
     const processExpense = (row, bwaData) => {
         try {
-            const columns = config.sheets.ausgaben.columns;
+            const columns = config.ausgaben.columns;
 
             const m = Helpers.getMonthFromRow(row, "ausgaben");
             if (!m) return;
@@ -276,7 +276,7 @@ const BWACalculator = (() => {
      */
     const processEigen = (row, bwaData) => {
         try {
-            const columns = config.sheets.eigenbelege.columns;
+            const columns = config.eigenbelege.columns;
 
             const m = Helpers.getMonthFromRow(row, "eigenbelege");
             if (!m) return;
@@ -285,7 +285,7 @@ const BWACalculator = (() => {
             if (amount === 0) return;
 
             const category = row[columns.kategorie - 1]?.toString().trim() || "";
-            const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+            const eigenCfg = config.eigenbelege.categories[category] ?? {};
             const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
             // Basierend auf Steuertyp zuordnen

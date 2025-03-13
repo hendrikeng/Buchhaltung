@@ -54,7 +54,7 @@ const UStVACalculator = (() => {
         try {
             // Sheet-Typ bestimmen
             const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
-            const columns = config.sheets[sheetType].columns;
+            const columns = config[sheetType].columns;
 
             // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
             const paymentDate = Helpers.parseDate(row[columns.zahlungsdatum - 1]);
@@ -66,7 +66,7 @@ const UStVACalculator = (() => {
 
             // Beträge aus der Zeile extrahieren
             const netto = Helpers.parseCurrency(row[columns.nettobetrag - 1]);
-            const restNetto = Helpers.parseCurrency(row[columns.steuerbemessung - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+            const restNetto = Helpers.parseCurrency(row[columns.restbetragNetto - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
             const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
 
             // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
@@ -138,7 +138,7 @@ const UStVACalculator = (() => {
      */
     const processEigenRow = (data, month, gezahlt, tax, roundedRate, category) => {
         // EIGENBELEGE
-        const eigenCfg = config.eigenbelege.mapping[category] ?? {};
+        const eigenCfg = config.eigenbelege.categories[category] ?? {};
         const taxType = eigenCfg.taxType ?? "steuerpflichtig";
 
         if (taxType === "steuerfrei") {

@@ -60,11 +60,11 @@ const RefreshModule = (() => {
             // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
             let columns;
             if (name === "Einnahmen") {
-                columns = config.sheets.einnahmen.columns;
+                columns = config.einnahmen.columns;
             } else if (name === "Ausgaben") {
-                columns = config.sheets.ausgaben.columns;
+                columns = config.ausgaben.columns;
             } else if (name === "Eigenbelege") {
-                columns = config.sheets.eigenbelege.columns;
+                columns = config.eigenbelege.columns;
             } else {
                 return false; // Unbekanntes Sheet
             }
@@ -90,8 +90,8 @@ const RefreshModule = (() => {
                 (_, i) => [`=${columnLetters.nettobetrag}${i + 2}+${columnLetters.mwstBetrag}${i + 2}`]
             );
 
-            // Steuerbemessungsgrundlage - für Teilzahlungen
-            formulasBatch[columns.steuerbemessung] = Array.from(
+            // Bezahlter Betrag - für Teilzahlungen
+            formulasBatch[columns.bezahlt] = Array.from(
                 {length: numRows},
                 (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
             );
@@ -102,11 +102,19 @@ const RefreshModule = (() => {
                 (_, i) => [`=IF(${columnLetters.datum}${i + 2}="";"";ROUNDUP(MONTH(${columnLetters.datum}${i + 2})/3;0))`]
             );
 
-            // Zahlungsstatus
-            formulasBatch[columns.zahlungsstatus] = Array.from(
-                {length: numRows},
-                (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
-            );
+            if (name !== "Eigenbelege") {
+                // Für Einnahmen und Ausgaben: Zahlungsstatus
+                formulasBatch[columns.zahlungsstatus] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`]
+                );
+            } else {
+                // Für Eigenbelege: Zahlungsstatus
+                formulasBatch[columns.zahlungsstatus] = Array.from(
+                    {length: numRows},
+                    (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Erstattet";"Teilerstattet"))`]
+                );
+            }
 
             // Formeln in Batches anwenden (weniger API-Calls)
             Object.entries(formulasBatch).forEach(([col, formulas]) => {
@@ -134,11 +142,12 @@ const RefreshModule = (() => {
                 ]);
             } else {
                 // Für Eigenbelege: Status
-                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.status, [
+                Helpers.setConditionalFormattingForColumn(sheet, columnLetters.zahlungsstatus, [
                     {value: "Offen", background: "#FFC7CE", fontColor: "#9C0006"},
-                    {value: "Erstattet", background: "#FFEB9C", fontColor: "#9C6500"},
-                    {value: "Gebucht", background: "#C6EFCE", fontColor: "#006100"}
+                    {value: "Teilerstattet", background: "#FFEB9C", fontColor: "#9C6500"},
+                    {value: "Erstattet", background: "#C6EFCE", fontColor: "#006100"}
                 ]);
+
             }
 
             // Spaltenbreiten automatisch anpassen
@@ -172,13 +181,7 @@ const RefreshModule = (() => {
         } else if (sheetName === "Eigenbelege") {
             Validator.validateDropdown(
                 sheet, 2, columns.kategorie, numRows, 1,
-                config.eigenbelege.category
-            );
-
-            // Für Eigenbelege: Status-Dropdown hinzufügen
-            Validator.validateDropdown(
-                sheet, 2, columns.status, numRows, 1,
-                config.eigenbelege.status
+                Object.keys(config.eigenbelege.categories)
             );
         }
 
@@ -205,7 +208,7 @@ const RefreshModule = (() => {
             const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
 
             // Bankbewegungen-Konfiguration für Spalten
-            const columns = config.sheets.bankbewegungen.columns;
+            const columns = config.bankbewegungen.columns;
 
             // Spaltenbuchstaben aus den Indizes generieren
             const columnLetters = {};
@@ -266,13 +269,13 @@ const RefreshModule = (() => {
         // Validierung für Transaktionstyp
         Validator.validateDropdown(
             sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-            config.bank.type
+            config.bankbewegungen.types
         );
 
         // Validierung für Kategorie
         Validator.validateDropdown(
             sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-            config.bank.category
+            config.bankbewegungen.categories
         );
 
         // Konten für Dropdown-Validierung sammeln
@@ -442,8 +445,8 @@ const RefreshModule = (() => {
      */
     const performBankReferenceMatching = (ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters) => {
         // Konfigurationen für Spaltenindizes
-        const einnahmenCols = config.sheets.einnahmen.columns;
-        const ausgabenCols = config.sheets.ausgaben.columns;
+        const einnahmenCols = config.einnahmen.columns;
+        const ausgabenCols = config.ausgaben.columns;
 
         // Referenzdaten laden für Einnahmen
         const einnahmenSheet = getSheet("Einnahmen");
@@ -986,8 +989,8 @@ const RefreshModule = (() => {
     const markPaidRows = (sheet, sheetType, bankZuordnungen) => {
         // Konfiguration für das Sheet
         const columns = sheetType === "Einnahmen"
-            ? config.sheets.einnahmen.columns
-            : config.sheets.ausgaben.columns;
+            ? config.einnahmen.columns
+            : config.ausgaben.columns;
 
         // Hole Werte aus dem Sheet
         const numRows = sheet.getLastRow() - 1;
@@ -1002,12 +1005,12 @@ const RefreshModule = (() => {
         const normalRows = [];
 
         // Bank-Abgleich-Updates sammeln
-        const bankAbgleichUpdates = [];
+        const bankabgleichUpdates = [];
 
         // Datenzeilen durchgehen und in Kategorien einteilen
         for (let i = 0; i < data.length; i++) {
             const row = i + 2; // Aktuelle Zeile im Sheet
-            const nettoBetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
+            const nettobetrag = Helpers.parseCurrency(data[i][columns.nettobetrag - 1]);
             const bezahltBetrag = Helpers.parseCurrency(data[i][columns.bezahlt - 1]);
             const zahlungsDatum = data[i][columns.zahlungsdatum - 1];
             const referenz = data[i][columns.rechnungsnummer - 1];
@@ -1021,7 +1024,7 @@ const RefreshModule = (() => {
 
             // Zahlungsstatus berechnen
             const mwst = Helpers.parseMwstRate(data[i][columns.mwstSatz - 1]) / 100;
-            const bruttoBetrag = nettoBetrag * (1 + mwst);
+            const bruttoBetrag = nettobetrag * (1 + mwst);
             const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
             const isPartialPaid = !isPaid && bezahltBetrag > 0;
 
@@ -1030,7 +1033,7 @@ const RefreshModule = (() => {
                 gutschriftRows.push(row);
                 // Bank-Abgleich-Info setzen
                 if (hatBankzuordnung) {
-                    bankAbgleichUpdates.push({
+                    bankabgleichUpdates.push({
                         row,
                         value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                     });
@@ -1039,7 +1042,7 @@ const RefreshModule = (() => {
                 if (zahlungsDatum) {
                     if (hatBankzuordnung) {
                         fullPaidWithBankRows.push(row);
-                        bankAbgleichUpdates.push({
+                        bankabgleichUpdates.push({
                             row,
                             value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                         });
@@ -1053,7 +1056,7 @@ const RefreshModule = (() => {
             } else if (isPartialPaid) {
                 if (hatBankzuordnung) {
                     partialPaidWithBankRows.push(row);
-                    bankAbgleichUpdates.push({
+                    bankabgleichUpdates.push({
                         row,
                         value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
                     });
@@ -1064,8 +1067,8 @@ const RefreshModule = (() => {
                 // Unbezahlt - normale Zeile
                 normalRows.push(row);
                 // Vorhandene Bank-Abgleich-Info entfernen falls vorhanden
-                if (sheet.getRange(row, columns.bankAbgleich).getValue().toString().startsWith("✓ Bank:")) {
-                    bankAbgleichUpdates.push({
+                if (sheet.getRange(row, columns.bankabgleich).getValue().toString().startsWith("✓ Bank:")) {
+                    bankabgleichUpdates.push({
                         row,
                         value: ""
                     });
@@ -1082,16 +1085,16 @@ const RefreshModule = (() => {
         applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
 
         // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-        if (sheet.getRange(1, columns.bankAbgleich).getValue() === "") {
-            sheet.getRange(1, columns.bankAbgleich).setValue("Bank-Abgleich");
+        if (sheet.getRange(1, columns.bankabgleich).getValue() === "") {
+            sheet.getRange(1, columns.bankabgleich).setValue("Bankabgleich");
         }
 
         // Bank-Abgleich-Updates in Batches ausführen
-        if (bankAbgleichUpdates.length > 0) {
+        if (bankabgleichUpdates.length > 0) {
             // Gruppiere Updates nach Wert für effizientere Batch-Updates
             const groupedUpdates = {};
 
-            bankAbgleichUpdates.forEach(update => {
+            bankabgleichUpdates.forEach(update => {
                 const { row, value } = update;
                 if (!groupedUpdates[value]) {
                     groupedUpdates[value] = [];
@@ -1106,7 +1109,7 @@ const RefreshModule = (() => {
                 for (let i = 0; i < rows.length; i += batchSize) {
                     const batchRows = rows.slice(i, i + batchSize);
                     batchRows.forEach(row => {
-                        sheet.getRange(row, columns.bankAbgleich).setValue(value);
+                        sheet.getRange(row, columns.bankabgleich).setValue(value);
                     });
 
                     // Kurze Pause, um API-Limits zu vermeiden

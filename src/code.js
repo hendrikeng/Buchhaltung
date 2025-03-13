@@ -37,19 +37,19 @@ const onEdit = e => {
     // Konvertieren in kleinbuchstaben und leerzeichen entfernen
     let sheetKey = name.toLowerCase().replace(/\s+/g, '');
 
-    // Nach entsprechendem Schlüssel in config.sheets suchen (case-insensitive)
+    // Nach entsprechendem Schlüssel in config suchen (case-insensitive)
     let configKey = null;
-    Object.keys(config.sheets).forEach(key => {
+    Object.keys(config).forEach(key => {
         if (key.toLowerCase() === sheetKey) {
             configKey = key;
         }
     });
 
     // Wenn kein passender Schlüssel gefunden wurde, abbrechen
-    if (!configKey || !config.sheets[configKey].columns.zeitstempel) return;
+    if (!configKey || !config[configKey].columns.zeitstempel) return;
 
     // Spalte für Zeitstempel aus der Konfiguration
-    const timestampCol = config.sheets[configKey].columns.zeitstempel;
+    const timestampCol = config[configKey].columns.zeitstempel;
 
     // Prüfen, ob die bearbeitete Spalte bereits die Zeitstempel-Spalte ist
     if (range.getColumn() === timestampCol ||

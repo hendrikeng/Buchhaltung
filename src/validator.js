@@ -41,7 +41,7 @@ const Validator = (() => {
      */
     const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
         const warnings = [];
-        const columns = config.sheets[sheetType].columns;
+        const columns = config[sheetType].columns;
 
         /**
          * Validiert eine Zeile anhand einer Liste von Validierungsregeln
@@ -80,7 +80,7 @@ const Validator = (() => {
         ];
 
         // Status-abhängige Regeln
-        const status = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
+        const zahlungsstatus = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
 
         // Regeln für offene Zahlungen
         const openPaymentRules = [
@@ -126,7 +126,7 @@ const Validator = (() => {
         ];
 
         // Regeln basierend auf Zahlungsstatus zusammenstellen
-        const paymentRules = status === "offen" ? openPaymentRules : paidPaymentRules;
+        const paymentRules = zahlungsstatus === "offen" ? openPaymentRules : paidPaymentRules;
 
         // Alle Regeln kombinieren und anwenden
         const rules = [...baseRules, ...paymentRules];
@@ -152,7 +152,7 @@ const Validator = (() => {
 
         const data = bankSheet.getDataRange().getValues();
         const warnings = [];
-        const columns = config.sheets.bankbewegungen.columns;
+        const columns = config.bankbewegungen.columns;
 
         // Regeln für Header- und Footer-Zeilen
         const headerFooterRules = [
