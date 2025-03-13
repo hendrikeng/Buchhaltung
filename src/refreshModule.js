@@ -1084,11 +1084,6 @@ const RefreshModule = (() => {
         applyColorToRows(sheet, gutschriftRows, "#E6E0FF"); // Helles Lila
         applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
 
-        // Titelzeile für Spalte Bank-Abgleich setzen, falls noch nicht vorhanden
-        if (sheet.getRange(1, columns.bankabgleich).getValue() === "") {
-            sheet.getRange(1, columns.bankabgleich).setValue("Bankabgleich");
-        }
-
         // Bank-Abgleich-Updates in Batches ausführen
         if (bankabgleichUpdates.length > 0) {
             // Gruppiere Updates nach Wert für effizientere Batch-Updates
