@@ -14,7 +14,8 @@ const RefreshModule = (() => {
         // Referenz-Maps für schnellere Suche nach Rechnungsnummern
         references: {
             einnahmen: null,
-            ausgaben: null
+            ausgaben: null,
+            eigenbelege: null
         }
     };
 
@@ -25,6 +26,7 @@ const RefreshModule = (() => {
         _cache.sheets.clear();
         _cache.references.einnahmen = null;
         _cache.references.ausgaben = null;
+        _cache.references.eigenbelege = null;
     };
 
     /**
@@ -305,6 +307,12 @@ const RefreshModule = (() => {
             if (m.gegen) allowedGegenkonto.add(m.gegen);
         });
 
+        // Konten aus Eigenbelegen sammeln
+        Object.values(config.eigenbelege.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
         // Dropdown-Validierungen für Konten setzen
         Validator.validateDropdown(
             sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
@@ -355,11 +363,16 @@ const RefreshModule = (() => {
      */
     const createReferenceMap = (data) => {
         // Cache prüfen und nutzen
-        if (arguments.length === 1 && data === "einnahmen" && _cache.references.einnahmen) {
-            return _cache.references.einnahmen;
-        }
-        if (arguments.length === 1 && data === "ausgaben" && _cache.references.ausgaben) {
-            return _cache.references.ausgaben;
+        if (arguments.length === 1) {
+            if (data === "einnahmen" && _cache.references.einnahmen) {
+                return _cache.references.einnahmen;
+            }
+            if (data === "ausgaben" && _cache.references.ausgaben) {
+                return _cache.references.ausgaben;
+            }
+            if (data === "eigenbelege" && _cache.references.eigenbelege) {
+                return _cache.references.eigenbelege;
+            }
         }
 
         const map = {};
@@ -439,6 +452,8 @@ const RefreshModule = (() => {
                 _cache.references.einnahmen = map;
             } else if (data === "ausgaben") {
                 _cache.references.ausgaben = map;
+            } else if (data === "eigenbelege") {
+                _cache.references.eigenbelege = map;
             }
         }
 
@@ -459,6 +474,7 @@ const RefreshModule = (() => {
         // Konfigurationen für Spaltenindizes
         const einnahmenCols = config.einnahmen.columns;
         const ausgabenCols = config.ausgaben.columns;
+        const eigenbelegeCols = config.eigenbelege.columns;
 
         // Referenzdaten laden für Einnahmen
         const einnahmenSheet = getSheet("Einnahmen");
@@ -482,6 +498,17 @@ const RefreshModule = (() => {
             ausgabenMap = createReferenceMap(ausgabenData);
         }
 
+        // Referenzdaten laden für Eigenbelege
+        const eigenbelegeSheet = getSheet("Eigenbelege");
+        let eigenbelegeData = [], eigenbelegeMap = {};
+
+        if (eigenbelegeSheet && eigenbelegeSheet.getLastRow() > 1) {
+            const numEigenbelegeRows = eigenbelegeSheet.getLastRow() - 1;
+            // Die relevanten Spalten laden basierend auf der Konfiguration
+            eigenbelegeData = eigenbelegeSheet.getRange(2, eigenbelegeCols.rechnungsnummer, numEigenbelegeRows, 8).getDisplayValues();
+            eigenbelegeMap = createReferenceMap(eigenbelegeData);
+        }
+
         // Bankbewegungen Daten für Verarbeitung holen
         const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
 
@@ -490,20 +517,25 @@ const RefreshModule = (() => {
         const kontoSollResults = [];
         const kontoHabenResults = [];
 
-        // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben
+        // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben/Eigenbelegen
         const bankZuordnungen = {};
 
         // Sammeln aller gültigen Konten für die Validierung
         const allowedKontoSoll = new Set();
         const allowedGegenkonto = new Set();
 
-        // Konten aus Einnahmen und Ausgaben sammeln
+        // Konten aus Einnahmen, Ausgaben und Eigenbelegen sammeln
         Object.values(config.einnahmen.kontoMapping).forEach(m => {
             if (m.soll) allowedKontoSoll.add(m.soll);
             if (m.gegen) allowedGegenkonto.add(m.gegen);
         });
 
         Object.values(config.ausgaben.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
+        Object.values(config.eigenbelege.kontoMapping).forEach(m => {
             if (m.soll) allowedKontoSoll.add(m.soll);
             if (m.gegen) allowedGegenkonto.add(m.gegen);
         });
@@ -574,6 +606,25 @@ const RefreshModule = (() => {
                         };
                     }
 
+                    // Wenn keine Übereinstimmung in Ausgaben, dann in Eigenbelegen suchen
+                    if (!matchFound) {
+                        const eigenbelegMatch = findMatch(refNumber, eigenbelegeMap, betragValue);
+                        if (eigenbelegMatch) {
+                            matchFound = true;
+                            matchInfo = processEigenbelegMatch(eigenbelegMatch, betragValue, row, columns, eigenbelegeSheet, eigenbelegeCols);
+
+                            // Für spätere Markierung merken
+                            const key = `eigenbeleg#${eigenbelegMatch.row}`;
+                            bankZuordnungen[key] = {
+                                typ: "eigenbeleg",
+                                row: eigenbelegMatch.row,
+                                bankDatum: row[columns.datum - 1],
+                                matchInfo: matchInfo,
+                                transTyp: tranType
+                            };
+                        }
+                    }
+
                     // FALLS keine Übereinstimmung, auch in Einnahmen suchen (für Gutschriften)
                     if (!matchFound) {
                         const gutschriftMatch = findMatch(refNumber, einnahmenMap);
@@ -589,6 +640,25 @@ const RefreshModule = (() => {
                                 bankDatum: row[columns.datum - 1],
                                 matchInfo: matchInfo,
                                 transTyp: "Gutschrift"
+                            };
+                        }
+                    }
+
+                    // FALLS immer noch keine Übereinstimmung, auch in Eigenbelegen suchen (für Erstattungen)
+                    if (!matchFound) {
+                        const eigenbelegMatch = findMatch(refNumber, eigenbelegeMap, betragValue);
+                        if (eigenbelegMatch) {
+                            matchFound = true;
+                            matchInfo = processEigenbelegMatch(eigenbelegMatch, betragValue, row, columns, eigenbelegeSheet, eigenbelegeCols);
+
+                            // Für spätere Markierung merken
+                            const key = `eigenbeleg#${eigenbelegMatch.row}`;
+                            bankZuordnungen[key] = {
+                                typ: "eigenbeleg",
+                                row: eigenbelegMatch.row,
+                                bankDatum: row[columns.datum - 1],
+                                matchInfo: matchInfo,
+                                transTyp: tranType
                             };
                         }
                     }
@@ -648,8 +718,8 @@ const RefreshModule = (() => {
         // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
         setMatchColumnFormatting(sheet, columnLetters.matchInfo);
 
-        // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
-        markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
+        // Setze farbliche Markierung in den Einnahmen/Ausgaben/Eigenbelege Sheets basierend auf Zahlungsstatus
+        markPaidInvoices(einnahmenSheet, ausgabenSheet, eigenbelegeSheet, bankZuordnungen);
     };
 
     /**
@@ -891,6 +961,46 @@ const RefreshModule = (() => {
     };
 
     /**
+     * Verarbeitet eine Eigenbeleg-Übereinstimmung
+     * @returns {string} Formatierte Match-Information
+     */
+    const processEigenbelegMatch = (eigenbelegMatch, betragValue, row, columns, eigenbelegeSheet, eigenbelegeCols) => {
+        let matchInfo = "";
+        let matchStatus = "";
+
+        // Je nach Match-Typ unterschiedliche Statusinformationen
+        if (eigenbelegMatch.matchType) {
+            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
+            if (eigenbelegMatch.matchType === "Unsichere Zahlung" && eigenbelegMatch.betragsDifferenz) {
+                matchStatus = ` (${eigenbelegMatch.matchType}, Diff: ${eigenbelegMatch.betragsDifferenz}€)`;
+            } else {
+                matchStatus = ` (${eigenbelegMatch.matchType})`;
+            }
+        }
+
+        // Prüfen, ob Erstattungsdatum in Eigenbelegen aktualisiert werden soll
+        if ((eigenbelegMatch.matchType === "Vollständige Zahlung" ||
+                eigenbelegMatch.matchType === "Teilzahlung") &&
+            eigenbelegeSheet) {
+            // Bankbewegungsdatum holen (aus Spalte A)
+            const erstattungsDatum = row[columns.datum - 1];
+            if (erstattungsDatum) {
+                // Erstattungsdatum im Eigenbelege-Sheet aktualisieren (nur wenn leer)
+                const eigenbelegeRow = eigenbelegMatch.row;
+                const erstattungsdatumRange = eigenbelegeSheet.getRange(eigenbelegeRow, eigenbelegeCols.zahlungsdatum);
+                const aktuellDatum = erstattungsdatumRange.getValue();
+
+                if (Helpers.isEmpty(aktuellDatum)) {
+                    erstattungsdatumRange.setValue(erstattungsDatum);
+                    matchStatus += " ✓ Datum aktualisiert";
+                }
+            }
+        }
+
+        return `Eigenbeleg #${eigenbelegMatch.row}${matchStatus}`;
+    };
+
+    /**
      * Formatiert Zeilen basierend auf dem Match-Typ
      * @param {Sheet} sheet - Das Sheet
      * @param {number} firstDataRow - Erste Datenzeile
@@ -906,6 +1016,9 @@ const RefreshModule = (() => {
             'Ausgabe': { rows: [], color: "#FFCCCC" },   // Helles Rosa (Grundfarbe für Ausgaben)
             'Vollständige Zahlung (Ausgabe)': { rows: [], color: "#FFC7CE" },  // Helles Rot
             'Teilzahlung (Ausgabe)': { rows: [], color: "#FCE4D6" },  // Helles Orange
+            'Eigenbeleg': { rows: [], color: "#DDEBF7" },  // Helles Blau (Grundfarbe für Eigenbelege)
+            'Vollständige Zahlung (Eigenbeleg)': { rows: [], color: "#9BC2E6" },  // Kräftigeres Blau
+            'Teilzahlung (Eigenbeleg)': { rows: [], color: "#FCE4D6" },  // Helles Orange
             'Gutschrift': { rows: [], color: "#E6E0FF" },  // Helles Lila
             'Gesellschaftskonto/Holding': { rows: [], color: "#FFEB9C" }  // Helles Gelb
         };
@@ -932,6 +1045,14 @@ const RefreshModule = (() => {
                     formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
                 } else {
                     formatBatches['Ausgabe'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Eigenbeleg")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Eigenbeleg)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Eigenbeleg)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Eigenbeleg'].rows.push(rowIndex);
                 }
             } else if (matchText.includes("Gutschrift")) {
                 formatBatches['Gutschrift'].rows.push(rowIndex);
@@ -975,6 +1096,7 @@ const RefreshModule = (() => {
             // Grundlegende Match-Typen mit beginsWith Pattern
             {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
             {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
+            {value: "Eigenbeleg", background: "#DDEBF7", fontColor: "#2F5597", pattern: "beginsWith"},
             {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
             {value: "Gesellschaftskonto", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
             {value: "Holding", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
@@ -990,12 +1112,13 @@ const RefreshModule = (() => {
     };
 
     /**
-     * Markiert bezahlte Einnahmen und Ausgaben farblich basierend auf dem Zahlungsstatus
+     * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich basierend auf dem Zahlungsstatus
      * @param {Sheet} einnahmenSheet - Das Einnahmen-Sheet
      * @param {Sheet} ausgabenSheet - Das Ausgaben-Sheet
+     * @param {Sheet} eigenbelegeSheet - Das Eigenbelege-Sheet
      * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
      */
-    const markPaidInvoices = (einnahmenSheet, ausgabenSheet, bankZuordnungen) => {
+    const markPaidInvoices = (einnahmenSheet, ausgabenSheet, eigenbelegeSheet, bankZuordnungen) => {
         // Markiere bezahlte Einnahmen
         if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
             markPaidRows(einnahmenSheet, "Einnahmen", bankZuordnungen);
@@ -1005,19 +1128,32 @@ const RefreshModule = (() => {
         if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
             markPaidRows(ausgabenSheet, "Ausgaben", bankZuordnungen);
         }
+
+        // Markiere bezahlte Eigenbelege
+        if (eigenbelegeSheet && eigenbelegeSheet.getLastRow() > 1) {
+            markPaidRows(eigenbelegeSheet, "Eigenbelege", bankZuordnungen);
+        }
     };
 
     /**
      * Markiert bezahlte Zeilen in einem Sheet
      * @param {Sheet} sheet - Das zu aktualisierende Sheet
-     * @param {string} sheetType - Typ des Sheets ("Einnahmen" oder "Ausgaben")
+     * @param {string} sheetType - Typ des Sheets ("Einnahmen", "Ausgaben" oder "Eigenbelege")
      * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
      */
     const markPaidRows = (sheet, sheetType, bankZuordnungen) => {
         // Konfiguration für das Sheet
-        const columns = sheetType === "Einnahmen"
-            ? config.einnahmen.columns
-            : config.ausgaben.columns;
+        let columns;
+
+        if (sheetType === "Einnahmen") {
+            columns = config.einnahmen.columns;
+        } else if (sheetType === "Ausgaben") {
+            columns = config.ausgaben.columns;
+        } else if (sheetType === "Eigenbelege") {
+            columns = config.eigenbelege.columns;
+        } else {
+            return; // Unbekannter Sheet-Typ
+        }
 
         // Hole Werte aus dem Sheet
         const numRows = sheet.getLastRow() - 1;
@@ -1046,7 +1182,8 @@ const RefreshModule = (() => {
             const isGutschrift = referenz && referenz.toString().startsWith("G-");
 
             // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
-            const zuordnungsKey = `${sheetType.toLowerCase().slice(0, -1)}#${row}`;
+            // Bei Eigenbelegen verwenden wir den key "eigenbeleg#row"
+            const zuordnungsKey = `${sheetType === "Eigenbelege" ? "eigenbeleg" : sheetType.toLowerCase().slice(0, -1)}#${row}`;
             const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
 
             // Zahlungsstatus berechnen
