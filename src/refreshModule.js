@@ -358,12 +358,13 @@ const RefreshModule = (() => {
 
     /**
      * Erstellt eine Map aus Referenznummern für schnellere Suche
-     * @param {Array|string} data - Array mit Referenznummern und Beträgen oder Sheetname
+     * @param {Array} data - Array mit Referenznummern und Beträgen
+     * @param {string} sheetType - Optional: Typ des Sheets ("einnahmen", "ausgaben", "eigenbelege")
      * @returns {Object} - Map mit Referenznummern als Keys
      */
-    const createReferenceMap = (data) => {
+    const createReferenceMap = (data, sheetType = null) => {
         // Cache prüfen und nutzen
-        if (arguments.length === 1) {
+        if (arguments.length === 1 && typeof data === 'string') {
             if (data === "einnahmen" && _cache.references.einnahmen) {
                 return _cache.references.einnahmen;
             }
@@ -373,6 +374,9 @@ const RefreshModule = (() => {
             if (data === "eigenbelege" && _cache.references.eigenbelege) {
                 return _cache.references.eigenbelege;
             }
+
+            // Wenn ein Sheetname übergeben wurde, diesen als sheetType setzen
+            sheetType = data;
         }
 
         const map = {};
@@ -382,21 +386,30 @@ const RefreshModule = (() => {
             return map;
         }
 
-        // Konfiguration basierend auf dem Sheettyp ermitteln
-        let sheetConfig = null;
-        let sheetType = "";
-        if (arguments.length === 1 && typeof data === 'string') {
-            // Wenn ein Sheetname übergeben wurde
-            sheetType = data;
-            sheetConfig = config[sheetType].columns;
+        // Get column configuration for the sheet type
+        const sheetConfig = sheetType ? config[sheetType].columns : null;
+
+        // When working with loaded data range, the first column is always the reference number (rechnungsnummer)
+        // Calculate relative positions of other columns based on this
+        const rechnungsnummerIdx = 0;
+
+        // Determine indices of required columns within the loaded data range
+        let nettoIdx, mwstIdx, bezahltIdx;
+
+        if (sheetConfig) {
+            // Calculate relative positions from rechnungsnummer within the loaded range
+            nettoIdx = sheetConfig.nettobetrag - sheetConfig.rechnungsnummer;
+            mwstIdx = sheetConfig.mwstSatz - sheetConfig.rechnungsnummer;
+            bezahltIdx = sheetConfig.bezahlt - sheetConfig.rechnungsnummer;
+        } else {
+            // Default values if no config provided (for backward compatibility)
+            nettoIdx = 3;
+            mwstIdx = 4;
+            bezahltIdx = 7;
         }
 
-        // Wir verarbeiten das geladene Range basierend auf den Spalten, die geladen wurden
-        // Die Indizes im Range entsprechen der Reihenfolge, wie sie geladen wurden
-
         for (let i = 0; i < data.length; i++) {
-            // Referenz ist immer die erste Spalte im geladenen Range (Rechnungsnummer)
-            const ref = data[i][0];
+            const ref = data[i][rechnungsnummerIdx];
             if (Helpers.isEmpty(ref)) continue;
 
             // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
@@ -408,27 +421,7 @@ const RefreshModule = (() => {
 
             const normalizedKey = Helpers.normalizeText(key);
 
-            // Bei Array-Daten, nutze die relativen Indizes im geladenen Range
-            // Bei getRange(2, rechnungsnummer, rows, 8) müssen wir wissen, welche Spalten geladen wurden
-
-            // Je nach Sheet-Typ sind die Spaltenindizes unterschiedlich
-            let nettoIdx, mwstIdx, bezahltIdx;
-
-            // Offset berechnen, wie viele Spalten vom rechnungsnummer bis zur jeweiligen Spalte
-            if (sheetConfig) {
-                // Anzahl der Spalten zwischen rechnungsnummer und der Zielspalte
-                nettoIdx = sheetConfig.nettobetrag - sheetConfig.rechnungsnummer;
-                mwstIdx = sheetConfig.mwstSatz - sheetConfig.rechnungsnummer;
-                bezahltIdx = sheetConfig.bezahlt - sheetConfig.rechnungsnummer;
-            } else {
-                // Fallback wenn keine Konfiguration vorhanden ist
-                // Hier nehmen wir an: Einnahmen/Ausgaben Standardstruktur
-                nettoIdx = 3;  // Offset von rechnungsnummer zu nettobetrag
-                mwstIdx = 4;   // Offset von rechnungsnummer zu mwstSatz
-                bezahltIdx = 7; // Offset von rechnungsnummer zu bezahlt
-            }
-
-            // Werte extrahieren
+            // Werte extrahieren mit den berechneten Indizes
             let betrag = 0;
             if (!Helpers.isEmpty(data[i][nettoIdx])) {
                 betrag = Helpers.parseCurrency(data[i][nettoIdx]);
@@ -466,8 +459,8 @@ const RefreshModule = (() => {
             }
         }
 
-        // Ergebnis cachen
-        if (arguments.length === 1 && typeof data === 'string') {
+        // Cache result if a sheet type was provided
+        if (sheetType) {
             _cache.references[sheetType] = map;
         }
 
@@ -518,9 +511,19 @@ const RefreshModule = (() => {
 
         if (eigenbelegeSheet && eigenbelegeSheet.getLastRow() > 1) {
             const numEigenbelegeRows = eigenbelegeSheet.getLastRow() - 1;
-            // Die relevanten Spalten laden basierend auf der Konfiguration
-            eigenbelegeData = eigenbelegeSheet.getRange(2, eigenbelegeCols.rechnungsnummer, numEigenbelegeRows, 8).getDisplayValues();
-            eigenbelegeMap = createReferenceMap(eigenbelegeData);
+
+            // Calculate the number of columns needed based on config
+            const columnsToLoad = eigenbelegeCols.bezahlt - eigenbelegeCols.rechnungsnummer + 1;
+
+            // Load data with the correct column span
+            eigenbelegeData = eigenbelegeSheet.getRange(
+                2, eigenbelegeCols.rechnungsnummer,
+                numEigenbelegeRows,
+                columnsToLoad
+            ).getDisplayValues();
+
+            // Pass both the data and the sheet type
+            eigenbelegeMap = createReferenceMap(eigenbelegeData, "eigenbelege");
         }
 
         // Bankbewegungen Daten für Verarbeitung holen
