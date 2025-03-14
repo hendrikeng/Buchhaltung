@@ -179,9 +179,21 @@ const RefreshModule = (() => {
                 Object.keys(config.ausgaben.categories)
             );
         } else if (sheetName === "Eigenbelege") {
+            // Kategorie-Dropdown für Eigenbelege
             Validator.validateDropdown(
                 sheet, 2, columns.kategorie, numRows, 1,
                 Object.keys(config.eigenbelege.categories)
+            );
+
+            // Dropdown für "Ausgelegt von" hinzufügen (merged aus shareholders und employees)
+            const ausleger = [
+                ...config.common.shareholders,
+                ...config.common.employees
+            ];
+
+            Validator.validateDropdown(
+                sheet, 2, columns.ausgelegtVon, numRows, 1,
+                ausleger
             );
         }
 
