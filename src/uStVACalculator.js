@@ -1,7 +1,6 @@
 // file: src/uStVACalculator.js
 import Helpers from "./helpers.js";
 import config from "./config.js";
-import Validator from "./validator.js";
 
 /**
  * Modul zur Berechnung der Umsatzsteuervoranmeldung (UStVA)
@@ -284,12 +283,6 @@ const UStVACalculator = (() => {
             // Prüfen, ob die wichtigsten Sheets vorhanden sind
             if (!revenueSheet || !expenseSheet) {
                 console.error("Fehlende Blätter: 'Einnahmen' oder 'Ausgaben' nicht gefunden");
-                return null;
-            }
-
-            // Sheets validieren
-            if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
-                console.error("UStVA-Berechnung abgebrochen, da Fehler in den Daten gefunden wurden");
                 return null;
             }
 

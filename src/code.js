@@ -5,6 +5,7 @@ import RefreshModule from "./refreshModule.js";
 import UStVACalculator from "./uStVACalculator.js";
 import BWACalculator from "./bWACalculator.js";
 import BilanzCalculator from "./bilanzCalculator.js";
+import Validator from "./validator.js";
 import config from "./config.js";
 
 // =================== Globale Funktionen ===================
@@ -29,10 +30,12 @@ const onOpen = () => {
  * @param {Object} e - Event-Objekt von Google Sheets
  */
 const onEdit = e => {
-
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
+
+    // Header-Zeile überspringen (Zeile 1)
+    if (range.getRow() <= 1) return;
 
     // Konvertieren in kleinbuchstaben und leerzeichen entfernen
     let sheetKey = name.toLowerCase().replace(/\s+/g, '');
@@ -66,6 +69,10 @@ const onEdit = e => {
     // Für jede bearbeitete Zeile
     for (let i = 0; i < numRows; i++) {
         const rowIndex = range.getRow() + i;
+
+        // Header-Zeile überspringen
+        if (rowIndex <= 1) continue;
+
         const headerLen = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length;
 
         // Prüfen, ob die Zeile leer ist
@@ -106,13 +113,37 @@ const setupTrigger = () => {
 };
 
 /**
+ * Validiert alle relevanten Sheets
+ * @returns {boolean} - True wenn alle Sheets valide sind, False sonst
+ */
+const validateSheets = () => {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const revenueSheet = ss.getSheetByName("Einnahmen");
+    const expenseSheet = ss.getSheetByName("Ausgaben");
+    const bankSheet = ss.getSheetByName("Bankbewegungen");
+    const eigenSheet = ss.getSheetByName("Eigenbelege");
+
+    return Validator.validateAllSheets(revenueSheet, expenseSheet, bankSheet, eigenSheet);
+};
+
+/**
  * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
  * @param {Function} fn - Die auszuführende Funktion
  * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
  */
 const executeWithErrorHandling = (fn, errorMessage) => {
     try {
+        // Zuerst alle Sheets aktualisieren
         RefreshModule.refreshAllSheets();
+
+        // Dann Validierung durchführen
+        if (!validateSheets()) {
+            // Validierung fehlgeschlagen - Berechnung abbrechen
+            console.error(`${errorMessage}: Validierung fehlgeschlagen`);
+            return;
+        }
+
+        // Wenn Validierung erfolgreich, Berechnung ausführen
         fn();
     } catch (error) {
         SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
@@ -162,6 +193,9 @@ const importDriveFiles = () => {
     try {
         ImportModule.importDriveFiles();
         RefreshModule.refreshAllSheets();
+
+        // Optional: Nach dem Import auch eine Validierung durchführen
+        // validateSheets();
     } catch (error) {
         SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
         console.error("Import-Fehler:", error);

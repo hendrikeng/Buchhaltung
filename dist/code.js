@@ -1046,8 +1046,8 @@ function importDriveFiles() {};
          * Importiert Dateien aus einem Ordner in die entsprechenden Sheets
          *
          * @param {Folder} folder - Google Drive Ordner mit den zu importierenden Dateien
-         * @param {Sheet} mainSheet - Hauptsheet (Einnahmen oder Ausgaben)
-         * @param {string} type - Typ der Dateien ("Einnahme" oder "Ausgabe")
+         * @param {Sheet} mainSheet - Hauptsheet (Einnahmen, Ausgaben oder Eigenbelege)
+         * @param {string} type - Typ der Dateien ("Einnahme", "Ausgabe" oder "Eigenbeleg")
          * @param {Sheet} historySheet - Sheet für die Änderungshistorie
          * @param {Set} existingFiles - Set mit bereits importierten Dateinamen
          * @returns {number} - Anzahl der importierten Dateien
@@ -1062,9 +1062,17 @@ function importDriveFiles() {};
             let importedCount = 0;
 
             // Konfiguration für das richtige Sheet auswählen
-            const sheetConfig = type === "Einnahme"
-                ? config$1.einnahmen.columns
-                : config$1.ausgaben.columns;
+            const sheetTypeMap = {
+                "Einnahme": config$1.sheets.einnahmen.columns,
+                "Ausgabe": config$1.sheets.ausgaben.columns,
+                "Eigenbeleg": config$1.sheets.eigenbelege.columns
+            };
+
+            const sheetConfig = sheetTypeMap[type];
+            if (!sheetConfig) {
+                console.error("Unbekannter Dateityp:", type);
+                return 0;
+            }
 
             // Konfiguration für das Änderungshistorie-Sheet
             const historyConfig = config$1.aenderungshistorie.columns;
@@ -1102,7 +1110,7 @@ function importDriveFiles() {};
 
                     // Daten in die richtigen Historie-Spalten setzen (0-basiert)
                     historyRow[historyConfig.datum - 1] = timestamp;           // Zeitstempel
-                    historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe)
+                    historyRow[historyConfig.typ - 1] = type;                  // Typ (Einnahme/Ausgabe/Eigenbeleg)
                     historyRow[historyConfig.dateiname - 1] = fileName;        // Dateiname
                     historyRow[historyConfig.dateilink - 1] = fileUrl;         // Link zur Datei
 
@@ -1151,7 +1159,7 @@ function importDriveFiles() {};
         };
 
         /**
-         * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- und Ausgabenordnern
+         * Hauptfunktion zum Importieren von Dateien aus den Einnahmen- Ausgaben- und Eigenbelegeordnern
          * @returns {number} Anzahl der importierten Dateien
          */
         const importDriveFiles = () => {
@@ -1160,12 +1168,13 @@ function importDriveFiles() {};
             let totalImported = 0;
 
             try {
-                // Hauptsheets für Einnahmen und Ausgaben abrufen
+                // Hauptsheets für Einnahmen, Ausgaben und Eigenbelege abrufen
                 const revenueMain = ss.getSheetByName("Einnahmen");
                 const expenseMain = ss.getSheetByName("Ausgaben");
+                const receiptsMain = ss.getSheetByName("Eigenbelege");
 
-                if (!revenueMain || !expenseMain) {
-                    ui.alert("Fehler: Die Sheets 'Einnahmen' oder 'Ausgaben' existieren nicht!");
+                if (!revenueMain || !expenseMain || !receiptsMain) {
+                    ui.alert("Fehler: Die Sheets 'Einnahmen', 'Ausgaben' oder 'Eigenbelege' existieren nicht!");
                     return 0;
                 }
 
@@ -1188,12 +1197,13 @@ function importDriveFiles() {};
                     return 0;
                 }
 
-                // Unterordner für Einnahmen und Ausgaben finden oder erstellen
+                // Unterordner für Einnahmen, Ausgaben und Eigenbelege finden oder erstellen
                 const revenueFolder = findOrCreateFolder(parentFolder, "Einnahmen");
                 const expenseFolder = findOrCreateFolder(parentFolder, "Ausgaben");
+                const receiptsFolder = findOrCreateFolder(parentFolder, "Eigenbelege");
 
                 // Import durchführen wenn Ordner existieren
-                let importedRevenue = 0, importedExpense = 0;
+                let importedRevenue = 0, importedExpense = 0, importedReceipts = 0;
 
                 if (revenueFolder) {
                     try {
@@ -1227,6 +1237,22 @@ function importDriveFiles() {};
                     }
                 }
 
+                if (receiptsFolder) {
+                    try {
+                        importedReceipts = importFilesFromFolder(
+                            receiptsFolder,
+                            receiptsMain,
+                            "Eigenbeleg",
+                            history,
+                            existingFiles  // Das gleiche Set wird für beide Importe verwendet
+                        );
+                        totalImported += importedReceipts;
+                    } catch (e) {
+                        console.error("Fehler beim Import der Eigenbelege:", e);
+                        ui.alert("Fehler beim Import der Eigenbelege: " + e.toString());
+                    }
+                }
+
                 // Abschluss-Meldung anzeigen
                 if (totalImported === 0) {
                     ui.alert("Es wurden keine neuen Dateien gefunden.");
@@ -1234,7 +1260,8 @@ function importDriveFiles() {};
                     ui.alert(
                         `Import abgeschlossen.\n\n` +
                         `${importedRevenue} Einnahmen importiert.\n` +
-                        `${importedExpense} Ausgaben importiert.`
+                        `${importedExpense} Ausgaben importiert.\n` +
+                        `${importedReceipts} Eigenbelege importiert.`
                     );
                 }
 
@@ -1285,13 +1312,13 @@ function importDriveFiles() {};
         };
 
         /**
-         * Validiert eine Einnahmen- oder Ausgaben-Zeile
+         * Validiert eine Zeile aus einem Dokument (Einnahmen, Ausgaben oder Eigenbelege)
          * @param {Array} row - Die zu validierende Zeile
          * @param {number} rowIndex - Der Index der Zeile (für Fehlermeldungen)
-         * @param {string} sheetType - Der Typ des Sheets ("einnahmen" oder "ausgaben")
+         * @param {string} sheetType - Der Typ des Sheets ("einnahmen", "ausgaben" oder "eigenbelege")
          * @returns {Array<string>} - Array mit Warnungen
          */
-        const validateRevenueAndExpenses = (row, rowIndex, sheetType = "einnahmen") => {
+        const validateDocumentRow = (row, rowIndex, sheetType = "einnahmen") => {
             const warnings = [];
             const columns = config$1[sheetType].columns;
 
@@ -1307,12 +1334,11 @@ function importDriveFiles() {};
                 });
             };
 
-            // Grundlegende Validierungsregeln
+            // Grundlegende Validierungsregeln für alle Dokumente
             const baseRules = [
-                {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: "Rechnungsdatum fehlt."},
-                {check: r => Helpers.isEmpty(r[columns.rechnungsnummer - 1]), message: "Rechnungsnummer fehlt."},
+                {check: r => Helpers.isEmpty(r[columns.datum - 1]), message: `${sheetType === "eigenbelege" ? "Beleg" : "Rechnungs"}datum fehlt.`},
+                {check: r => Helpers.isEmpty(r[columns.rechnungsnummer - 1]), message: `${sheetType === "eigenbelege" ? "Beleg" : "Rechnungs"}nummer fehlt.`},
                 {check: r => Helpers.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-                {check: r => Helpers.isEmpty(r[columns.kunde - 1]), message: "Kunde/Lieferant fehlt."},
                 {check: r => isInvalidNumber(r[columns.nettobetrag - 1]), message: "Nettobetrag fehlt oder ungültig."},
                 {
                     check: r => {
@@ -1331,30 +1357,53 @@ function importDriveFiles() {};
                 }
             ];
 
+            // Dokument-spezifische Regeln
+            if (sheetType === "einnahmen" || sheetType === "ausgaben") {
+                baseRules.push({
+                    check: r => Helpers.isEmpty(r[columns.kunde - 1]),
+                    message: `${sheetType === "einnahmen" ? "Kunde" : "Lieferant"} fehlt.`
+                });
+            } else if (sheetType === "eigenbelege") {
+                baseRules.push({
+                    check: r => Helpers.isEmpty(r[columns.ausgelegtVon - 1]),
+                    message: "Ausgelegt von fehlt."
+                });
+                baseRules.push({
+                    check: r => Helpers.isEmpty(r[columns.beschreibung - 1]),
+                    message: "Beschreibung fehlt."
+                });
+            }
+
             // Status-abhängige Regeln
             const zahlungsstatus = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : "";
+            const isOpen = zahlungsstatus === "offen";
+
+            // Angepasste Bezeichnungen je nach Dokumenttyp
+            const paidStatus = sheetType === "eigenbelege" ? "erstattet/teilerstattet" : "bezahlt/teilbezahlt";
+            const paymentType = sheetType === "eigenbelege" ? "Erstattungsart" : "Zahlungsart";
+            const paymentDate = sheetType === "eigenbelege" ? "Erstattungsdatum" : "Zahlungsdatum";
 
             // Regeln für offene Zahlungen
             const openPaymentRules = [
                 {
                     check: r => !Helpers.isEmpty(r[columns.zahlungsart - 1]),
-                    message: 'Zahlungsart darf bei offener Zahlung nicht gesetzt sein.'
+                    message: `${paymentType} darf bei offener Zahlung nicht gesetzt sein.`
                 },
                 {
                     check: r => !Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
-                    message: 'Zahlungsdatum darf bei offener Zahlung nicht gesetzt sein.'
+                    message: `${paymentDate} darf bei offener Zahlung nicht gesetzt sein.`
                 }
             ];
 
-            // Regeln für bezahlte Zahlungen
+            // Regeln für bezahlte/erstattete Zahlungen
             const paidPaymentRules = [
                 {
                     check: r => Helpers.isEmpty(r[columns.zahlungsart - 1]),
-                    message: 'Zahlungsart muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+                    message: `${paymentType} muss bei ${paidStatus} Zahlung gesetzt sein.`
                 },
                 {
                     check: r => Helpers.isEmpty(r[columns.zahlungsdatum - 1]),
-                    message: 'Zahlungsdatum muss bei bezahlter/teilbezahlter Zahlung gesetzt sein.'
+                    message: `${paymentDate} muss bei ${paidStatus} Zahlung gesetzt sein.`
                 },
                 {
                     check: r => {
@@ -1363,22 +1412,22 @@ function importDriveFiles() {};
                         const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
                         return paymentDate ? paymentDate > new Date() : false;
                     },
-                    message: "Zahlungsdatum darf nicht in der Zukunft liegen."
+                    message: `${paymentDate} darf nicht in der Zukunft liegen.`
                 },
                 {
                     check: r => {
                         if (Helpers.isEmpty(r[columns.zahlungsdatum - 1]) || Helpers.isEmpty(r[columns.datum - 1])) return false;
 
                         const paymentDate = Helpers.parseDate(r[columns.zahlungsdatum - 1]);
-                        const invoiceDate = Helpers.parseDate(r[columns.datum - 1]);
-                        return paymentDate && invoiceDate ? paymentDate < invoiceDate : false;
+                        const documentDate = Helpers.parseDate(r[columns.datum - 1]);
+                        return paymentDate && documentDate ? paymentDate < documentDate : false;
                     },
-                    message: "Zahlungsdatum darf nicht vor dem Rechnungsdatum liegen."
+                    message: `${paymentDate} darf nicht vor dem ${sheetType === "eigenbelege" ? "Beleg" : "Rechnungs"}datum liegen.`
                 }
             ];
 
             // Regeln basierend auf Zahlungsstatus zusammenstellen
-            const paymentRules = zahlungsstatus === "offen" ? openPaymentRules : paidPaymentRules;
+            const paymentRules = isOpen ? openPaymentRules : paidPaymentRules;
 
             // Alle Regeln kombinieren und anwenden
             const rules = [...baseRules, ...paymentRules];
@@ -1467,9 +1516,10 @@ function importDriveFiles() {};
          * @param {Sheet} revenueSheet - Das Einnahmen-Sheet
          * @param {Sheet} expenseSheet - Das Ausgaben-Sheet
          * @param {Sheet|null} bankSheet - Das Bankbewegungen-Sheet (optional)
+         * @param {Sheet|null} eigenSheet - Das Eigenbelege-Sheet (optional)
          * @returns {boolean} - True, wenn keine Fehler gefunden wurden
          */
-        const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null) => {
+        const validateAllSheets = (revenueSheet, expenseSheet, bankSheet = null, eigenSheet = null) => {
             if (!revenueSheet || !expenseSheet) {
                 SpreadsheetApp.getUi().alert("Fehler: Benötigte Sheets nicht gefunden!");
                 return false;
@@ -1494,6 +1544,15 @@ function importDriveFiles() {};
                     const expenseWarnings = validateSheet(expenseData, "ausgaben");
                     if (expenseWarnings.length) {
                         allWarnings.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join("\n"));
+                    }
+                }
+
+                // Eigenbelege validieren (wenn vorhanden und Daten vorhanden)
+                if (eigenSheet && eigenSheet.getLastRow() > 1) {
+                    const eigenData = eigenSheet.getDataRange().getValues().slice(1); // Header überspringen
+                    const eigenWarnings = validateSheet(eigenData, "eigenbelege");
+                    if (eigenWarnings.length) {
+                        allWarnings.push("Fehler in 'Eigenbelege':\n" + eigenWarnings.join("\n"));
                     }
                 }
 
@@ -1532,14 +1591,14 @@ function importDriveFiles() {};
         /**
          * Validiert alle Zeilen in einem Sheet
          * @param {Array} data - Zeilen-Daten (ohne Header)
-         * @param {string} sheetType - Typ des Sheets ('einnahmen' oder 'ausgaben')
+         * @param {string} sheetType - Typ des Sheets ('einnahmen', 'ausgaben' oder 'eigenbelege')
          * @returns {Array<string>} - Array mit Warnungen
          */
         const validateSheet = (data, sheetType) => {
             return data.reduce((warnings, row, index) => {
                 // Nur nicht-leere Zeilen prüfen
                 if (row.some(cell => cell !== "")) {
-                    const rowWarnings = validateRevenueAndExpenses(row, index + 2, sheetType);
+                    const rowWarnings = validateDocumentRow(row, index + 2, sheetType);
                     warnings.push(...rowWarnings);
                 }
                 return warnings;
@@ -1688,7 +1747,7 @@ function importDriveFiles() {};
         // Öffentliche API des Moduls
         return {
             validateDropdown,
-            validateRevenueAndExpenses,
+            validateDocumentRow,
             validateBanking,
             validateAllSheets,
             validateCellValue,
@@ -1788,7 +1847,7 @@ function importDriveFiles() {};
                 );
 
                 // Bezahlter Betrag - für Teilzahlungen
-                formulasBatch[columns.bezahlt] = Array.from(
+                formulasBatch[columns.restbetragNetto] = Array.from(
                     {length: numRows},
                     (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`]
                 );
@@ -3209,8 +3268,8 @@ function importDriveFiles() {};
                     return null;
                 }
 
-                // Sheets validieren
-                if (!Validator.validateAllSheets(revenueSheet, expenseSheet)) {
+                // Sheets validieren TODO: Bankbewegungen
+                if (!Validator.validateAllSheets(revenueSheet, expenseSheet, null, eigenSheet)) {
                     console.error("UStVA-Berechnung abgebrochen, da Fehler in den Daten gefunden wurden");
                     return null;
                 }
