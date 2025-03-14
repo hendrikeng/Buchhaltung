@@ -358,7 +358,7 @@ const RefreshModule = (() => {
 
     /**
      * Erstellt eine Map aus Referenznummern für schnellere Suche
-     * @param {Array} data - Array mit Referenznummern und Beträgen
+     * @param {Array|string} data - Array mit Referenznummern und Beträgen oder Sheetname
      * @returns {Object} - Map mit Referenznummern als Keys
      */
     const createReferenceMap = (data) => {
@@ -382,56 +382,77 @@ const RefreshModule = (() => {
             return map;
         }
 
-        // Da die Indizes bei data[] sich auf die Spalten im Range beziehen (nicht auf das komplette Sheet),
-        // müssen wir wissen, welche Spalten in welcher Reihenfolge geladen wurden
-        // In der aktuellen Implementation werden diese Spalten geladen:
-        // Rechnungsnummer(0), Nettobetrag(3), MwSt-Satz(4), Bezahlt(7)
+        // Konfiguration basierend auf dem Sheettyp ermitteln
+        let sheetConfig = null;
+        let sheetType = "";
+        if (arguments.length === 1 && typeof data === 'string') {
+            // Wenn ein Sheetname übergeben wurde
+            sheetType = data;
+            sheetConfig = config[sheetType].columns;
+        }
+
+        // Wir verarbeiten das geladene Range basierend auf den Spalten, die geladen wurden
+        // Die Indizes im Range entsprechen der Reihenfolge, wie sie geladen wurden
 
         for (let i = 0; i < data.length; i++) {
-            const ref = data[i][0]; // Referenz (erste Spalte im geladenen Range)
+            // Referenz ist immer die erste Spalte im geladenen Range (Rechnungsnummer)
+            const ref = data[i][0];
             if (Helpers.isEmpty(ref)) continue;
 
             // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
             let key = ref.trim();
             const isGutschrift = key.startsWith("G-");
             if (isGutschrift) {
-                key = key.substring(2); // Entferne "G-" Prefix für den Schlüssel
+                key = key.substring(2);
             }
 
-            // Alternativschlüssel: Normalisierter Text für unscharfe Suche
             const normalizedKey = Helpers.normalizeText(key);
 
-            // Netto-Betrag aus dritter Spalte im geladenen Range
-            let betrag = 0;
-            if (!Helpers.isEmpty(data[i][3])) {
-                betrag = Helpers.parseCurrency(data[i][3]);
+            // Bei Array-Daten, nutze die relativen Indizes im geladenen Range
+            // Bei getRange(2, rechnungsnummer, rows, 8) müssen wir wissen, welche Spalten geladen wurden
 
-                // Bei Gutschriften ist der Betrag im Sheet negativ, wir speichern den Absolutwert
+            // Je nach Sheet-Typ sind die Spaltenindizes unterschiedlich
+            let nettoIdx, mwstIdx, bezahltIdx;
+
+            // Offset berechnen, wie viele Spalten vom rechnungsnummer bis zur jeweiligen Spalte
+            if (sheetConfig) {
+                // Anzahl der Spalten zwischen rechnungsnummer und der Zielspalte
+                nettoIdx = sheetConfig.nettobetrag - sheetConfig.rechnungsnummer;
+                mwstIdx = sheetConfig.mwstSatz - sheetConfig.rechnungsnummer;
+                bezahltIdx = sheetConfig.bezahlt - sheetConfig.rechnungsnummer;
+            } else {
+                // Fallback wenn keine Konfiguration vorhanden ist
+                // Hier nehmen wir an: Einnahmen/Ausgaben Standardstruktur
+                nettoIdx = 3;  // Offset von rechnungsnummer zu nettobetrag
+                mwstIdx = 4;   // Offset von rechnungsnummer zu mwstSatz
+                bezahltIdx = 7; // Offset von rechnungsnummer zu bezahlt
+            }
+
+            // Werte extrahieren
+            let betrag = 0;
+            if (!Helpers.isEmpty(data[i][nettoIdx])) {
+                betrag = Helpers.parseCurrency(data[i][nettoIdx]);
                 betrag = Math.abs(betrag);
             }
 
-            // MwSt-Satz aus vierter Spalte im geladenen Range
             let mwstRate = 0;
-            if (!Helpers.isEmpty(data[i][4])) {
-                mwstRate = Helpers.parseMwstRate(data[i][4]);
+            if (!Helpers.isEmpty(data[i][mwstIdx])) {
+                mwstRate = Helpers.parseMwstRate(data[i][mwstIdx]);
             }
 
-            // Bezahlter Betrag aus achter Spalte im geladenen Range
             let bezahlt = 0;
-            if (!Helpers.isEmpty(data[i][7])) {
-                bezahlt = Helpers.parseCurrency(data[i][7]);
-                // Bei Gutschriften ist der bezahlte Betrag im Sheet negativ, wir speichern den Absolutwert
+            if (!Helpers.isEmpty(data[i][bezahltIdx])) {
+                bezahlt = Helpers.parseCurrency(data[i][bezahltIdx]);
                 bezahlt = Math.abs(bezahlt);
             }
 
             // Bruttobetrag berechnen
             const brutto = betrag * (1 + mwstRate/100);
 
-            // Speichere auch den Zeilen-Index und die Beträge
             map[key] = {
-                ref: ref.trim(), // Originale Referenz mit G-Prefix, falls vorhanden
-                normalizedRef: normalizedKey, // Für unscharfe Suche
-                row: i + 2,      // +2 weil wir bei Zeile 2 beginnen (erste Zeile ist Header)
+                ref: ref.trim(),
+                normalizedRef: normalizedKey,
+                row: i + 2,
                 betrag: betrag,
                 mwstRate: mwstRate,
                 brutto: brutto,
@@ -440,21 +461,14 @@ const RefreshModule = (() => {
                 isGutschrift: isGutschrift
             };
 
-            // Doppelten Eintrag mit normalisiertem Schlüssel anlegen, falls nötig
             if (normalizedKey !== key && !map[normalizedKey]) {
                 map[normalizedKey] = map[key];
             }
         }
 
-        // Ergebnis cachen, wenn es sich um ein komplettes Sheet handelt
-        if (arguments.length === 1) {
-            if (data === "einnahmen") {
-                _cache.references.einnahmen = map;
-            } else if (data === "ausgaben") {
-                _cache.references.ausgaben = map;
-            } else if (data === "eigenbelege") {
-                _cache.references.eigenbelege = map;
-            }
+        // Ergebnis cachen
+        if (arguments.length === 1 && typeof data === 'string') {
+            _cache.references[sheetType] = map;
         }
 
         return map;
