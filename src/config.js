@@ -60,19 +60,63 @@ const config = {
             dateiname: 17,         // Q: Dateiname (für importierte Dateien)
             dateilink: 18          // R: Link zur Originaldatei
         },
-        // Kategorien mit Steuertyp
+        // Kategorien mit einheitlicher Struktur
         categories: {
-            "Erlöse aus Lieferungen und Leistungen": {taxType: "steuerpflichtig"},
-            "Provisionserlöse": {taxType: "steuerpflichtig"},
-            "Sonstige betriebliche Erträge": {taxType: "steuerpflichtig"},
-            "Erträge aus Vermietung/Verpachtung": {taxType: "steuerfrei_inland"},
-            "Erträge aus Zuschüssen": {taxType: "steuerpflichtig"},
-            "Erträge aus Währungsgewinnen": {taxType: "steuerpflichtig"},
-            "Erträge aus Anlagenabgängen": {taxType: "steuerpflichtig"},
-            "Darlehen": {taxType: "steuerfrei_inland"},
-            "Zinsen": {taxType: "steuerfrei_inland"},
-            "Gewinnvortrag": {taxType: "steuerfrei_inland"},
-            "Verlustvortrag": {taxType: "steuerfrei_inland"}
+            "Erlöse aus Lieferungen und Leistungen": {
+                taxType: "steuerpflichtig",
+                group: "umsatz",
+                besonderheit: null
+            },
+            "Provisionserlöse": {
+                taxType: "steuerpflichtig",
+                group: "umsatz",
+                besonderheit: null
+            },
+            "Sonstige betriebliche Erträge": {
+                taxType: "steuerpflichtig",
+                group: "sonstige_ertraege",
+                besonderheit: null
+            },
+            "Erträge aus Vermietung/Verpachtung": {
+                taxType: "steuerfrei_inland",
+                group: "vermietung",
+                besonderheit: null
+            },
+            "Erträge aus Zuschüssen": {
+                taxType: "steuerpflichtig",
+                group: "zuschuesse",
+                besonderheit: null
+            },
+            "Erträge aus Währungsgewinnen": {
+                taxType: "steuerpflichtig",
+                group: "sonstige_ertraege",
+                besonderheit: null
+            },
+            "Erträge aus Anlagenabgängen": {
+                taxType: "steuerpflichtig",
+                group: "anlagenabgaenge",
+                besonderheit: null
+            },
+            "Darlehen": {
+                taxType: "steuerfrei_inland",
+                group: "finanzen",
+                besonderheit: null
+            },
+            "Zinsen": {
+                taxType: "steuerfrei_inland",
+                group: "finanzen",
+                besonderheit: null
+            },
+            "Gewinnvortrag": {
+                taxType: "steuerfrei_inland",
+                group: "eigenkapital",
+                besonderheit: null
+            },
+            "Verlustvortrag": {
+                taxType: "steuerfrei_inland",
+                group: "eigenkapital",
+                besonderheit: null
+            }
         },
         // SKR04-konforme Konten-Zuordnung
         kontoMapping: {
@@ -124,52 +168,176 @@ const config = {
             dateiname: 17,         // Q: Dateiname (für importierte Dateien)
             dateilink: 18          // R: Link zur Originaldatei
         },
-        // Kategorien mit Steuertyp
+        // Kategorien mit einheitlicher Struktur
         categories: {
             // Materialaufwand & Wareneinsatz
-            "Wareneinsatz": {taxType: "steuerpflichtig", group: "material"},
-            "Bezogene Leistungen": {taxType: "steuerpflichtig", group: "material"},
-            "Roh-, Hilfs- & Betriebsstoffe": {taxType: "steuerpflichtig", group: "material"},
+            "Wareneinsatz": {
+                taxType: "steuerpflichtig",
+                group: "material",
+                besonderheit: null
+            },
+            "Bezogene Leistungen": {
+                taxType: "steuerpflichtig",
+                group: "material",
+                besonderheit: null
+            },
+            "Roh-, Hilfs- & Betriebsstoffe": {
+                taxType: "steuerpflichtig",
+                group: "material",
+                besonderheit: null
+            },
 
             // Personalkosten
-            "Bruttolöhne & Gehälter": {taxType: "steuerfrei_inland", group: "personal"},
-            "Soziale Abgaben & Arbeitgeberanteile": {taxType: "steuerfrei_inland", group: "personal"},
-            "Sonstige Personalkosten": {taxType: "steuerpflichtig", group: "personal"},
+            "Bruttolöhne & Gehälter": {
+                taxType: "steuerfrei_inland",
+                group: "personal",
+                besonderheit: null
+            },
+            "Soziale Abgaben & Arbeitgeberanteile": {
+                taxType: "steuerfrei_inland",
+                group: "personal",
+                besonderheit: null
+            },
+            "Sonstige Personalkosten": {
+                taxType: "steuerpflichtig",
+                group: "personal",
+                besonderheit: null
+            },
 
             // Raumkosten
-            "Miete": {taxType: "steuerfrei_inland", group: "raum"},
-            "Nebenkosten": {taxType: "steuerpflichtig", group: "raum"},
+            "Miete": {
+                taxType: "steuerfrei_inland",
+                group: "raum",
+                besonderheit: null
+            },
+            "Nebenkosten": {
+                taxType: "steuerpflichtig",
+                group: "raum",
+                besonderheit: null
+            },
 
             // Betriebskosten
-            "Betriebskosten": {taxType: "steuerpflichtig", group: "betrieb"},
-            "Marketing & Werbung": {taxType: "steuerpflichtig", group: "betrieb"},
-            "Reisekosten": {taxType: "steuerpflichtig", group: "betrieb"},
-            "Versicherungen": {taxType: "steuerfrei_inland", group: "betrieb"},
-            "Porto": {taxType: "steuerfrei_inland", group: "betrieb"},
-            "Google Ads": {taxType: "steuerfrei_ausland", group: "betrieb"},
-            "AWS": {taxType: "steuerfrei_ausland", group: "betrieb"},
-            "Facebook Ads": {taxType: "steuerfrei_ausland", group: "betrieb"},
-            "Bewirtung": {taxType: "steuerpflichtig", group: "betrieb", besonderheit: "bewirtung"},
-            "Telefon & Internet": {taxType: "steuerpflichtig", group: "betrieb"},
-            "Bürokosten": {taxType: "steuerpflichtig", group: "betrieb"},
-            "Fortbildungskosten": {taxType: "steuerpflichtig", group: "betrieb"},
+            "Betriebskosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Marketing & Werbung": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Reisekosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Versicherungen": {
+                taxType: "steuerfrei_inland",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Porto": {
+                taxType: "steuerfrei_inland",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Google Ads": {
+                taxType: "steuerfrei_ausland",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "AWS": {
+                taxType: "steuerfrei_ausland",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Facebook Ads": {
+                taxType: "steuerfrei_ausland",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Bewirtung": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: "bewirtung"
+            },
+            "Telefon & Internet": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Bürokosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Fortbildungskosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
 
             // Abschreibungen & Zinsen
-            "Abschreibungen Maschinen": {taxType: "steuerpflichtig", group: "abschreibung"},
-            "Abschreibungen Büroausstattung": {taxType: "steuerpflichtig", group: "abschreibung"},
-            "Abschreibungen immaterielle Wirtschaftsgüter": {taxType: "steuerpflichtig", group: "abschreibung"},
-            "Zinsen auf Bankdarlehen": {taxType: "steuerpflichtig", group: "zinsen"},
-            "Zinsen auf Gesellschafterdarlehen": {taxType: "steuerpflichtig", group: "zinsen"},
-            "Leasingkosten": {taxType: "steuerpflichtig", group: "abschreibung"},
+            "Abschreibungen Maschinen": {
+                taxType: "steuerpflichtig",
+                group: "abschreibung",
+                besonderheit: null
+            },
+            "Abschreibungen Büroausstattung": {
+                taxType: "steuerpflichtig",
+                group: "abschreibung",
+                besonderheit: null
+            },
+            "Abschreibungen immaterielle Wirtschaftsgüter": {
+                taxType: "steuerpflichtig",
+                group: "abschreibung",
+                besonderheit: null
+            },
+            "Zinsen auf Bankdarlehen": {
+                taxType: "steuerpflichtig",
+                group: "zinsen",
+                besonderheit: null
+            },
+            "Zinsen auf Gesellschafterdarlehen": {
+                taxType: "steuerpflichtig",
+                group: "zinsen",
+                besonderheit: null
+            },
+            "Leasingkosten": {
+                taxType: "steuerpflichtig",
+                group: "abschreibung",
+                besonderheit: null
+            },
 
             // Steuern & Rückstellungen
-            "Gewerbesteuerrückstellungen": {taxType: "steuerfrei_inland", group: "steuer"},
-            "Körperschaftsteuer": {taxType: "steuerfrei_inland", group: "steuer"},
-            "Solidaritätszuschlag": {taxType: "steuerfrei_inland", group: "steuer"},
-            "Sonstige Steuerrückstellungen": {taxType: "steuerfrei_inland", group: "steuer"},
+            "Gewerbesteuerrückstellungen": {
+                taxType: "steuerfrei_inland",
+                group: "steuer",
+                besonderheit: null
+            },
+            "Körperschaftsteuer": {
+                taxType: "steuerfrei_inland",
+                group: "steuer",
+                besonderheit: null
+            },
+            "Solidaritätszuschlag": {
+                taxType: "steuerfrei_inland",
+                group: "steuer",
+                besonderheit: null
+            },
+            "Sonstige Steuerrückstellungen": {
+                taxType: "steuerfrei_inland",
+                group: "steuer",
+                besonderheit: null
+            },
 
             // Sonstige Aufwendungen
-            "Sonstige betriebliche Aufwendungen": {taxType: "steuerpflichtig", group: "sonstige"}
+            "Sonstige betriebliche Aufwendungen": {
+                taxType: "steuerpflichtig",
+                group: "sonstige",
+                besonderheit: null
+            }
         },
         // SKR04-konforme Konten-Zuordnung
         kontoMapping: {
@@ -264,20 +432,64 @@ const config = {
             dateiname: 18,         // R: Dateiname (für importierte Dateien)
             dateilink: 19          // S: Link zum Originalbeleg
         },
-        // Kategorien mit Steuertyp
+        // Kategorien mit einheitlicher Struktur
         categories: {
-            "Kleidung": {taxType: "steuerpflichtig"},
-            "Trinkgeld": {taxType: "steuerfrei"},
-            "Private Vorauslage": {taxType: "steuerfrei"},
-            "Bürokosten": {taxType: "steuerpflichtig"},
-            "Reisekosten": {taxType: "steuerpflichtig"},
-            "Bewirtung": {taxType: "eigenbeleg", besonderheit: "bewirtung"},
-            "Sonstiges": {taxType: "steuerpflichtig"}
+            "Kleidung": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Trinkgeld": {
+                taxType: "steuerfrei",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Private Vorauslage": {
+                taxType: "steuerfrei",
+                group: "sonstige",
+                besonderheit: null
+            },
+            "Bürokosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Reisekosten": {
+                taxType: "steuerpflichtig",
+                group: "betrieb",
+                besonderheit: null
+            },
+            "Bewirtung": {
+                taxType: "eigenbeleg",
+                group: "betrieb",
+                besonderheit: "bewirtung"
+            },
+            "Sonstiges": {
+                taxType: "steuerpflichtig",
+                group: "sonstige",
+                besonderheit: null
+            }
         },
-        // TODO: Necessary?
-        kontoMapping: {},
-        // TODO: Necessary?
-        bwaMapping: {},
+        // Konten-Mapping für Eigenbelege hinzugefügt
+        kontoMapping: {
+            "Kleidung": {soll: "6800", gegen: "1200", vorsteuer: "1576"},
+            "Trinkgeld": {soll: "6800", gegen: "1200"},
+            "Private Vorauslage": {soll: "6800", gegen: "1200"},
+            "Bürokosten": {soll: "6815", gegen: "1200", vorsteuer: "1576"},
+            "Reisekosten": {soll: "6650", gegen: "1200", vorsteuer: "1576"},
+            "Bewirtung": {soll: "6670", gegen: "1200", vorsteuer: "1576"},
+            "Sonstiges": {soll: "6800", gegen: "1200", vorsteuer: "1576"}
+        },
+        // BWA-Mapping für Eigenbelege hinzugefügt
+        bwaMapping: {
+            "Kleidung": "sonstigeAufwendungen",
+            "Trinkgeld": "sonstigeAufwendungen",
+            "Private Vorauslage": "sonstigeAufwendungen",
+            "Bürokosten": "buerokosten",
+            "Reisekosten": "reisekosten",
+            "Bewirtung": "sonstigeAufwendungen",
+            "Sonstiges": "sonstigeAufwendungen"
+        }
     },
 
     // Bankbewegungen-Konfiguration
@@ -316,7 +528,50 @@ const config = {
             saldo: 11,             // K: Saldo (berechnet)
             zeitstempel: 12        // L: Zeitstempel der letzten Änderung
         },
-        categories: ["Gesellschafterdarlehen", "Ausschüttungen", "Kapitalrückführung", "Privatentnahme", "Privateinlage"],
+        // Kategorien als Objekte mit einheitlicher Struktur
+        categories: {
+            "Gesellschafterdarlehen": {
+                taxType: "steuerfrei_inland",
+                group: "gesellschafter",
+                besonderheit: null
+            },
+            "Ausschüttungen": {
+                taxType: "steuerfrei_inland",
+                group: "gesellschafter",
+                besonderheit: null
+            },
+            "Kapitalrückführung": {
+                taxType: "steuerfrei_inland",
+                group: "gesellschafter",
+                besonderheit: null
+            },
+            "Privatentnahme": {
+                taxType: "steuerfrei_inland",
+                group: "gesellschafter",
+                besonderheit: null
+            },
+            "Privateinlage": {
+                taxType: "steuerfrei_inland",
+                group: "gesellschafter",
+                besonderheit: null
+            }
+        },
+        // Konten-Mapping für Gesellschafterkonto hinzugefügt
+        kontoMapping: {
+            "Gesellschafterdarlehen": {soll: "1200", gegen: "3300"},
+            "Ausschüttungen": {soll: "2000", gegen: "1200"},
+            "Kapitalrückführung": {soll: "2000", gegen: "1200"},
+            "Privatentnahme": {soll: "1600", gegen: "1200"},
+            "Privateinlage": {soll: "1200", gegen: "1600"}
+        },
+        // BWA-Mapping für Gesellschafterkonto hinzugefügt
+        bwaMapping: {
+            "Gesellschafterdarlehen": "gesellschafterdarlehen",
+            "Ausschüttungen": "ausschuettungen",
+            "Kapitalrückführung": "eigenkapitalveraenderungen",
+            "Privatentnahme": "eigenkapitalveraenderungen",
+            "Privateinlage": "eigenkapitalveraenderungen"
+        },
         shareholders: ["Christopher Giebel", "Hendrik Werner"]
     },
 
@@ -324,14 +579,36 @@ const config = {
     holdingTransfers: {
         columns: {
             datum: 1,              // A: Datum
-            betrag: 2,             // B: Betrag
+            betrag: 2,              // B: Betrag
             art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
             buchungstext: 4,       // D: Buchungstext
-            zahlungsstatus: 5,             // E: Status
-            referenz: 6,            // F: Referenznummer zur Bankbewegung
-            zeitstempel: 7       // G: Zeitstempel der letzten Änderung
+            zahlungsstatus: 5,     // E: Status
+            referenz: 6,           // F: Referenznummer zur Bankbewegung
+            zeitstempel: 7         // G: Zeitstempel der letzten Änderung
         },
-        categories: ["Gewinnübertrag", "Kapitalrückführung"]
+        // Kategorien als Objekte mit einheitlicher Struktur
+        categories: {
+            "Gewinnübertrag": {
+                taxType: "steuerfrei_inland",
+                group: "holding",
+                besonderheit: null
+            },
+            "Kapitalrückführung": {
+                taxType: "steuerfrei_inland",
+                group: "holding",
+                besonderheit: null
+            }
+        },
+        // Konten-Mapping für Holding Transfers hinzugefügt
+        kontoMapping: {
+            "Gewinnübertrag": {soll: "1200", gegen: "8999"},
+            "Kapitalrückführung": {soll: "1200", gegen: "2000"}
+        },
+        // BWA-Mapping für Holding Transfers hinzugefügt
+        bwaMapping: {
+            "Gewinnübertrag": "gesamtRueckstellungenTransfers",
+            "Kapitalrückführung": "eigenkapitalveraenderungen"
+        }
     },
 
     // Änderungshistorie-Konfiguration
@@ -430,8 +707,8 @@ const config = {
             ...Object.keys(this.einnahmen.categories),
             ...Object.keys(this.ausgaben.categories),
             ...Object.keys(this.eigenbelege.categories),
-            ...this.gesellschafterkonto.categories,
-            ...this.holdingTransfers.categories,
+            ...Object.keys(this.gesellschafterkonto.categories),
+            ...Object.keys(this.holdingTransfers.categories),
         ];
 
         // Duplikate aus den Kategorien entfernen
