@@ -489,9 +489,18 @@ const RefreshModule = (() => {
 
         if (einnahmenSheet && einnahmenSheet.getLastRow() > 1) {
             const numEinnahmenRows = einnahmenSheet.getLastRow() - 1;
+
+            // Berechne die benötigte Anzahl an Spalten
+            const columnsToLoad = einnahmenCols.bezahlt - einnahmenCols.rechnungsnummer + 1;
+
             // Die relevanten Spalten laden basierend auf der Konfiguration
-            einnahmenData = einnahmenSheet.getRange(2, einnahmenCols.rechnungsnummer, numEinnahmenRows, 8).getDisplayValues();
-            einnahmenMap = createReferenceMap(einnahmenData);
+            einnahmenData = einnahmenSheet.getRange(
+                2, einnahmenCols.rechnungsnummer,
+                numEinnahmenRows,
+                columnsToLoad
+            ).getDisplayValues();
+
+            einnahmenMap = createReferenceMap(einnahmenData, "einnahmen");
         }
 
         // Referenzdaten laden für Ausgaben
@@ -500,9 +509,18 @@ const RefreshModule = (() => {
 
         if (ausgabenSheet && ausgabenSheet.getLastRow() > 1) {
             const numAusgabenRows = ausgabenSheet.getLastRow() - 1;
+
+            // Berechne die benötigte Anzahl an Spalten
+            const columnsToLoad = ausgabenCols.bezahlt - ausgabenCols.rechnungsnummer + 1;
+
             // Die relevanten Spalten laden basierend auf der Konfiguration
-            ausgabenData = ausgabenSheet.getRange(2, ausgabenCols.rechnungsnummer, numAusgabenRows, 8).getDisplayValues();
-            ausgabenMap = createReferenceMap(ausgabenData);
+            ausgabenData = ausgabenSheet.getRange(
+                2, ausgabenCols.rechnungsnummer,
+                numAusgabenRows,
+                columnsToLoad
+            ).getDisplayValues();
+
+            ausgabenMap = createReferenceMap(ausgabenData, "ausgaben");
         }
 
         // Referenzdaten laden für Eigenbelege
@@ -512,17 +530,16 @@ const RefreshModule = (() => {
         if (eigenbelegeSheet && eigenbelegeSheet.getLastRow() > 1) {
             const numEigenbelegeRows = eigenbelegeSheet.getLastRow() - 1;
 
-            // Calculate the number of columns needed based on config
+            // Berechne die benötigte Anzahl an Spalten
             const columnsToLoad = eigenbelegeCols.bezahlt - eigenbelegeCols.rechnungsnummer + 1;
 
-            // Load data with the correct column span
+            // Die relevanten Spalten laden basierend auf der Konfiguration
             eigenbelegeData = eigenbelegeSheet.getRange(
                 2, eigenbelegeCols.rechnungsnummer,
                 numEigenbelegeRows,
                 columnsToLoad
             ).getDisplayValues();
 
-            // Pass both the data and the sheet type
             eigenbelegeMap = createReferenceMap(eigenbelegeData, "eigenbelege");
         }
 
