@@ -481,6 +481,25 @@ const RefreshModule = (() => {
         // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben
         const bankZuordnungen = {};
 
+        // Sammeln aller gültigen Konten für die Validierung
+        const allowedKontoSoll = new Set();
+        const allowedGegenkonto = new Set();
+
+        // Konten aus Einnahmen und Ausgaben sammeln
+        Object.values(config.einnahmen.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
+        Object.values(config.ausgaben.kontoMapping).forEach(m => {
+            if (m.soll) allowedKontoSoll.add(m.soll);
+            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        });
+
+        // Fallback-Konto wenn kein Match - das erste Konto aus den erlaubten Konten
+        const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : "";
+        const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : "";
+
         // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
         for (let i = 0; i < bankData.length; i++) {
             const rowIndex = i + firstDataRow;
@@ -501,7 +520,7 @@ const RefreshModule = (() => {
 
             // Kontonummern basierend auf Kategorie vorbereiten
             let kontoSoll = "", kontoHaben = "";
-            const category = row[columns.kategorie - 1] || "";
+            const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
 
             // Nur prüfen, wenn Referenz nicht leer ist
             if (!Helpers.isEmpty(refNumber)) {
@@ -582,19 +601,21 @@ const RefreshModule = (() => {
 
             // Kontonummern basierend auf Kategorie setzen
             if (category) {
-                let mapping = null;
-                if (tranType === "Einnahme") {
-                    mapping = config.einnahmen.kontoMapping[category];
-                } else if (tranType === "Ausgabe") {
-                    mapping = config.ausgaben.kontoMapping[category];
-                }
+                // Den richtigen Mapping-Typ basierend auf der Transaktionsart auswählen
+                const mappingSource = tranType === "Einnahme" ?
+                    config.einnahmen.kontoMapping :
+                    config.ausgaben.kontoMapping;
 
-                if (mapping) {
-                    kontoSoll = mapping.soll || "";
-                    kontoHaben = mapping.gegen || "";
+                // Mapping für die Kategorie finden
+                if (mappingSource && mappingSource[category]) {
+                    const mapping = mappingSource[category];
+                    // Nutze die Kontonummern aus dem Mapping
+                    kontoSoll = mapping.soll || fallbackKontoSoll;
+                    kontoHaben = mapping.gegen || fallbackKontoHaben;
                 } else {
-                    kontoSoll = "Manuell prüfen";
-                    kontoHaben = "Manuell prüfen";
+                    // Fallback wenn kein Mapping gefunden wurde - erstes zulässiges Konto
+                    kontoSoll = fallbackKontoSoll;
+                    kontoHaben = fallbackKontoHaben;
                 }
             }
 
@@ -609,22 +630,15 @@ const RefreshModule = (() => {
         sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
         sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
 
-        // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
-        Utilities.sleep(500);
-
         // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
         formatMatchedRows(sheet, firstDataRow, matchResults, columns);
 
         // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
         setMatchColumnFormatting(sheet, columnLetters.matchInfo);
 
-        // Verzögerung vor dem Aufruf von markPaidInvoices
-        Utilities.sleep(500);
-
         // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
         markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
     };
-
     /**
      * Findet eine Übereinstimmung in der Referenz-Map
      * @param {string} reference - Zu suchende Referenz
