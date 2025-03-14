@@ -122,9 +122,9 @@ const ImportModule = (() => {
 
         // Konfiguration für das richtige Sheet auswählen
         const sheetTypeMap = {
-            "Einnahme": config.sheets.einnahmen.columns,
-            "Ausgabe": config.sheets.ausgaben.columns,
-            "Eigenbeleg": config.sheets.eigenbelege.columns
+            "Einnahme": config.einnahmen.columns,
+            "Ausgabe": config.ausgaben.columns,
+            "Eigenbeleg": config.eigenbelege.columns
         };
 
         const sheetConfig = sheetTypeMap[type];
