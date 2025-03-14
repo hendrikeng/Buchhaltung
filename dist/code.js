@@ -1063,9 +1063,9 @@ function importDriveFiles() {};
 
             // Konfiguration für das richtige Sheet auswählen
             const sheetTypeMap = {
-                "Einnahme": config$1.sheets.einnahmen.columns,
-                "Ausgabe": config$1.sheets.ausgaben.columns,
-                "Eigenbeleg": config$1.sheets.eigenbelege.columns
+                "Einnahme": config$1.einnahmen.columns,
+                "Ausgabe": config$1.ausgaben.columns,
+                "Eigenbeleg": config$1.eigenbelege.columns
             };
 
             const sheetConfig = sheetTypeMap[type];
@@ -2237,6 +2237,25 @@ function importDriveFiles() {};
             // Banking-Zuordnungen für spätere Synchronisierung mit Einnahmen/Ausgaben
             const bankZuordnungen = {};
 
+            // Sammeln aller gültigen Konten für die Validierung
+            const allowedKontoSoll = new Set();
+            const allowedGegenkonto = new Set();
+
+            // Konten aus Einnahmen und Ausgaben sammeln
+            Object.values(config$1.einnahmen.kontoMapping).forEach(m => {
+                if (m.soll) allowedKontoSoll.add(m.soll);
+                if (m.gegen) allowedGegenkonto.add(m.gegen);
+            });
+
+            Object.values(config$1.ausgaben.kontoMapping).forEach(m => {
+                if (m.soll) allowedKontoSoll.add(m.soll);
+                if (m.gegen) allowedGegenkonto.add(m.gegen);
+            });
+
+            // Fallback-Konto wenn kein Match - das erste Konto aus den erlaubten Konten
+            const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : "";
+            const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : "";
+
             // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
             for (let i = 0; i < bankData.length; i++) {
                 const rowIndex = i + firstDataRow;
@@ -2257,7 +2276,7 @@ function importDriveFiles() {};
 
                 // Kontonummern basierend auf Kategorie vorbereiten
                 let kontoSoll = "", kontoHaben = "";
-                const category = row[columns.kategorie - 1] || "";
+                const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
 
                 // Nur prüfen, wenn Referenz nicht leer ist
                 if (!Helpers.isEmpty(refNumber)) {
@@ -2338,19 +2357,21 @@ function importDriveFiles() {};
 
                 // Kontonummern basierend auf Kategorie setzen
                 if (category) {
-                    let mapping = null;
-                    if (tranType === "Einnahme") {
-                        mapping = config$1.einnahmen.kontoMapping[category];
-                    } else if (tranType === "Ausgabe") {
-                        mapping = config$1.ausgaben.kontoMapping[category];
-                    }
+                    // Den richtigen Mapping-Typ basierend auf der Transaktionsart auswählen
+                    const mappingSource = tranType === "Einnahme" ?
+                        config$1.einnahmen.kontoMapping :
+                        config$1.ausgaben.kontoMapping;
 
-                    if (mapping) {
-                        kontoSoll = mapping.soll || "";
-                        kontoHaben = mapping.gegen || "";
+                    // Mapping für die Kategorie finden
+                    if (mappingSource && mappingSource[category]) {
+                        const mapping = mappingSource[category];
+                        // Nutze die Kontonummern aus dem Mapping
+                        kontoSoll = mapping.soll || fallbackKontoSoll;
+                        kontoHaben = mapping.gegen || fallbackKontoHaben;
                     } else {
-                        kontoSoll = "Manuell prüfen";
-                        kontoHaben = "Manuell prüfen";
+                        // Fallback wenn kein Mapping gefunden wurde - erstes zulässiges Konto
+                        kontoSoll = fallbackKontoSoll;
+                        kontoHaben = fallbackKontoHaben;
                     }
                 }
 
@@ -2365,22 +2386,15 @@ function importDriveFiles() {};
             sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
             sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
 
-            // Verzögerung hinzufügen, um sicherzustellen, dass die Daten verarbeitet wurden
-            Utilities.sleep(500);
-
             // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
             formatMatchedRows(sheet, firstDataRow, matchResults, columns);
 
             // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
             setMatchColumnFormatting(sheet, columnLetters.matchInfo);
 
-            // Verzögerung vor dem Aufruf von markPaidInvoices
-            Utilities.sleep(500);
-
             // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
             markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
         };
-
         /**
          * Findet eine Übereinstimmung in der Referenz-Map
          * @param {string} reference - Zu suchende Referenz
@@ -3265,12 +3279,6 @@ function importDriveFiles() {};
                 // Prüfen, ob die wichtigsten Sheets vorhanden sind
                 if (!revenueSheet || !expenseSheet) {
                     console.error("Fehlende Blätter: 'Einnahmen' oder 'Ausgaben' nicht gefunden");
-                    return null;
-                }
-
-                // Sheets validieren TODO: Bankbewegungen
-                if (!Validator.validateAllSheets(revenueSheet, expenseSheet, null, eigenSheet)) {
-                    console.error("UStVA-Berechnung abgebrochen, da Fehler in den Daten gefunden wurden");
                     return null;
                 }
 
@@ -4578,10 +4586,12 @@ function importDriveFiles() {};
      * @param {Object} e - Event-Objekt von Google Sheets
      */
     const onEdit = e => {
-
         const {range} = e;
         const sheet = range.getSheet();
         const name = sheet.getName();
+
+        // Header-Zeile überspringen (Zeile 1)
+        if (range.getRow() <= 1) return;
 
         // Konvertieren in kleinbuchstaben und leerzeichen entfernen
         let sheetKey = name.toLowerCase().replace(/\s+/g, '');
@@ -4615,6 +4625,10 @@ function importDriveFiles() {};
         // Für jede bearbeitete Zeile
         for (let i = 0; i < numRows; i++) {
             const rowIndex = range.getRow() + i;
+
+            // Header-Zeile überspringen
+            if (rowIndex <= 1) continue;
+
             const headerLen = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length;
 
             // Prüfen, ob die Zeile leer ist
@@ -4655,13 +4669,37 @@ function importDriveFiles() {};
     };
 
     /**
+     * Validiert alle relevanten Sheets
+     * @returns {boolean} - True wenn alle Sheets valide sind, False sonst
+     */
+    const validateSheets = () => {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const revenueSheet = ss.getSheetByName("Einnahmen");
+        const expenseSheet = ss.getSheetByName("Ausgaben");
+        const bankSheet = ss.getSheetByName("Bankbewegungen");
+        const eigenSheet = ss.getSheetByName("Eigenbelege");
+
+        return Validator.validateAllSheets(revenueSheet, expenseSheet, bankSheet, eigenSheet);
+    };
+
+    /**
      * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
      * @param {Function} fn - Die auszuführende Funktion
      * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
      */
     const executeWithErrorHandling = (fn, errorMessage) => {
         try {
+            // Zuerst alle Sheets aktualisieren
             RefreshModule.refreshAllSheets();
+
+            // Dann Validierung durchführen
+            if (!validateSheets()) {
+                // Validierung fehlgeschlagen - Berechnung abbrechen
+                console.error(`${errorMessage}: Validierung fehlgeschlagen`);
+                return;
+            }
+
+            // Wenn Validierung erfolgreich, Berechnung ausführen
             fn();
         } catch (error) {
             SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
@@ -4711,6 +4749,9 @@ function importDriveFiles() {};
         try {
             ImportModule.importDriveFiles();
             RefreshModule.refreshAllSheets();
+
+            // Optional: Nach dem Import auch eine Validierung durchführen
+            // validateSheets();
         } catch (error) {
             SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
             console.error("Import-Fehler:", error);

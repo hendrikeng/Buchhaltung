@@ -639,6 +639,7 @@ const RefreshModule = (() => {
         // Setze farbliche Markierung in den Einnahmen/Ausgaben Sheets basierend auf Zahlungsstatus
         markPaidInvoices(einnahmenSheet, ausgabenSheet, bankZuordnungen);
     };
+
     /**
      * Findet eine Übereinstimmung in der Referenz-Map
      * @param {string} reference - Zu suchende Referenz
