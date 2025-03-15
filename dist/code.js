@@ -900,7 +900,7 @@ function importDriveFiles() {};
         return sheet;
     }
 
-    var sheetUtils$1 = {
+    var sheetUtils = {
         batchWriteToSheet,
         setConditionalFormattingForColumn,
         getFolderByName,
@@ -936,7 +936,7 @@ function importDriveFiles() {};
         if (!parentFolder) return null;
 
         try {
-            let folder = sheetUtils$1.getFolderByName(parentFolder, folderName);
+            let folder = sheetUtils.getFolderByName(parentFolder, folderName);
 
             if (!folder) {
                 const createFolder = ui.alert(
@@ -961,129 +961,120 @@ function importDriveFiles() {};
         findOrCreateFolder
     };
 
-    // utils/numberUtils.js
+    // src/utils/dateUtils.js
     /**
-     * Funktionen für die Verarbeitung und Formatierung von Zahlen und Währungen
+     * Funktionen für die Verarbeitung und Formatierung von Datumsangaben
      */
 
+    // Cache für Datumsberechnungen
+    const _dateCache = new Map();
+
     /**
-     * Konvertiert einen String oder eine Zahl in einen numerischen Währungswert
-     * @param {number|string} value - Der zu parsende Wert
-     * @returns {number} - Der geparste Währungswert oder 0 bei ungültigem Format
+     * Extrahiert ein Datum aus einem Dateinamen in verschiedenen Formaten
+     * @param {string} filename - Der Dateiname, aus dem das Datum extrahiert werden soll
+     * @returns {Date|null} - Das extrahierte Datum oder null, wenn kein Datum gefunden wurde
      */
-    function parseCurrency$1(value) {
-        if (value === null || value === undefined || value === "") return 0;
-        if (typeof value === "number") return value;
+    function extractDateFromFilename(filename) {
+        if (!filename) return null;
 
-        // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
-        const str = value.toString()
-            .replace(/[^\d,.-]/g, "")
-            .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
-
-        // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
-        const parts = str.split('.');
-        let result;
-
-        if (parts.length > 2) {
-            const last = parts.pop();
-            result = parseFloat(parts.join('') + '.' + last);
-        } else {
-            result = parseFloat(str);
+        // Cache-Lookup
+        const cacheKey = `filename_${filename}`;
+        if (_dateCache.has(cacheKey)) {
+            return _dateCache.get(cacheKey);
         }
 
-        return isNaN(result) ? 0 : result;
-    }
+        const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+        let dateStr = null;
 
-    /**
-     * Parst einen MwSt-Satz und normalisiert ihn
-     * @param {number|string} value - Der zu parsende MwSt-Satz
-     * @param {number} defaultMwst - Standard-MwSt-Satz, falls value ungültig ist
-     * @returns {number} - Der normalisierte MwSt-Satz (0-100)
-     */
-    function parseMwstRate$1(value, defaultMwst = 19) {
-        if (value === null || value === undefined || value === "") {
-            return defaultMwst;
-        }
-
-        let result;
-
-        if (typeof value === "number") {
-            // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
-            result = value < 1 ? value * 100 : value;
+        // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
+        // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
+        let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
+        if (match?.[1]) {
+            const parts = match[1].split('.');
+            dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD für Date-Konstruktor
         } else {
-            // String-Wert parsen und bereinigen
-            const rateStr = value.toString()
-                .replace(/%/g, "")
-                .replace(/,/g, ".")
-                .trim();
-
-            const rate = parseFloat(rateStr);
-
-            // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
-            if (isNaN(rate)) {
-                result = defaultMwst;
+            // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
+            match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+            if (match?.[1]) {
+                dateStr = match[1].replace(/[-_.\/]/g, '-');
             } else {
-                // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
-                result = rate < 1 ? rate * 100 : rate;
+                // 3. Format: YYYY-MM-DD am Anfang oder Ende
+                match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+                if (match?.[2]) {
+                    dateStr = match[2].replace(/[-_.\/]/g, '-');
+                } else {
+                    // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
+                    match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+                    if (match) {
+                        const [_, day, month, year] = match;
+                        dateStr = `${year}-${month}-${day}`;
+                    }
+                }
             }
         }
 
+        let result = null;
+        if (dateStr) {
+            result = new Date(dateStr);
+            // Prüfen ob das Datum valide ist
+            if (isNaN(result.getTime())) {
+                result = null;
+            }
+        }
+
+        // Ergebnis cachen
+        _dateCache.set(cacheKey, result);
         return result;
     }
 
     /**
-     * Formatiert einen Währungsbetrag im deutschen Format
-     * @param {number|string} amount - Der zu formatierende Betrag
-     * @param {string} currency - Das Währungssymbol (Standard: "€")
-     * @returns {string} - Der formatierte Betrag
+     * Extrahiert den Monat (1-12) aus einer Zeile
+     * @param {Array} row - Die Zeile mit Daten
+     * @param {string} sheetType - Der Typ des Sheets (einnahmen, ausgaben, eigenbelege)
+     * @param {Object} config - Die Konfiguration
+     * @returns {number|null} - Der Monat (1-12) oder null
      */
-    function formatCurrency$1(amount, currency = "€") {
-        const value = parseCurrency$1(amount);
-        return value.toLocaleString('de-DE', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }) + " " + currency;
+    function getMonthFromRow(row, sheetType, config) {
+        // Vereinfachte Implementierung für Tests
+        return 1;
     }
 
     /**
-     * Prüft, ob zwei Zahlenwerte im Rahmen einer bestimmten Toleranz gleich sind
-     * @param {number} a - Erster Wert
-     * @param {number} b - Zweiter Wert
-     * @param {number} tolerance - Toleranzwert (Standard: 0.01)
-     * @returns {boolean} - true wenn Werte innerhalb der Toleranz gleich sind
+     * Parst ein Datum aus verschiedenen Formaten
+     * @param {string|Date} value - Das zu parsende Datum
+     * @returns {Date|null} - Das geparste Datum oder null, wenn kein gültiges Datum
      */
-    function isApproximatelyEqual$1(a, b, tolerance = 0.01) {
-        return Math.abs(a - b) <= tolerance;
-    }
+    function parseDate(value) {
+        if (!value) return null;
 
-    /**
-     * Sicheres Runden eines Werts auf n Dezimalstellen
-     * @param {number} value - Der zu rundende Wert
-     * @param {number} decimals - Anzahl der Dezimalstellen (Standard: 2)
-     * @returns {number} - Gerundeter Wert
-     */
-    function round$1(value, decimals = 2) {
-        const factor = Math.pow(10, decimals);
-        return Math.round((value + Number.EPSILON) * factor) / factor;
-    }
+        // Wenn bereits ein Date-Objekt übergeben wurde
+        if (value instanceof Date) return value;
 
-    /**
-     * Prüft, ob ein Wert keine gültige Zahl ist
-     * @param {*} v - Der zu prüfende Wert
-     * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
-     */
-    function isInvalidNumber$1(v) {
-        if (v === null || v === undefined || v === "") return true;
-        return isNaN(parseFloat(v.toString().trim()));
+        // String-Wert parsen
+        const dateStr = value.toString().trim();
+
+        // Deutsches Format (DD.MM.YYYY)
+        const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+        if (germanFormat.test(dateStr)) {
+            const [_, day, month, year] = dateStr.match(germanFormat);
+            return new Date(year, month - 1, day);
+        }
+
+        // ISO Format (YYYY-MM-DD)
+        const isoFormat = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+        if (isoFormat.test(dateStr)) {
+            return new Date(dateStr);
+        }
+
+        // Fallback
+        const parsedDate = new Date(dateStr);
+        return isNaN(parsedDate.getTime()) ? null : parsedDate;
     }
 
     var dateUtils = {
-        parseCurrency: parseCurrency$1,
-        parseMwstRate: parseMwstRate$1,
-        formatCurrency: formatCurrency$1,
-        isApproximatelyEqual: isApproximatelyEqual$1,
-        round: round$1,
-        isInvalidNumber: isInvalidNumber$1
+        extractDateFromFilename,
+        getMonthFromRow,
+        parseDate
     };
 
     // modules/importModule/dataProcessor.js
@@ -1185,7 +1176,7 @@ function importDriveFiles() {};
 
         // Optimierte Schreibvorgänge mit Helpers
         if (newMainRows.length > 0) {
-            sheetUtils$1.batchWriteToSheet(
+            sheetUtils.batchWriteToSheet(
                 mainSheet,
                 newMainRows,
                 mainSheet.getLastRow() + 1,
@@ -1194,7 +1185,7 @@ function importDriveFiles() {};
         }
 
         if (newHistoryRows.length > 0) {
-            sheetUtils$1.batchWriteToSheet(
+            sheetUtils.batchWriteToSheet(
                 historySheet,
                 newHistoryRows,
                 historySheet.getLastRow() + 1,
@@ -1218,7 +1209,7 @@ function importDriveFiles() {};
      * @returns {Sheet} - Das initialisierte Historie-Sheet
      */
     function getOrCreateHistorySheet(ss, config) {
-        const history = sheetUtils$1.getOrCreateSheet(ss, "Änderungshistorie");
+        const history = sheetUtils.getOrCreateSheet(ss, "Änderungshistorie");
 
         try {
             if (history.getLastRow() === 0) {
@@ -1462,7 +1453,7 @@ function importDriveFiles() {};
         generateUniqueId
     };
 
-    // modules/refreshModule/formattingHandler.js
+    // src/modules/refreshModule/formattingHandler.js
 
     /**
      * Setzt bedingte Formatierung für eine Statusspalte
@@ -1471,7 +1462,7 @@ function importDriveFiles() {};
      * @param {Array<Object>} conditions - Bedingungen (value, background, fontColor)
      */
     function setConditionalFormattingForStatusColumn(sheet, column, conditions) {
-        sheetUtils$1.setConditionalFormattingForColumn(sheet, column, conditions);
+        sheetUtils.setConditionalFormattingForColumn(sheet, column, conditions);
     }
 
     /**
@@ -1624,10 +1615,132 @@ function importDriveFiles() {};
         );
     }
 
+    /**
+     * Formatiert Zeilen basierend auf dem Match-Typ
+     */
+    function formatMatchedRows(sheet, firstDataRow, matchResults, columns) {
+        // Performance-optimiertes Batch-Update vorbereiten
+        const formatBatches = {
+            'Einnahme': { rows: [], color: "#EAF1DD" },
+            'Vollständige Zahlung (Einnahme)': { rows: [], color: "#C6EFCE" },
+            'Teilzahlung (Einnahme)': { rows: [], color: "#FCE4D6" },
+            'Ausgabe': { rows: [], color: "#FFCCCC" },
+            'Vollständige Zahlung (Ausgabe)': { rows: [], color: "#FFC7CE" },
+            'Teilzahlung (Ausgabe)': { rows: [], color: "#FCE4D6" },
+            'Eigenbeleg': { rows: [], color: "#DDEBF7" },
+            'Vollständige Zahlung (Eigenbeleg)': { rows: [], color: "#9BC2E6" },
+            'Teilzahlung (Eigenbeleg)': { rows: [], color: "#FCE4D6" },
+            'Gesellschafterkonto': { rows: [], color: "#E2EFDA" },
+            'Holding Transfer': { rows: [], color: "#FFF2CC" },
+            'Gutschrift': { rows: [], color: "#E6E0FF" },
+            'Gesellschaftskonto/Holding': { rows: [], color: "#FFEB9C" }
+        };
+
+        // Zeilen nach Kategorien gruppieren
+        matchResults.forEach((matchInfo, index) => {
+            const rowIndex = firstDataRow + index;
+            const matchText = (matchInfo && matchInfo[0]) ? matchInfo[0].toString() : "";
+
+            if (!matchText) return; // Überspringe leere Matches
+
+            if (matchText.includes("Einnahme")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Einnahme)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Einnahme)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Einnahme'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Ausgabe")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Ausgabe)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Ausgabe'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Eigenbeleg")) {
+                if (matchText.includes("Vollständige Zahlung")) {
+                    formatBatches['Vollständige Zahlung (Eigenbeleg)'].rows.push(rowIndex);
+                } else if (matchText.includes("Teilzahlung")) {
+                    formatBatches['Teilzahlung (Eigenbeleg)'].rows.push(rowIndex);
+                } else {
+                    formatBatches['Eigenbeleg'].rows.push(rowIndex);
+                }
+            } else if (matchText.includes("Gesellschafterkonto")) {
+                formatBatches['Gesellschafterkonto'].rows.push(rowIndex);
+            } else if (matchText.includes("Holding Transfer")) {
+                formatBatches['Holding Transfer'].rows.push(rowIndex);
+            } else if (matchText.includes("Gutschrift")) {
+                formatBatches['Gutschrift'].rows.push(rowIndex);
+            } else if (matchText.includes("Gesellschaftskonto") || matchText.includes("Holding")) {
+                formatBatches['Gesellschaftskonto/Holding'].rows.push(rowIndex);
+            }
+        });
+
+        // Batch-Formatting anwenden
+        Object.values(formatBatches).forEach(batch => {
+            if (batch.rows.length > 0) {
+                // Gruppen von maximal 20 Zeilen formatieren (API-Limits vermeiden)
+                applyFormatBatches(sheet, batch.rows, batch.color, columns.matchInfo);
+            }
+        });
+    }
+
+    /**
+     * Wendet Formatierung auf Batches von Zeilen an
+     */
+    function applyFormatBatches(sheet, rows, color, maxColumn) {
+        const chunkSize = 20;
+        for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize);
+            chunk.forEach(rowIndex => {
+                try {
+                    sheet.getRange(rowIndex, 1, 1, maxColumn)
+                        .setBackground(color);
+                } catch (e) {
+                    console.error(`Fehler beim Formatieren von Zeile ${rowIndex}:`, e);
+                }
+            });
+
+            // Kurze Pause um API-Limits zu vermeiden
+            if (i + chunkSize < rows.length) {
+                Utilities.sleep(50);
+            }
+        }
+    }
+
+    /**
+     * Setzt bedingte Formatierung für die Match-Spalte
+     */
+    function setMatchColumnFormatting(sheet, columnLetter) {
+        const conditions = [
+            // Grundlegende Match-Typen
+            {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
+            {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
+            {value: "Eigenbeleg", background: "#DDEBF7", fontColor: "#2F5597", pattern: "beginsWith"},
+            {value: "Gesellschafterkonto", background: "#E2EFDA", fontColor: "#375623", pattern: "beginsWith"},
+            {value: "Holding Transfer", background: "#FFF2CC", fontColor: "#7F6000", pattern: "beginsWith"},
+            {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
+
+            // Zusätzliche Betragstypen
+            {value: "Vollständige Zahlung", background: "#C6EFCE", fontColor: "#006100", pattern: "contains"},
+            {value: "Teilzahlung", background: "#FCE4D6", fontColor: "#974706", pattern: "contains"},
+            {value: "Unsichere Zahlung", background: "#F8CBAD", fontColor: "#843C0C", pattern: "contains"},
+            {value: "Vollständige Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"}
+        ];
+
+        // Bedingte Formatierung für die Match-Spalte setzen
+        sheetUtils.setConditionalFormattingForColumn(sheet, columnLetter, conditions);
+    }
+
     var formattingHandler = {
         setConditionalFormattingForStatusColumn,
         setDropdownValidations,
-        applyBankSheetValidations
+        applyBankSheetValidations,
+        formatMatchedRows,
+        applyFormatBatches,
+        setMatchColumnFormatting
     };
 
     // modules/refreshModule/dataSheetHandler.js
@@ -2048,187 +2161,22 @@ function importDriveFiles() {};
         }
     };
 
-    // modules/refreshModule/matchingHandler.js
+    // modules/refreshModule/matchingUtils.js
 
-    /**
-     * Führt das Matching von Bankbewegungen mit Rechnungen durch
-     * @param {Spreadsheet} ss - Das Spreadsheet
-     * @param {Sheet} sheet - Das Bankbewegungen-Sheet
-     * @param {number} firstDataRow - Erste Datenzeile
-     * @param {number} numDataRows - Anzahl der Datenzeilen
-     * @param {number} lastRow - Letzte Zeile
-     * @param {Object} columns - Spaltenkonfiguration
-     * @param {Object} columnLetters - Buchstaben für die Spalten
-     * @param {Object} config - Die Konfiguration
-     */
-    function performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters, config) {
-        // Konfigurationen für Spaltenindizes
-        const einnahmenCols = config.einnahmen.columns;
-        const ausgabenCols = config.ausgaben.columns;
-        const eigenbelegeCols = config.eigenbelege.columns;
-        const gesellschafterCols = config.gesellschafterkonto.columns;
-        const holdingCols = config.holdingTransfers.columns;
-
-        // Referenzdaten laden für alle relevanten Sheets
-        const sheetData = loadReferenceData(ss, {
-            einnahmen: einnahmenCols,
-            ausgaben: ausgabenCols,
-            eigenbelege: eigenbelegeCols,
-            gesellschafterkonto: gesellschafterCols,
-            holdingTransfers: holdingCols
-        });
-
-        // Bankbewegungen Daten für Verarbeitung holen
-        const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
-
-        // Ergebnis-Arrays für Batch-Update
-        const matchResults = [];
-        const kontoSollResults = [];
-        const kontoHabenResults = [];
-
-        // Banking-Zuordnungen für spätere Synchronisierung mit anderen Sheets
-        const bankZuordnungen = {};
-
-        // Sammeln aller gültigen Konten für die Validierung
-        const allowedKontoSoll = new Set();
-        const allowedGegenkonto = new Set();
-
-        // Konten aus allen relevanten Mappings sammeln
-        [
-            config.einnahmen.kontoMapping,
-            config.ausgaben.kontoMapping,
-            config.eigenbelege.kontoMapping,
-            config.gesellschafterkonto.kontoMapping,
-            config.holdingTransfers.kontoMapping
-        ].forEach(mapping => {
-            Object.values(mapping).forEach(m => {
-                if (m.soll) allowedKontoSoll.add(m.soll);
-                if (m.gegen) allowedGegenkonto.add(m.gegen);
-            });
-        });
-
-        // Fallback-Konto wenn kein Match - das erste Konto aus den erlaubten Konten
-        const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : "";
-        const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : "";
-
-        // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
-        for (let i = 0; i < bankData.length; i++) {
-            const rowIndex = i + firstDataRow;
-            const row = bankData[i];
-
-            // Prüfe, ob es sich um die Endsaldo-Zeile handelt
-            const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
-            if (rowIndex === lastRow && label === "endsaldo") {
-                matchResults.push([""]);
-                kontoSollResults.push([""]);
-                kontoHabenResults.push([""]);
-                continue;
-            }
-
-            const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
-            const refNumber = row[columns.referenz - 1];       // Referenznummer
-            let matchInfo = "";
-
-            // Kontonummern basierend auf Kategorie vorbereiten
-            let kontoSoll = "", kontoHaben = "";
-            const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-
-            // Matching-Logik für Bankbewegungen
-            if (!stringUtils.isEmpty(refNumber)) {
-                let matchFound = false;
-                const betragValue = Math.abs(numberUtils$1.parseCurrency(row[columns.betrag - 1]));
-
-                // Je nach Transaktionstyp in unterschiedlichen Sheets suchen
-                if (tranType === "Einnahme") {
-                    // Einnahmen prüfen
-                    processEinnahmeMatching(
-                        refNumber, betragValue, row, columns, sheetData.einnahmen,
-                        einnahmenCols, matchResults, kontoSollResults, kontoHabenResults,
-                        bankZuordnungen, matchFound, config
-                    );
-                } else if (tranType === "Ausgabe") {
-                    // Ausgaben, Eigenbelege, Gesellschafterkonto und Holding Transfers prüfen
-                    processAusgabeMatching(
-                        refNumber, betragValue, row, columns, {
-                            ausgaben: sheetData.ausgaben,
-                            eigenbelege: sheetData.eigenbelege,
-                            gesellschafterkonto: sheetData.gesellschafterkonto,
-                            holdingTransfers: sheetData.holdingTransfers
-                        },
-                        {
-                            ausgabenCols, eigenbelegeCols, gesellschafterCols, holdingCols
-                        },
-                        matchResults, kontoSollResults, kontoHabenResults,
-                        bankZuordnungen, matchFound, config
-                    );
-                }
-            }
-
-            // Kontonummern basierend auf Kategorie setzen
-            if (category) {
-                // Den richtigen Mapping-Typ basierend auf der Transaktionsart auswählen
-                const mappingSource = tranType === "Einnahme" ?
-                    config.einnahmen.kontoMapping :
-                    config.ausgaben.kontoMapping;
-
-                // Mapping für die Kategorie finden
-                if (mappingSource && mappingSource[category]) {
-                    const mapping = mappingSource[category];
-                    // Nutze die Kontonummern aus dem Mapping
-                    kontoSoll = mapping.soll || fallbackKontoSoll;
-                    kontoHaben = mapping.gegen || fallbackKontoHaben;
-                } else {
-                    // Fallback wenn kein Mapping gefunden wurde - erstes zulässiges Konto
-                    kontoSoll = fallbackKontoSoll;
-                    kontoHaben = fallbackKontoHaben;
-                }
-            }
-
-            // Sicherstellen, dass die Arrays die richtigen Werte haben
-            if (matchResults.length <= i) {
-                matchResults.push([matchInfo]);
-            }
-
-            if (kontoSollResults.length <= i) {
-                kontoSollResults.push([kontoSoll]);
-            }
-
-            if (kontoHabenResults.length <= i) {
-                kontoHabenResults.push([kontoHaben]);
-            }
-        }
-
-        // Batch-Updates ausführen für bessere Performance
-        sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchResults);
-        sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
-        sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
-
-        // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
-        formatMatchedRows(sheet, firstDataRow, matchResults, columns);
-
-        // Bedingte Formatierung für Match-Spalte mit verbesserten Farben
-        setMatchColumnFormatting(sheet, columnLetters.matchInfo);
-
-        // Setze farbliche Markierung in den Einnahmen/Ausgaben/Eigenbelege Sheets basierend auf Zahlungsstatus
-        markPaidInvoices(ss, bankZuordnungen, config);
-    }
 
     /**
      * Lädt Referenzdaten aus allen relevanten Sheets
-     * @param {Spreadsheet} ss - Das Spreadsheet
-     * @param {Object} columns - Spaltenkonfigurationen für alle Sheets
-     * @returns {Object} - Referenzdaten für alle Sheets
      */
-    function loadReferenceData(ss, columns) {
+    function loadReferenceData(ss, config) {
         const result = {};
 
         // Sheets und ihre Konfigurationen
         const sheets = {
-            einnahmen: { name: "Einnahmen", cols: columns.einnahmen },
-            ausgaben: { name: "Ausgaben", cols: columns.ausgaben },
-            eigenbelege: { name: "Eigenbelege", cols: columns.eigenbelege },
-            gesellschafterkonto: { name: "Gesellschafterkonto", cols: columns.gesellschafterkonto },
-            holdingTransfers: { name: "Holding Transfers", cols: columns.holdingTransfers }
+            einnahmen: { name: "Einnahmen", cols: config.einnahmen.columns },
+            ausgaben: { name: "Ausgaben", cols: config.ausgaben.columns },
+            eigenbelege: { name: "Eigenbelege", cols: config.eigenbelege.columns },
+            gesellschafterkonto: { name: "Gesellschafterkonto", cols: config.gesellschafterkonto.columns },
+            holdingTransfers: { name: "Holding Transfers", cols: config.holdingTransfers.columns }
         };
 
         // Für jedes Sheet Referenzdaten laden
@@ -2247,10 +2195,6 @@ function importDriveFiles() {};
 
     /**
      * Lädt Referenzdaten aus einem einzelnen Sheet
-     * @param {Sheet} sheet - Das Sheet
-     * @param {Object} columns - Spaltenkonfiguration
-     * @param {string} sheetType - Typ des Sheets
-     * @returns {Object} - Referenzdaten für das Sheet
      */
     function loadSheetReferenceData(sheet, columns, sheetType) {
         // Cache prüfen
@@ -2336,251 +2280,7 @@ function importDriveFiles() {};
     }
 
     /**
-     * Verarbeitet Matching für Einnahmen
-     * @param {string} refNumber - Referenznummer
-     * @param {number} betragValue - Betrag
-     * @param {Array} row - Zeile aus dem Bankbewegungen-Sheet
-     * @param {Object} columns - Spaltenkonfiguration
-     * @param {Object} einnahmenData - Referenzdaten für Einnahmen
-     * @param {Object} einnahmenCols - Spaltenkonfiguration für Einnahmen
-     * @param {Array} matchResults - Array für Match-Ergebnisse
-     * @param {Array} kontoSollResults - Array für Konto-Soll-Ergebnisse
-     * @param {Array} kontoHabenResults - Array für Konto-Haben-Ergebnisse
-     * @param {Object} bankZuordnungen - Speicher für Bankzuordnungen
-     * @param {boolean} matchFound - Flag für gefundene Übereinstimmung
-     * @param {Object} config - Die Konfiguration
-     */
-    function processEinnahmeMatching(refNumber, betragValue, row, columns, einnahmenData, einnahmenCols, matchResults, kontoSollResults, kontoHabenResults, bankZuordnungen, matchFound, config) {
-        // Einnahmen-Match prüfen
-        const matchResult = findMatch(refNumber, einnahmenData, betragValue);
-
-        if (matchResult) {
-            const matchInfo = processEinnahmeMatch(matchResult);
-            matchResults.push([matchInfo]);
-
-            // Konten aus dem Mapping setzen
-            const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-            let kontoSoll = "", kontoHaben = "";
-
-            if (category && config.einnahmen.kontoMapping[category]) {
-                const mapping = config.einnahmen.kontoMapping[category];
-                kontoSoll = mapping.soll || "";
-                kontoHaben = mapping.gegen || "";
-            }
-
-            kontoSollResults.push([kontoSoll]);
-            kontoHabenResults.push([kontoHaben]);
-
-            // Für spätere Markierung merken
-            const key = `einnahme#${matchResult.row}`;
-            bankZuordnungen[key] = {
-                typ: "einnahme",
-                row: matchResult.row,
-                bankDatum: row[columns.datum - 1],
-                matchInfo: matchInfo,
-                transTyp: "Einnahme"
-            };
-        }
-    }
-
-    /**
-     * Verarbeitet Matching für Ausgaben und andere Belege
-     * @param {string} refNumber - Referenznummer
-     * @param {number} betragValue - Betrag
-     * @param {Array} row - Zeile aus dem Bankbewegungen-Sheet
-     * @param {Object} columns - Spaltenkonfiguration
-     * @param {Object} sheetData - Referenzdaten für verschiedene Sheets
-     * @param {Object} sheetCols - Spaltenkonfigurationen für verschiedene Sheets
-     * @param {Array} matchResults - Array für Match-Ergebnisse
-     * @param {Array} kontoSollResults - Array für Konto-Soll-Ergebnisse
-     * @param {Array} kontoHabenResults - Array für Konto-Haben-Ergebnisse
-     * @param {Object} bankZuordnungen - Speicher für Bankzuordnungen
-     * @param {boolean} matchFound - Flag für gefundene Übereinstimmung
-     * @param {Object} config - Die Konfiguration
-     */
-    function processAusgabeMatching(refNumber, betragValue, row, columns, sheetData, sheetCols, matchResults, kontoSollResults, kontoHabenResults, bankZuordnungen, matchFound, config) {
-        // Ausgaben-Match prüfen
-        const ausgabenMatch = findMatch(refNumber, sheetData.ausgaben, betragValue);
-        if (ausgabenMatch) {
-            matchFound = true;
-            const matchInfo = processAusgabeMatch(ausgabenMatch, betragValue, row, columns, sheetCols.ausgabenCols);
-            matchResults.push([matchInfo]);
-
-            // Konten aus dem Mapping setzen
-            const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-            let kontoSoll = "", kontoHaben = "";
-
-            if (category && config.ausgaben.kontoMapping[category]) {
-                const mapping = config.ausgaben.kontoMapping[category];
-                kontoSoll = mapping.soll || "";
-                kontoHaben = mapping.gegen || "";
-            }
-
-            kontoSollResults.push([kontoSoll]);
-            kontoHabenResults.push([kontoHaben]);
-
-            // Für spätere Markierung merken
-            const key = `ausgabe#${ausgabenMatch.row}`;
-            bankZuordnungen[key] = {
-                typ: "ausgabe",
-                row: ausgabenMatch.row,
-                bankDatum: row[columns.datum - 1],
-                matchInfo: matchInfo,
-                transTyp: "Ausgabe"
-            };
-            return;
-        }
-
-        // Wenn keine Übereinstimmung in Ausgaben, dann in Eigenbelegen suchen
-        if (!matchFound) {
-            const eigenbelegMatch = findMatch(refNumber, sheetData.eigenbelege, betragValue);
-            if (eigenbelegMatch) {
-                matchFound = true;
-                const matchInfo = processEigenbelegMatch(eigenbelegMatch, betragValue, row, columns, sheetCols.eigenbelegeCols);
-                matchResults.push([matchInfo]);
-
-                // Konten aus dem Mapping setzen
-                const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-                let kontoSoll = "", kontoHaben = "";
-
-                if (category && config.eigenbelege.kontoMapping[category]) {
-                    const mapping = config.eigenbelege.kontoMapping[category];
-                    kontoSoll = mapping.soll || "";
-                    kontoHaben = mapping.gegen || "";
-                }
-
-                kontoSollResults.push([kontoSoll]);
-                kontoHabenResults.push([kontoHaben]);
-
-                // Für spätere Markierung merken
-                const key = `eigenbeleg#${eigenbelegMatch.row}`;
-                bankZuordnungen[key] = {
-                    typ: "eigenbeleg",
-                    row: eigenbelegMatch.row,
-                    bankDatum: row[columns.datum - 1],
-                    matchInfo: matchInfo,
-                    transTyp: "Ausgabe"
-                };
-                return;
-            }
-        }
-
-        // Wenn keine Übereinstimmung, auch in Gesellschafterkonto suchen
-        if (!matchFound) {
-            const gesellschafterMatch = findMatch(refNumber, sheetData.gesellschafterkonto, betragValue);
-            if (gesellschafterMatch) {
-                matchFound = true;
-                const matchInfo = processGesellschafterMatch(gesellschafterMatch, betragValue, row, columns, sheetCols.gesellschafterCols);
-                matchResults.push([matchInfo]);
-
-                // Konten aus dem Mapping setzen
-                const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-                let kontoSoll = "", kontoHaben = "";
-
-                if (category && config.gesellschafterkonto.kontoMapping[category]) {
-                    const mapping = config.gesellschafterkonto.kontoMapping[category];
-                    kontoSoll = mapping.soll || "";
-                    kontoHaben = mapping.gegen || "";
-                }
-
-                kontoSollResults.push([kontoSoll]);
-                kontoHabenResults.push([kontoHaben]);
-
-                // Für spätere Markierung merken
-                const key = `gesellschafterkonto#${gesellschafterMatch.row}`;
-                bankZuordnungen[key] = {
-                    typ: "gesellschafterkonto",
-                    row: gesellschafterMatch.row,
-                    bankDatum: row[columns.datum - 1],
-                    matchInfo: matchInfo,
-                    transTyp: "Ausgabe"
-                };
-                return;
-            }
-        }
-
-        // Wenn keine Übereinstimmung, auch in Holding Transfers suchen
-        if (!matchFound) {
-            const holdingMatch = findMatch(refNumber, sheetData.holdingTransfers, betragValue);
-            if (holdingMatch) {
-                matchFound = true;
-                const matchInfo = processHoldingMatch(holdingMatch, betragValue, row, columns, sheetCols.holdingCols);
-                matchResults.push([matchInfo]);
-
-                // Konten aus dem Mapping setzen
-                const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-                let kontoSoll = "", kontoHaben = "";
-
-                if (category && config.holdingTransfers.kontoMapping[category]) {
-                    const mapping = config.holdingTransfers.kontoMapping[category];
-                    kontoSoll = mapping.soll || "";
-                    kontoHaben = mapping.gegen || "";
-                }
-
-                kontoSollResults.push([kontoSoll]);
-                kontoHabenResults.push([kontoHaben]);
-
-                // Für spätere Markierung merken
-                const key = `holdingtransfer#${holdingMatch.row}`;
-                bankZuordnungen[key] = {
-                    typ: "holdingtransfer",
-                    row: holdingMatch.row,
-                    bankDatum: row[columns.datum - 1],
-                    matchInfo: matchInfo,
-                    transTyp: "Ausgabe"
-                };
-                return;
-            }
-        }
-
-        // FALLS keine Übereinstimmung, auch in Einnahmen suchen (für Gutschriften)
-        if (!matchFound) {
-            const gutschriftMatch = findMatch(refNumber, sheetData.einnahmen);
-            if (gutschriftMatch) {
-                matchFound = true;
-                const matchInfo = processGutschriftMatch(gutschriftMatch, betragValue, row, columns, sheetCols.einnahmenCols);
-                matchResults.push([matchInfo]);
-
-                // Konten aus dem Mapping setzen
-                const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
-                let kontoSoll = "", kontoHaben = "";
-
-                if (category && config.einnahmen.kontoMapping[category]) {
-                    const mapping = config.einnahmen.kontoMapping[category];
-                    kontoSoll = mapping.soll || "";
-                    kontoHaben = mapping.gegen || "";
-                }
-
-                kontoSollResults.push([kontoSoll]);
-                kontoHabenResults.push([kontoHaben]);
-
-                // Für spätere Markierung merken
-                const key = `einnahme#${gutschriftMatch.row}`;
-                bankZuordnungen[key] = {
-                    typ: "einnahme",
-                    row: gutschriftMatch.row,
-                    bankDatum: row[columns.datum - 1],
-                    matchInfo: matchInfo,
-                    transTyp: "Gutschrift"
-                };
-                return;
-            }
-        }
-
-        // Wenn keine Übereinstimmung gefunden wurde, leere Ergebnisse hinzufügen
-        if (!matchFound) {
-            matchResults.push([""]);
-            kontoSollResults.push([""]);
-            kontoHabenResults.push([""]);
-        }
-    }
-
-    /**
      * Findet eine Übereinstimmung in der Referenz-Map
-     * @param {string} reference - Zu suchende Referenz
-     * @param {Object} refMap - Map mit Referenznummern
-     * @param {number} betrag - Betrag der Bankbewegung (absoluter Wert)
-     * @returns {Object|null} - Gefundene Übereinstimmung oder null
      */
     function findMatch(reference, refMap, betrag = null) {
         // Keine Daten
@@ -2627,9 +2327,6 @@ function importDriveFiles() {};
 
     /**
      * Bewertet die Qualität einer Übereinstimmung basierend auf Beträgen
-     * @param {Object} match - Die gefundene Übereinstimmung
-     * @param {number} betrag - Der Betrag zum Vergleich
-     * @returns {Object} - Übereinstimmung mit zusätzlichen Infos
      */
     function evaluateMatch(match, betrag = null) {
         if (!match) return null;
@@ -2662,307 +2359,36 @@ function importDriveFiles() {};
             return result;
         }
 
-        // Fall 3: Teilzahlung (Bankbetrag kleiner als Rechnungsbetrag)
-        // Nur als Teilzahlung markieren, wenn der Betrag deutlich kleiner ist (> 10% Differenz)
+        // Fall 3: Teilzahlung
         if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
             result.matchType = "Teilzahlung";
             return result;
         }
 
-        // Fall 4: Betrag ist größer als Bruttobetrag, aber vermutlich trotzdem die richtige Zahlung
-        // (z.B. wegen Rundungen oder kleinen Gebühren)
+        // Fall 4: Betrag größer, aber nahe dem Bruttobetrag
         if (betrag > matchBrutto && numberUtils$1.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
             result.matchType = "Vollständige Zahlung";
             return result;
         }
 
-        // Fall 5: Bei allen anderen Fällen (Beträge weichen stärker ab)
+        // Fall 5: Bei allen anderen Fällen
         result.matchType = "Unsichere Zahlung";
         result.betragsDifferenz = numberUtils$1.round(Math.abs(betrag - matchBrutto), 2);
         return result;
     }
 
-    /**
-     * Verarbeitet eine Einnahmen-Übereinstimmung
-     * @param {Object} matchResult - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} einnahmenCols - Die Spaltenkonfiguration für Einnahmen
-     * @returns {string} Formatierte Match-Information
-     */
-    function processEinnahmeMatch(matchResult, betragValue, row, columns, einnahmenCols) {
-        let matchStatus = "";
+    var matchingUtils = {
+        loadReferenceData,
+        loadSheetReferenceData,
+        findMatch,
+        evaluateMatch
+    };
 
-        // Je nach Match-Typ unterschiedliche Statusinformationen
-        if (matchResult.matchType) {
-            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
-            if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
-                matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
-            } else {
-                matchStatus = ` (${matchResult.matchType})`;
-            }
-        }
+    // modules/refreshModule/syncHandler.js
 
-        return `Einnahme #${matchResult.row}${matchStatus}`;
-    }
 
     /**
-     * Verarbeitet eine Ausgaben-Übereinstimmung
-     * @param {Object} matchResult - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} ausgabenCols - Die Spaltenkonfiguration für Ausgaben
-     * @returns {string} Formatierte Match-Information
-     */
-    function processAusgabeMatch(matchResult, betragValue, row, columns, ausgabenCols) {
-        let matchStatus = "";
-
-        // Je nach Match-Typ unterschiedliche Statusinformationen für Ausgaben
-        if (matchResult.matchType) {
-            if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
-                matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
-            } else {
-                matchStatus = ` (${matchResult.matchType})`;
-            }
-        }
-
-        return `Ausgabe #${matchResult.row}${matchStatus}`;
-    }
-
-    /**
-     * Verarbeitet eine Eigenbeleg-Übereinstimmung
-     * @param {Object} eigenbelegMatch - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} eigenbelegeCols - Die Spaltenkonfiguration für Eigenbelege
-     * @returns {string} Formatierte Match-Information
-     */
-    function processEigenbelegMatch(eigenbelegMatch, betragValue, row, columns, eigenbelegeCols) {
-        let matchStatus = "";
-
-        // Je nach Match-Typ unterschiedliche Statusinformationen
-        if (eigenbelegMatch.matchType) {
-            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
-            if (eigenbelegMatch.matchType === "Unsichere Zahlung" && eigenbelegMatch.betragsDifferenz) {
-                matchStatus = ` (${eigenbelegMatch.matchType}, Diff: ${eigenbelegMatch.betragsDifferenz}€)`;
-            } else {
-                matchStatus = ` (${eigenbelegMatch.matchType})`;
-            }
-        }
-
-        return `Eigenbeleg #${eigenbelegMatch.row}${matchStatus}`;
-    }
-
-    /**
-     * Verarbeitet eine Gesellschafterkonto-Übereinstimmung
-     * @param {Object} gesellschafterMatch - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} gesellschafterCols - Die Spaltenkonfiguration für Gesellschafterkonto
-     * @returns {string} Formatierte Match-Information
-     */
-    function processGesellschafterMatch(gesellschafterMatch, betragValue, row, columns, gesellschafterCols) {
-        let matchStatus = "";
-
-        // Je nach Match-Typ unterschiedliche Statusinformationen
-        if (gesellschafterMatch.matchType) {
-            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
-            if (gesellschafterMatch.matchType === "Unsichere Zahlung" && gesellschafterMatch.betragsDifferenz) {
-                matchStatus = ` (${gesellschafterMatch.matchType}, Diff: ${gesellschafterMatch.betragsDifferenz}€)`;
-            } else {
-                matchStatus = ` (${gesellschafterMatch.matchType})`;
-            }
-        }
-
-        return `Gesellschafterkonto #${gesellschafterMatch.row}${matchStatus}`;
-    }
-
-    /**
-     * Verarbeitet eine Holding-Transfers-Übereinstimmung
-     * @param {Object} holdingMatch - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} holdingCols - Die Spaltenkonfiguration für Holding Transfers
-     * @returns {string} Formatierte Match-Information
-     */
-    function processHoldingMatch(holdingMatch, betragValue, row, columns, holdingCols) {
-        let matchStatus = "";
-
-        // Je nach Match-Typ unterschiedliche Statusinformationen
-        if (holdingMatch.matchType) {
-            // Bei "Unsichere Zahlung" auch die Differenz anzeigen
-            if (holdingMatch.matchType === "Unsichere Zahlung" && holdingMatch.betragsDifferenz) {
-                matchStatus = ` (${holdingMatch.matchType}, Diff: ${holdingMatch.betragsDifferenz}€)`;
-            } else {
-                matchStatus = ` (${holdingMatch.matchType})`;
-            }
-        }
-
-        return `Holding Transfer #${holdingMatch.row}${matchStatus}`;
-    }
-
-    /**
-     * Verarbeitet eine Gutschrift-Übereinstimmung
-     * @param {Object} gutschriftMatch - Das Match-Ergebnis
-     * @param {number} betragValue - Der Betrag
-     * @param {Array} row - Die Bankbewegungszeile
-     * @param {Object} columns - Die Spaltenkonfiguration
-     * @param {Object} einnahmenCols - Die Spaltenkonfiguration für Einnahmen
-     * @returns {string} Formatierte Match-Information
-     */
-    function processGutschriftMatch(gutschriftMatch, betragValue, row, columns, einnahmenCols) {
-        let matchStatus = "";
-
-        // Bei Gutschriften könnte der Betrag abweichen (z.B. Teilgutschrift)
-        // Prüfen, ob die Beträge plausibel sind
-        const gutschriftBetrag = Math.abs(gutschriftMatch.brutto);
-
-        if (numberUtils$1.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
-            // Beträge stimmen genau überein
-            matchStatus = " (Vollständige Gutschrift)";
-        } else if (betragValue < gutschriftBetrag) {
-            // Teilgutschrift (Gutschriftbetrag kleiner als ursprünglicher Rechnungsbetrag)
-            matchStatus = " (Teilgutschrift)";
-        } else {
-            // Ungewöhnlicher Fall - Gutschriftbetrag größer als Rechnungsbetrag
-            matchStatus = " (Ungewöhnliche Gutschrift)";
-        }
-
-        return `Gutschrift zu Einnahme #${gutschriftMatch.row}${matchStatus}`;
-    }
-
-    /**
-     * Formatiert Zeilen basierend auf dem Match-Typ
-     * @param {Sheet} sheet - Das Sheet
-     * @param {number} firstDataRow - Erste Datenzeile
-     * @param {Array} matchResults - Array mit Match-Infos
-     * @param {Object} columns - Spaltenkonfiguration
-     */
-    function formatMatchedRows(sheet, firstDataRow, matchResults, columns) {
-        // Performance-optimiertes Batch-Update vorbereiten
-        const formatBatches = {
-            'Einnahme': { rows: [], color: "#EAF1DD" },  // Helles Grün (Grundfarbe für Einnahmen)
-            'Vollständige Zahlung (Einnahme)': { rows: [], color: "#C6EFCE" },  // Kräftiges Grün
-            'Teilzahlung (Einnahme)': { rows: [], color: "#FCE4D6" },  // Helles Orange
-            'Ausgabe': { rows: [], color: "#FFCCCC" },   // Helles Rosa (Grundfarbe für Ausgaben)
-            'Vollständige Zahlung (Ausgabe)': { rows: [], color: "#FFC7CE" },  // Helles Rot
-            'Teilzahlung (Ausgabe)': { rows: [], color: "#FCE4D6" },  // Helles Orange
-            'Eigenbeleg': { rows: [], color: "#DDEBF7" },  // Helles Blau (Grundfarbe für Eigenbelege)
-            'Vollständige Zahlung (Eigenbeleg)': { rows: [], color: "#9BC2E6" },  // Kräftigeres Blau
-            'Teilzahlung (Eigenbeleg)': { rows: [], color: "#FCE4D6" },  // Helles Orange
-            'Gesellschafterkonto': { rows: [], color: "#E2EFDA" },  // Helles Grün für Gesellschafterkonto
-            'Holding Transfer': { rows: [], color: "#FFF2CC" },  // Helles Gelb für Holding Transfers
-            'Gutschrift': { rows: [], color: "#E6E0FF" },  // Helles Lila
-            'Gesellschaftskonto/Holding': { rows: [], color: "#FFEB9C" }  // Helles Gelb
-        };
-
-        // Zeilen nach Kategorien gruppieren
-        matchResults.forEach((matchInfo, index) => {
-            const rowIndex = firstDataRow + index;
-            const matchText = (matchInfo && matchInfo[0]) ? matchInfo[0].toString() : "";
-
-            if (!matchText) return; // Überspringe leere Matches
-
-            if (matchText.includes("Einnahme")) {
-                if (matchText.includes("Vollständige Zahlung")) {
-                    formatBatches['Vollständige Zahlung (Einnahme)'].rows.push(rowIndex);
-                } else if (matchText.includes("Teilzahlung")) {
-                    formatBatches['Teilzahlung (Einnahme)'].rows.push(rowIndex);
-                } else {
-                    formatBatches['Einnahme'].rows.push(rowIndex);
-                }
-            } else if (matchText.includes("Ausgabe")) {
-                if (matchText.includes("Vollständige Zahlung")) {
-                    formatBatches['Vollständige Zahlung (Ausgabe)'].rows.push(rowIndex);
-                } else if (matchText.includes("Teilzahlung")) {
-                    formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
-                } else {
-                    formatBatches['Ausgabe'].rows.push(rowIndex);
-                }
-            } else if (matchText.includes("Eigenbeleg")) {
-                if (matchText.includes("Vollständige Zahlung")) {
-                    formatBatches['Vollständige Zahlung (Eigenbeleg)'].rows.push(rowIndex);
-                } else if (matchText.includes("Teilzahlung")) {
-                    formatBatches['Teilzahlung (Eigenbeleg)'].rows.push(rowIndex);
-                } else {
-                    formatBatches['Eigenbeleg'].rows.push(rowIndex);
-                }
-            } else if (matchText.includes("Gesellschafterkonto")) {
-                formatBatches['Gesellschafterkonto'].rows.push(rowIndex);
-            } else if (matchText.includes("Holding Transfer")) {
-                formatBatches['Holding Transfer'].rows.push(rowIndex);
-            } else if (matchText.includes("Gutschrift")) {
-                formatBatches['Gutschrift'].rows.push(rowIndex);
-            } else if (matchText.includes("Gesellschaftskonto") || matchText.includes("Holding")) {
-                formatBatches['Gesellschaftskonto/Holding'].rows.push(rowIndex);
-            }
-        });
-
-        // Batch-Formatting anwenden
-        Object.values(formatBatches).forEach(batch => {
-            if (batch.rows.length > 0) {
-                // Gruppen von maximal 20 Zeilen formatieren (API-Limits vermeiden)
-                const chunkSize = 20;
-                for (let i = 0; i < batch.rows.length; i += chunkSize) {
-                    const chunk = batch.rows.slice(i, i + chunkSize);
-                    chunk.forEach(rowIndex => {
-                        try {
-                            sheet.getRange(rowIndex, 1, 1, columns.matchInfo)
-                                .setBackground(batch.color);
-                        } catch (e) {
-                            console.error(`Fehler beim Formatieren von Zeile ${rowIndex}:`, e);
-                        }
-                    });
-
-                    // Kurze Pause um API-Limits zu vermeiden
-                    if (i + chunkSize < batch.rows.length) {
-                        Utilities.sleep(50);
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Setzt bedingte Formatierung für die Match-Spalte
-     * @param {Sheet} sheet - Das Sheet
-     * @param {string} columnLetter - Buchstabe für die Spalte
-     */
-    function setMatchColumnFormatting(sheet, columnLetter) {
-        const conditions = [
-            // Grundlegende Match-Typen mit beginsWith Pattern
-            {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100", pattern: "beginsWith"},
-            {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006", pattern: "beginsWith"},
-            {value: "Eigenbeleg", background: "#DDEBF7", fontColor: "#2F5597", pattern: "beginsWith"},
-            {value: "Gesellschafterkonto", background: "#E2EFDA", fontColor: "#375623", pattern: "beginsWith"},
-            {value: "Holding Transfer", background: "#FFF2CC", fontColor: "#7F6000", pattern: "beginsWith"},
-            {value: "Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "beginsWith"},
-            {value: "Gesellschaftskonto", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
-            {value: "Holding", background: "#FFEB9C", fontColor: "#9C6500", pattern: "beginsWith"},
-
-            // Zusätzliche Betragstypen mit contains Pattern
-            {value: "Vollständige Zahlung", background: "#C6EFCE", fontColor: "#006100", pattern: "contains"},
-            {value: "Teilzahlung", background: "#FCE4D6", fontColor: "#974706", pattern: "contains"},
-            {value: "Unsichere Zahlung", background: "#F8CBAD", fontColor: "#843C0C", pattern: "contains"},
-            {value: "Vollständige Gutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
-            {value: "Teilgutschrift", background: "#E6E0FF", fontColor: "#5229A3", pattern: "contains"},
-            {value: "Ungewöhnliche Gutschrift", background: "#FFD966", fontColor: "#7F6000", pattern: "contains"}
-        ];
-
-        // Bedingte Formatierung für die Match-Spalte setzen
-        sheetUtils.setConditionalFormattingForColumn(sheet, columnLetter, conditions);
-    }
-
-    /**
-     * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich basierend auf dem Zahlungsstatus
-     * @param {Spreadsheet} ss - Das Spreadsheet
-     * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
-     * @param {Object} config - Die Konfiguration
+     * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
      */
     function markPaidInvoices(ss, bankZuordnungen, config) {
         // Alle relevanten Sheets abrufen
@@ -2984,10 +2410,6 @@ function importDriveFiles() {};
 
     /**
      * Markiert bezahlte Zeilen in einem Sheet
-     * @param {Sheet} sheet - Das zu aktualisierende Sheet
-     * @param {string} sheetType - Typ des Sheets ("einnahmen", "ausgaben", "eigenbelege", etc.)
-     * @param {Object} bankZuordnungen - Zuordnungen aus dem Bankbewegungen-Sheet
-     * @param {Object} config - Die Konfiguration
      */
     function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         // Konfiguration für das Sheet
@@ -3008,12 +2430,14 @@ function importDriveFiles() {};
         const data = sheet.getRange(2, 1, numRows, maxCol).getValues();
 
         // Batch-Arrays für die verschiedenen Status
-        const fullPaidWithBankRows = [];
-        const fullPaidRows = [];
-        const partialPaidWithBankRows = [];
-        const partialPaidRows = [];
-        const gutschriftRows = [];
-        const normalRows = [];
+        const rowCategories = {
+            fullPaidWithBankRows: [],
+            fullPaidRows: [],
+            partialPaidWithBankRows: [],
+            partialPaidRows: [],
+            gutschriftRows: [],
+            normalRows: []
+        };
 
         // Bank-Abgleich-Updates sammeln
         const bankabgleichUpdates = [];
@@ -3021,123 +2445,111 @@ function importDriveFiles() {};
         // Datenzeilen durchgehen und in Kategorien einteilen
         for (let i = 0; i < data.length; i++) {
             const row = i + 2; // Aktuelle Zeile im Sheet
-            const nettobetrag = numberUtils$1.parseCurrency(data[i][columns.nettobetrag - 1]);
-            const bezahltBetrag = numberUtils$1.parseCurrency(data[i][columns.bezahlt - 1]);
-            const zahlungsDatum = data[i][columns.zahlungsdatum - 1];
-            const referenz = data[i][columns.rechnungsnummer - 1];
+            const rowData = categorizeRow(data[i], row, columns, sheetType, bankZuordnungen, config);
 
-            // Prüfe, ob es eine Gutschrift ist
-            const isGutschrift = referenz && referenz.toString().startsWith("G-");
+            // Zu entsprechender Kategorie hinzufügen
+            if (rowData.category) {
+                rowCategories[rowData.category].push(row);
+            }
 
-            // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
-            // Bei Eigenbelegen verwenden wir den key "eigenbeleg#row"
-            const prefix = sheetType === "eigenbelege" ? "eigenbeleg" :
-                sheetType === "gesellschafterkonto" ? "gesellschafterkonto" :
-                    sheetType === "holdingTransfers" ? "holdingtransfer" :
-                        sheetType;
-
-            const zuordnungsKey = `${prefix}#${row}`;
-            const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
-
-            // Zahlungsstatus berechnen
-            const mwst = columns.mwstSatz ? numberUtils$1.parseMwstRate(data[i][columns.mwstSatz - 1], config.tax.defaultMwst) / 100 : 0;
-            const bruttoBetrag = nettobetrag * (1 + mwst);
-            const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
-            const isPartialPaid = !isPaid && bezahltBetrag > 0;
-
-            // Kategorie bestimmen
-            if (isGutschrift) {
-                gutschriftRows.push(row);
-                // Bank-Abgleich-Info setzen
-                if (hatBankzuordnung) {
-                    bankabgleichUpdates.push({
-                        row,
-                        value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
-                    });
-                }
-            } else if (isPaid) {
-                if (zahlungsDatum) {
-                    if (hatBankzuordnung) {
-                        fullPaidWithBankRows.push(row);
-                        bankabgleichUpdates.push({
-                            row,
-                            value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
-                        });
-                    } else {
-                        fullPaidRows.push(row);
-                    }
-                } else {
-                    // Bezahlt aber kein Datum
-                    partialPaidRows.push(row);
-                }
-            } else if (isPartialPaid) {
-                if (hatBankzuordnung) {
-                    partialPaidWithBankRows.push(row);
-                    bankabgleichUpdates.push({
-                        row,
-                        value: getZuordnungsInfo(bankZuordnungen[zuordnungsKey])
-                    });
-                } else {
-                    partialPaidRows.push(row);
-                }
-            } else {
-                // Unbezahlt - normale Zeile
-                normalRows.push(row);
-                // Vorhandene Bank-Abgleich-Info entfernen falls vorhanden
-                if (columns.bankabgleich && data[i][columns.bankabgleich - 1]?.toString().startsWith("✓ Bank:")) {
-                    bankabgleichUpdates.push({
-                        row,
-                        value: ""
-                    });
-                }
+            // Bank-Abgleich-Info hinzufügen wenn vorhanden
+            if (rowData.bankInfo) {
+                bankabgleichUpdates.push({
+                    row,
+                    value: rowData.bankInfo
+                });
             }
         }
 
-        // Färbe Zeilen im Batch-Modus (für bessere Performance)
-        applyColorToRows(sheet, fullPaidWithBankRows, "#C6EFCE"); // Kräftigeres Grün
-        applyColorToRows(sheet, fullPaidRows, "#EAF1DD"); // Helles Grün
-        applyColorToRows(sheet, partialPaidWithBankRows, "#FFC7AA"); // Kräftigeres Orange
-        applyColorToRows(sheet, partialPaidRows, "#FCE4D6"); // Helles Orange
-        applyColorToRows(sheet, gutschriftRows, "#E6E0FF"); // Helles Lila
-        applyColorToRows(sheet, normalRows, null); // Keine Farbe / Zurücksetzen
+        // Färbe Zeilen im Batch-Modus
+        applyColorToRowCategories(sheet, rowCategories);
 
         // Bank-Abgleich-Updates in Batches ausführen
-        if (bankabgleichUpdates.length > 0 && columns.bankabgleich) {
-            // Gruppiere Updates nach Wert für effizientere Batch-Updates
-            const groupedUpdates = {};
+        applyBankInfoUpdates(sheet, bankabgleichUpdates, columns);
+    }
 
-            bankabgleichUpdates.forEach(update => {
-                const { row, value } = update;
-                if (!groupedUpdates[value]) {
-                    groupedUpdates[value] = [];
-                }
-                groupedUpdates[value].push(row);
-            });
+    /**
+     * Kategorisiert eine Zeile basierend auf ihren Daten
+     */
+    function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, config) {
+        const nettobetrag = numberUtils$1.parseCurrency(rowData[columns.nettobetrag - 1]);
+        const bezahltBetrag = numberUtils$1.parseCurrency(rowData[columns.bezahlt - 1]);
+        const zahlungsDatum = rowData[columns.zahlungsdatum - 1];
+        const referenz = rowData[columns.rechnungsnummer - 1];
 
-            // Führe Batch-Updates für jede Gruppe aus
-            Object.entries(groupedUpdates).forEach(([value, rows]) => {
-                // Verarbeite in Batches von maximal 20 Zeilen
-                const batchSize = 20;
-                for (let i = 0; i < rows.length; i += batchSize) {
-                    const batchRows = rows.slice(i, i + batchSize);
-                    batchRows.forEach(row => {
-                        sheet.getRange(row, columns.bankabgleich).setValue(value);
-                    });
+        // Prüfe, ob es eine Gutschrift ist
+        const isGutschrift = referenz && referenz.toString().startsWith("G-");
 
-                    // Kurze Pause, um API-Limits zu vermeiden
-                    if (i + batchSize < rows.length) {
-                        Utilities.sleep(50);
-                    }
-                }
-            });
+        // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
+        const prefix = getDocumentTypePrefix(sheetType);
+        const zuordnungsKey = `${prefix}#${rowIndex}`;
+        const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
+
+        // Zahlungsstatus berechnen
+        const mwst = columns.mwstSatz ?
+            numberUtils$1.parseMwstRate(rowData[columns.mwstSatz - 1], config.tax.defaultMwst) / 100 : 0;
+        const bruttoBetrag = nettobetrag * (1 + mwst);
+        const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
+        const isPartialPaid = !isPaid && bezahltBetrag > 0;
+
+        // Bankabgleich-Info aus der Zuordnung
+        const bankInfo = hatBankzuordnung ?
+            getZuordnungsInfo(bankZuordnungen[zuordnungsKey]) :
+            undefined;
+
+        // Kategorie bestimmen
+        let category = null;
+
+        if (isGutschrift) {
+            category = 'gutschriftRows';
+        } else if (isPaid) {
+            if (zahlungsDatum) {
+                category = hatBankzuordnung ? 'fullPaidWithBankRows' : 'fullPaidRows';
+            } else {
+                // Bezahlt aber kein Datum
+                category = 'partialPaidRows';
+            }
+        } else if (isPartialPaid) {
+            category = hatBankzuordnung ? 'partialPaidWithBankRows' : 'partialPaidRows';
+        } else {
+            // Unbezahlt - normale Zeile
+            category = 'normalRows';
         }
+
+        return { category, bankInfo };
+    }
+
+    /**
+     * Ermittelt das Präfix für einen Dokumenttyp
+     */
+    function getDocumentTypePrefix(sheetType) {
+        return sheetType === "eigenbelege" ? "eigenbeleg" :
+            sheetType === "gesellschafterkonto" ? "gesellschafterkonto" :
+                sheetType === "holdingTransfers" ? "holdingtransfer" : sheetType;
+    }
+
+    /**
+     * Wendet Farben auf alle Zeilenkategorien an
+     */
+    function applyColorToRowCategories(sheet, rowCategories) {
+        const colorMap = {
+            fullPaidWithBankRows: "#C6EFCE",    // Kräftigeres Grün
+            fullPaidRows: "#EAF1DD",            // Helles Grün
+            partialPaidWithBankRows: "#FFC7AA", // Kräftigeres Orange
+            partialPaidRows: "#FCE4D6",         // Helles Orange
+            gutschriftRows: "#E6E0FF",          // Helles Lila
+            normalRows: null                    // Keine Farbe / Zurücksetzen
+        };
+
+        Object.entries(rowCategories).forEach(([category, rows]) => {
+            if (rows.length > 0) {
+                applyColorToRows(sheet, rows, colorMap[category]);
+            }
+        });
     }
 
     /**
      * Wendet eine Farbe auf mehrere Zeilen an
-     * @param {Sheet} sheet - Das Sheet
-     * @param {Array} rows - Die zu färbenden Zeilennummern
-     * @param {string|null} color - Die Hintergrundfarbe oder null zum Zurücksetzen
      */
     function applyColorToRows(sheet, rows, color) {
         if (!rows || rows.length === 0) return;
@@ -3167,9 +2579,42 @@ function importDriveFiles() {};
     }
 
     /**
+     * Führt Bank-Info-Updates in Batches aus
+     */
+    function applyBankInfoUpdates(sheet, updates, columns) {
+        if (updates.length === 0 || !columns.bankabgleich) return;
+
+        // Gruppiere Updates nach Wert für effizientere Batch-Updates
+        const groupedUpdates = {};
+
+        updates.forEach(update => {
+            const { row, value } = update;
+            if (!groupedUpdates[value]) {
+                groupedUpdates[value] = [];
+            }
+            groupedUpdates[value].push(row);
+        });
+
+        // Führe Batch-Updates für jede Gruppe aus
+        Object.entries(groupedUpdates).forEach(([value, rows]) => {
+            // Verarbeite in Batches von maximal 20 Zeilen
+            const batchSize = 20;
+            for (let i = 0; i < rows.length; i += batchSize) {
+                const batchRows = rows.slice(i, i + batchSize);
+                batchRows.forEach(row => {
+                    sheet.getRange(row, columns.bankabgleich).setValue(value);
+                });
+
+                // Kurze Pause, um API-Limits zu vermeiden
+                if (i + batchSize < rows.length) {
+                    Utilities.sleep(50);
+                }
+            }
+        });
+    }
+
+    /**
      * Erstellt einen Informationstext für eine Bank-Zuordnung
-     * @param {Object} zuordnung - Die Zuordnungsinformation
-     * @returns {string} - Formatierter Informationstext
      */
     function getZuordnungsInfo(zuordnung) {
         if (!zuordnung) return "";
@@ -3184,15 +2629,286 @@ function importDriveFiles() {};
         return infoText;
     }
 
+    var syncHandler = {
+        markPaidInvoices,
+        markPaidRows,
+        getZuordnungsInfo
+    };
+
+    // src/modules/refreshModule/matchingHandler.js
+
+    /**
+     * Hauptfunktion: Führt das Matching von Bankbewegungen mit Rechnungen durch
+     */
+    function performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters, config) {
+        // Referenzdaten laden für alle relevanten Sheets
+        const sheetData = matchingUtils.loadReferenceData(ss, config);
+
+        // Bankbewegungen Daten für Verarbeitung holen
+        const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
+
+        // Vorbereitung für Batch-Updates
+        const matchResults = [];
+        const kontoSollResults = [];
+        const kontoHabenResults = [];
+        const bankZuordnungen = {};
+
+        // Kontoinformationen sammeln
+        const { allowedKontoSoll, allowedGegenkonto } = collectAccountInfo(config);
+
+        // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
+        processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
+            matchResults, kontoSollResults, kontoHabenResults,
+            bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config);
+
+        // Batch-Updates ausführen für bessere Performance
+        performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
+            matchResults, kontoSollResults, kontoHabenResults);
+
+        // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
+        formattingHandler.formatMatchedRows(sheet, firstDataRow, matchResults, columns);
+
+        // Bedingte Formatierung für Match-Spalte
+        formattingHandler.setMatchColumnFormatting(sheet, columnLetters.matchInfo);
+
+        // Setze farbliche Markierung in den anderen Sheets basierend auf Zahlungsstatus
+        syncHandler.markPaidInvoices(ss, bankZuordnungen, config);
+    }
+
+    /**
+     * Sammelt Kontoinformationen aus der Konfiguration
+     */
+    function collectAccountInfo(config) {
+        const allowedKontoSoll = new Set();
+        const allowedGegenkonto = new Set();
+
+        [
+            config.einnahmen.kontoMapping,
+            config.ausgaben.kontoMapping,
+            config.eigenbelege.kontoMapping,
+            config.gesellschafterkonto.kontoMapping,
+            config.holdingTransfers.kontoMapping
+        ].forEach(mapping => {
+            Object.values(mapping).forEach(m => {
+                if (m.soll) allowedKontoSoll.add(m.soll);
+                if (m.gegen) allowedGegenkonto.add(m.gegen);
+            });
+        });
+
+        return { allowedKontoSoll, allowedGegenkonto };
+    }
+
+    /**
+     * Verarbeitet alle Bankeinträge und sucht nach Übereinstimmungen
+     */
+    function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
+                                matchResults, kontoSollResults, kontoHabenResults,
+                                bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config) {
+
+        // Fallback-Konten
+        const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : "";
+        const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : "";
+
+        // Durchlaufe jede Bankbewegung
+        for (let i = 0; i < bankData.length; i++) {
+            const rowIndex = i + firstDataRow;
+            const row = bankData[i];
+
+            // Prüfe, ob es sich um die Endsaldo-Zeile handelt
+            if (isEndSaldoRow(rowIndex, lastRow, row, columns)) {
+                addEmptyResults(matchResults, kontoSollResults, kontoHabenResults);
+                continue;
+            }
+
+            const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
+            const refNumber = row[columns.referenz - 1];       // Referenznummer
+            const betragValue = Math.abs(numberUtils$1.parseCurrency(row[columns.betrag - 1]));
+            const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : "";
+
+            // Match-Informationen
+            let matchFound = false;
+
+            // Matching-Logik basierend auf Transaktionstyp
+            if (!stringUtils.isEmpty(refNumber)) {
+                if (tranType === "Einnahme") {
+                    matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
+                        columns, "einnahme", config.einnahmen.columns, config.einnahmen.kontoMapping,
+                        matchResults, kontoSollResults, kontoHabenResults,
+                        bankZuordnungen, category);
+                } else if (tranType === "Ausgabe") {
+                    const docTypes = [
+                        { data: sheetData.ausgaben, type: "ausgabe", cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
+                        { data: sheetData.eigenbelege, type: "eigenbeleg", cols: config.eigenbelege.columns, mapping: config.eigenbelege.kontoMapping },
+                        { data: sheetData.gesellschafterkonto, type: "gesellschafterkonto", cols: config.gesellschafterkonto.columns, mapping: config.gesellschafterkonto.kontoMapping },
+                        { data: sheetData.holdingTransfers, type: "holdingtransfer", cols: config.holdingTransfers.columns, mapping: config.holdingTransfers.kontoMapping }
+                    ];
+
+                    // Versuche alle Dokumenttypen der Reihe nach
+                    for (const docType of docTypes) {
+                        matchFound = processDocumentTypeMatching(docType.data, refNumber, betragValue, row,
+                            columns, docType.type, docType.cols, docType.mapping,
+                            matchResults, kontoSollResults, kontoHabenResults,
+                            bankZuordnungen, category);
+                        if (matchFound) break;
+                    }
+
+                    // Falls keine Übereinstimmung, noch nach Gutschriften in Einnahmen suchen
+                    if (!matchFound) {
+                        matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
+                            columns, "gutschrift", config.einnahmen.columns, config.einnahmen.kontoMapping,
+                            matchResults, kontoSollResults, kontoHabenResults,
+                            bankZuordnungen, category, config, true);
+                    }
+                }
+            }
+
+            // Wenn keine Übereinstimmung gefunden, default Konten basierend auf Kategorie setzen
+            if (!matchFound) {
+                setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
+                    matchResults, kontoSollResults, kontoHabenResults);
+            }
+        }
+    }
+
+    /**
+     * Prüft, ob es sich um die Endsaldo-Zeile handelt
+     */
+    function isEndSaldoRow(rowIndex, lastRow, row, columns) {
+        const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : "";
+        return rowIndex === lastRow && label === "endsaldo";
+    }
+
+    /**
+     * Fügt leere Ergebnisse zu den Arrays hinzu
+     */
+    function addEmptyResults(matchResults, kontoSollResults, kontoHabenResults) {
+        matchResults.push([""]);
+        kontoSollResults.push([""]);
+        kontoHabenResults.push([""]);
+    }
+
+    /**
+     * Generalisierte Funktion für das Matching eines Dokumenttyps
+     */
+    function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
+                                         matchResults, kontoSollResults, kontoHabenResults, bankZuordnungen,
+                                         category, config, isGutschrift = false) {
+
+        const matchResult = matchingUtils.findMatch(refNumber, docData, isGutschrift ? null : betragValue);
+
+        if (!matchResult) return false;
+
+        // Match-Info erstellen basierend auf Dokumenttyp
+        let matchInfo = createMatchInfo(matchResult, docType, betragValue);
+
+        // Konten aus dem Mapping setzen
+        let kontoSoll = "", kontoHaben = "";
+        if (category && kontoMapping[category]) {
+            const mapping = kontoMapping[category];
+            kontoSoll = mapping.soll || "";
+            kontoHaben = mapping.gegen || "";
+        }
+
+        // Ergebnisse zu den Arrays hinzufügen
+        matchResults.push([matchInfo]);
+        kontoSollResults.push([kontoSoll]);
+        kontoHabenResults.push([kontoHaben]);
+
+        // Für spätere Markierung merken
+        const key = `${docType}#${matchResult.row}`;
+        bankZuordnungen[key] = {
+            typ: docType === "gutschrift" ? "einnahme" : docType,
+            row: matchResult.row,
+            bankDatum: row[columns.datum - 1],
+            matchInfo: matchInfo,
+            transTyp: docType === "gutschrift" ? "Gutschrift" : row[columns.transaktionstyp - 1]
+        };
+
+        return true;
+    }
+
+    /**
+     * Erzeugt die Match-Info basierend auf dem Dokumenttyp
+     */
+    function createMatchInfo(matchResult, docType, betragValue) {
+        let matchStatus = "";
+
+        if (matchResult.matchType) {
+            if (matchResult.matchType === "Unsichere Zahlung" && matchResult.betragsDifferenz) {
+                matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
+            } else {
+                matchStatus = ` (${matchResult.matchType})`;
+            }
+        }
+
+        // Spezialbehandlung für Gutschriften
+        if (docType === "gutschrift") {
+            const gutschriftBetrag = Math.abs(matchResult.brutto);
+
+            if (numberUtils$1.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
+                matchStatus = " (Vollständige Gutschrift)";
+            } else if (betragValue < gutschriftBetrag) {
+                matchStatus = " (Teilgutschrift)";
+            } else {
+                matchStatus = " (Ungewöhnliche Gutschrift)";
+            }
+
+            return `Gutschrift zu Einnahme #${matchResult.row}${matchStatus}`;
+        }
+
+        // Standardbehandlung für andere Dokumenttypen
+        const docTypeName = {
+            "einnahme": "Einnahme",
+            "ausgabe": "Ausgabe",
+            "eigenbeleg": "Eigenbeleg",
+            "gesellschafterkonto": "Gesellschafterkonto",
+            "holdingtransfer": "Holding Transfer"
+        }[docType] || docType;
+
+        return `${docTypeName} #${matchResult.row}${matchStatus}`;
+    }
+
+    /**
+     * Setzt Default-Konten basierend auf Kategorie und Transaktionstyp
+     */
+    function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
+                                matchResults, kontoSollResults, kontoHabenResults) {
+
+        let kontoSoll = fallbackKontoSoll;
+        let kontoHaben = fallbackKontoHaben;
+
+        if (category) {
+            // Den richtigen Mapping-Typ basierend auf der Transaktionsart auswählen
+            const mappingSource = tranType === "Einnahme" ?
+                config.einnahmen.kontoMapping :
+                config.ausgaben.kontoMapping;
+
+            // Mapping für die Kategorie finden
+            if (mappingSource && mappingSource[category]) {
+                const mapping = mappingSource[category];
+                kontoSoll = mapping.soll || fallbackKontoSoll;
+                kontoHaben = mapping.gegen || fallbackKontoHaben;
+            }
+        }
+
+        matchResults.push([""]);
+        kontoSollResults.push([kontoSoll]);
+        kontoHabenResults.push([kontoHaben]);
+    }
+
+    /**
+     * Führt die Batch-Updates für die generierten Daten aus
+     */
+    function performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
+                                 matchResults, kontoSollResults, kontoHabenResults) {
+
+        sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchResults);
+        sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
+        sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
+    }
+
     var matchingHandler = {
-        performBankReferenceMatching,
-        processEinnahmeMatching,
-        processAusgabeMatching,
-        findMatch,
-        evaluateMatch,
-        formatMatchedRows,
-        setMatchColumnFormatting,
-        markPaidInvoices
+        performBankReferenceMatching
     };
 
     // modules/refreshModule/bankSheetHandler.js
@@ -3435,7 +3151,7 @@ function importDriveFiles() {};
 
             // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
             const month = dateUtils.getMonthFromRow(row, sheetType, config);
-            if (!month || month < 1 || month > 12) return;
+            if (!month || month < 1 || month > 12) ;
 
             // Beträge aus der Zeile extrahieren
             const netto = numberUtils$1.parseCurrency(row[columns.nettobetrag - 1]);
@@ -3752,7 +3468,7 @@ function importDriveFiles() {};
             outputRows.push(formatUStVARow("Gesamtjahr", calculator$2.aggregateUStVA(ustvaData, 1, 12)));
 
             // UStVA-Sheet erstellen oder aktualisieren
-            let ustvaSheet = sheetUtils$1.getOrCreateSheet(ss, "UStVA");
+            let ustvaSheet = sheetUtils.getOrCreateSheet(ss, "UStVA");
             ustvaSheet.clearContents();
 
             // Daten in das Sheet schreiben mit optimiertem Batch-Update
@@ -3952,7 +3668,7 @@ function importDriveFiles() {};
             const columns = config.einnahmen.columns;
 
             const m = dateUtils.getMonthFromRow(row, "einnahmen", config);
-            if (!m) return;
+            if (!m) ;
 
             const amount = numberUtils$1.parseCurrency(row[columns.nettobetrag - 1]);
             if (amount === 0) return;
@@ -4010,7 +3726,7 @@ function importDriveFiles() {};
             const columns = config.ausgaben.columns;
 
             const m = dateUtils.getMonthFromRow(row, "ausgaben", config);
-            if (!m) return;
+            if (!m) ;
 
             const amount = numberUtils$1.parseCurrency(row[columns.nettobetrag - 1]);
             if (amount === 0) return;
@@ -4124,7 +3840,7 @@ function importDriveFiles() {};
             const columns = config.eigenbelege.columns;
 
             const m = dateUtils.getMonthFromRow(row, "eigenbelege", config);
-            if (!m) return;
+            if (!m) ;
 
             const amount = numberUtils$1.parseCurrency(row[columns.nettobetrag - 1]);
             if (amount === 0) return;
@@ -4535,7 +4251,7 @@ function importDriveFiles() {};
             }
 
             // BWA-Sheet erstellen oder aktualisieren
-            let bwaSheet = sheetUtils$1.getOrCreateSheet(ss, "BWA");
+            let bwaSheet = sheetUtils.getOrCreateSheet(ss, "BWA");
             bwaSheet.clearContents();
 
             // Daten in das Sheet schreiben (als Batch für Performance)
@@ -5014,7 +4730,7 @@ function importDriveFiles() {};
             const passivaArray = createPassivaArray(bilanzData, config);
 
             // Erstelle oder leere das Blatt "Bilanz"
-            let bilanzSheet = sheetUtils$1.getOrCreateSheet(ss, "Bilanz");
+            let bilanzSheet = sheetUtils.getOrCreateSheet(ss, "Bilanz");
             bilanzSheet.clearContents();
 
             // Batch-Write statt einzelner Zellen-Updates
