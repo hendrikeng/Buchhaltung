@@ -1,4 +1,4 @@
-// modules/validatorModule/cellValidator.js
+// src/modules/validatorModule/cellValidator.js
 import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 import dateUtils from '../../utils/dateUtils.js';
@@ -17,14 +17,15 @@ function validateDropdown(sheet, row, col, numRows, numCols, list) {
     if (!sheet || !list || !list.length) return null;
 
     try {
+        console.log(`Validating dropdown for range [${row}:${col}] with ${list.length} items`);
         return sheet.getRange(row, col, numRows, numCols).setDataValidation(
             SpreadsheetApp.newDataValidation()
                 .requireValueInList(list, true)
                 .setAllowInvalid(false)
-                .build()
+                .build(),
         );
     } catch (e) {
-        console.error("Fehler beim Erstellen der Dropdown-Validierung:", e);
+        console.error('Fehler beim Erstellen der Dropdown-Validierung:', e);
         return null;
     }
 }
@@ -38,48 +39,48 @@ function validateDropdown(sheet, row, col, numRows, numCols, list) {
  */
 function validateCellValue(value, type, config) {
     switch (type.toLowerCase()) {
-        case 'date':
-            const date = dateUtils.parseDate(value);
-            return {
-                isValid: !!date,
-                message: date ? "" : "Ungültiges Datumsformat. Bitte verwenden Sie DD.MM.YYYY."
-            };
+    case 'date':
+        const date = dateUtils.parseDate(value);
+        return {
+            isValid: !!date,
+            message: date ? '' : 'Ungültiges Datumsformat. Bitte verwenden Sie DD.MM.YYYY.',
+        };
 
-        case 'number':
-            const num = parseFloat(value);
-            return {
-                isValid: !isNaN(num),
-                message: !isNaN(num) ? "" : "Ungültige Zahl."
-            };
+    case 'number':
+        const num = parseFloat(value);
+        return {
+            isValid: !isNaN(num),
+            message: !isNaN(num) ? '' : 'Ungültige Zahl.',
+        };
 
-        case 'currency':
-            const amount = numberUtils.parseCurrency(value);
-            return {
-                isValid: !isNaN(amount),
-                message: !isNaN(amount) ? "" : "Ungültiger Geldbetrag."
-            };
+    case 'currency':
+        const amount = numberUtils.parseCurrency(value);
+        return {
+            isValid: !isNaN(amount),
+            message: !isNaN(amount) ? '' : 'Ungültiger Geldbetrag.',
+        };
 
-        case 'mwst':
-            const mwst = numberUtils.parseMwstRate(value, config.tax.defaultMwst);
-            const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
-            return {
-                isValid: allowedRates.includes(Math.round(mwst)),
-                message: allowedRates.includes(Math.round(mwst))
-                    ? ""
-                    : `Ungültiger MwSt-Satz. Erlaubt sind: ${allowedRates.join('%, ')}%.`
-            };
+    case 'mwst':
+        const mwst = numberUtils.parseMwstRate(value, config.tax.defaultMwst);
+        const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
+        return {
+            isValid: allowedRates.includes(Math.round(mwst)),
+            message: allowedRates.includes(Math.round(mwst))
+                ? ''
+                : `Ungültiger MwSt-Satz. Erlaubt sind: ${allowedRates.join('%, ')}%.`,
+        };
 
-        case 'text':
-            return {
-                isValid: !stringUtils.isEmpty(value),
-                message: !stringUtils.isEmpty(value) ? "" : "Text darf nicht leer sein."
-            };
+    case 'text':
+        return {
+            isValid: !stringUtils.isEmpty(value),
+            message: !stringUtils.isEmpty(value) ? '' : 'Text darf nicht leer sein.',
+        };
 
-        default:
-            return {
-                isValid: true,
-                message: ""
-            };
+    default:
+        return {
+            isValid: true,
+            message: '',
+        };
     }
 }
 
@@ -95,12 +96,12 @@ function validateSheetWithRules(sheet, validationRules, config) {
         isValid: true,
         errors: [],
         errorsByRow: {},
-        errorsByColumn: {}
+        errorsByColumn: {},
     };
 
     if (!sheet) {
         results.isValid = false;
-        results.errors.push("Sheet nicht gefunden");
+        results.errors.push('Sheet nicht gefunden');
         return results;
     }
 
@@ -124,7 +125,7 @@ function validateSheetWithRules(sheet, validationRules, config) {
                 const error = {
                     row: rowIdx + 1,
                     column: colIdx + 1,
-                    message: "Pflichtfeld nicht ausgefüllt"
+                    message: 'Pflichtfeld nicht ausgefüllt',
                 };
                 addError(results, error);
                 return;
@@ -137,7 +138,7 @@ function validateSheetWithRules(sheet, validationRules, config) {
                     const error = {
                         row: rowIdx + 1,
                         column: colIdx + 1,
-                        message: validation.message
+                        message: validation.message,
                     };
                     addError(results, error);
                 }
@@ -173,5 +174,5 @@ function addError(results, error) {
 export default {
     validateDropdown,
     validateCellValue,
-    validateSheetWithRules
+    validateSheetWithRules,
 };

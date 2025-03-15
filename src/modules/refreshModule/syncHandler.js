@@ -1,7 +1,6 @@
-// modules/refreshModule/syncHandler.js
-
-import numberUtils from '../../utils/numberUtils.js';
+// src/modules/refreshModule/syncHandler.js
 import stringUtils from '../../utils/stringUtils.js';
+import numberUtils from '../../utils/numberUtils.js';
 
 /**
  * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
@@ -9,11 +8,11 @@ import stringUtils from '../../utils/stringUtils.js';
 function markPaidInvoices(ss, bankZuordnungen, config) {
     // Alle relevanten Sheets abrufen
     const sheets = {
-        einnahmen: ss.getSheetByName("Einnahmen"),
-        ausgaben: ss.getSheetByName("Ausgaben"),
-        eigenbelege: ss.getSheetByName("Eigenbelege"),
-        gesellschafterkonto: ss.getSheetByName("Gesellschafterkonto"),
-        holdingTransfers: ss.getSheetByName("Holding Transfers")
+        einnahmen: ss.getSheetByName('Einnahmen'),
+        ausgaben: ss.getSheetByName('Ausgaben'),
+        eigenbelege: ss.getSheetByName('Eigenbelege'),
+        gesellschafterkonto: ss.getSheetByName('Gesellschafterkonto'),
+        holdingTransfers: ss.getSheetByName('Holding Transfers'),
     };
 
     // Für jedes Sheet Zahlungsdaten aktualisieren
@@ -38,7 +37,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     // Bestimme die maximale Anzahl an Spalten, die benötigt werden
     const maxCol = Math.max(
         columns.zahlungsdatum || 0,
-        columns.bankabgleich || 0
+        columns.bankabgleich || 0,
     );
 
     if (maxCol === 0) return; // Keine relevanten Spalten verfügbar
@@ -52,7 +51,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         partialPaidWithBankRows: [],
         partialPaidRows: [],
         gutschriftRows: [],
-        normalRows: []
+        normalRows: [],
     };
 
     // Bank-Abgleich-Updates sammeln
@@ -72,7 +71,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         if (rowData.bankInfo) {
             bankabgleichUpdates.push({
                 row,
-                value: rowData.bankInfo
+                value: rowData.bankInfo,
             });
         }
     }
@@ -94,7 +93,7 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     const referenz = rowData[columns.rechnungsnummer - 1];
 
     // Prüfe, ob es eine Gutschrift ist
-    const isGutschrift = referenz && referenz.toString().startsWith("G-");
+    const isGutschrift = referenz && referenz.toString().startsWith('G-');
 
     // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
     const prefix = getDocumentTypePrefix(sheetType);
@@ -139,9 +138,9 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
  * Ermittelt das Präfix für einen Dokumenttyp
  */
 function getDocumentTypePrefix(sheetType) {
-    return sheetType === "eigenbelege" ? "eigenbeleg" :
-        sheetType === "gesellschafterkonto" ? "gesellschafterkonto" :
-            sheetType === "holdingTransfers" ? "holdingtransfer" : sheetType;
+    return sheetType === 'eigenbelege' ? 'eigenbeleg' :
+        sheetType === 'gesellschafterkonto' ? 'gesellschafterkonto' :
+            sheetType === 'holdingTransfers' ? 'holdingtransfer' : sheetType;
 }
 
 /**
@@ -149,12 +148,12 @@ function getDocumentTypePrefix(sheetType) {
  */
 function applyColorToRowCategories(sheet, rowCategories) {
     const colorMap = {
-        fullPaidWithBankRows: "#C6EFCE",    // Kräftigeres Grün
-        fullPaidRows: "#EAF1DD",            // Helles Grün
-        partialPaidWithBankRows: "#FFC7AA", // Kräftigeres Orange
-        partialPaidRows: "#FCE4D6",         // Helles Orange
-        gutschriftRows: "#E6E0FF",          // Helles Lila
-        normalRows: null                    // Keine Farbe / Zurücksetzen
+        fullPaidWithBankRows: '#C6EFCE',    // Kräftigeres Grün
+        fullPaidRows: '#EAF1DD',            // Helles Grün
+        partialPaidWithBankRows: '#FFC7AA', // Kräftigeres Orange
+        partialPaidRows: '#FCE4D6',         // Helles Orange
+        gutschriftRows: '#E6E0FF',          // Helles Lila
+        normalRows: null,                    // Keine Farbe / Zurücksetzen
     };
 
     Object.entries(rowCategories).forEach(([category, rows]) => {
@@ -233,13 +232,13 @@ function applyBankInfoUpdates(sheet, updates, columns) {
  * Erstellt einen Informationstext für eine Bank-Zuordnung
  */
 function getZuordnungsInfo(zuordnung) {
-    if (!zuordnung) return "";
+    if (!zuordnung) return '';
 
-    let infoText = "✓ Bank: " + zuordnung.bankDatum;
+    let infoText = '✓ Bank: ' + zuordnung.bankDatum;
 
     // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
     if (zuordnung.additional && zuordnung.additional.length > 0) {
-        infoText += " + " + zuordnung.additional.length + " weitere";
+        infoText += ' + ' + zuordnung.additional.length + ' weitere';
     }
 
     return infoText;
@@ -248,5 +247,5 @@ function getZuordnungsInfo(zuordnung) {
 export default {
     markPaidInvoices,
     markPaidRows,
-    getZuordnungsInfo
+    getZuordnungsInfo,
 };

@@ -1,4 +1,4 @@
-// modules/refreshModule/index.js
+// src/modules/refreshModule/index.js
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
 import matchingHandler from './matchingHandler.js';
@@ -13,6 +13,7 @@ const RefreshModule = {
      * Cache zurücksetzen
      */
     clearCache() {
+        console.log('Clearing cache');
         globalCache.clear();
     },
 
@@ -27,27 +28,29 @@ const RefreshModule = {
             const name = sheet.getName();
             const ui = SpreadsheetApp.getUi();
 
+            console.log(`Refreshing active sheet: ${name}`);
+
             // Cache zurücksetzen
             this.clearCache();
 
-            if (["Einnahmen", "Ausgaben", "Eigenbelege"].includes(name)) {
+            if (['Einnahmen', 'Ausgaben', 'Eigenbelege'].includes(name)) {
                 dataSheetHandler.refreshDataSheet(sheet, name, config);
                 ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
-            } else if (name === "Bankbewegungen") {
+            } else if (name === 'Bankbewegungen') {
                 bankSheetHandler.refreshBankSheet(sheet, config);
                 ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
-            } else if (name === "Gesellschafterkonto") {
-                // Hier später Logik für Gesellschafterkonto ergänzen
+            } else if (name === 'Gesellschafterkonto') {
+                dataSheetHandler.refreshDataSheet(sheet, name, config);
                 ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
-            } else if (name === "Holding Transfers") {
-                // Hier später Logik für Holding Transfers ergänzen
+            } else if (name === 'Holding Transfers') {
+                dataSheetHandler.refreshDataSheet(sheet, name, config);
                 ui.alert(`Das Blatt "${name}" wurde aktualisiert.`);
             } else {
-                ui.alert("Für dieses Blatt gibt es keine Refresh-Funktion.");
+                ui.alert('Für dieses Blatt gibt es keine Refresh-Funktion.');
             }
         } catch (e) {
-            console.error("Fehler beim Aktualisieren des aktiven Sheets:", e);
-            SpreadsheetApp.getUi().alert("Ein Fehler ist beim Aktualisieren aufgetreten: " + e.toString());
+            console.error('Fehler beim Aktualisieren des aktiven Sheets:', e);
+            SpreadsheetApp.getUi().alert('Ein Fehler ist beim Aktualisieren aufgetreten: ' + e.toString());
         }
     },
 
@@ -58,23 +61,24 @@ const RefreshModule = {
     refreshAllSheets(config) {
         try {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
+            console.log('Refreshing all sheets');
 
             // Cache zurücksetzen
             this.clearCache();
 
             // Sheets in der richtigen Reihenfolge aktualisieren, um Abhängigkeiten zu berücksichtigen
-            const refreshOrder = ["Einnahmen", "Ausgaben", "Eigenbelege", "Gesellschafterkonto", "Holding Transfers", "Bankbewegungen"];
+            const refreshOrder = ['Einnahmen', 'Ausgaben', 'Eigenbelege', 'Gesellschafterkonto', 'Holding Transfers', 'Bankbewegungen'];
 
             for (const name of refreshOrder) {
                 const sheet = ss.getSheetByName(name);
-                if (!sheet) continue;
+                if (!sheet) {
+                    console.log(`Sheet ${name} not found, skipping`);
+                    continue;
+                }
 
-                if (name === "Bankbewegungen") {
+                console.log(`Processing sheet: ${name}`);
+                if (name === 'Bankbewegungen') {
                     bankSheetHandler.refreshBankSheet(sheet, config);
-                } else if (name === "Gesellschafterkonto") {
-                    // Hier später Logik für Gesellschafterkonto ergänzen
-                } else if (name === "Holding Transfers") {
-                    // Hier später Logik für Holding Transfers ergänzen
                 } else {
                     dataSheetHandler.refreshDataSheet(sheet, name, config);
                 }
@@ -82,11 +86,13 @@ const RefreshModule = {
                 // Kurze Pause einfügen, um API-Limits zu vermeiden
                 Utilities.sleep(100);
             }
+
+            console.log('All sheets refreshed successfully');
         } catch (e) {
-            console.error("Fehler beim Aktualisieren aller Sheets:", e);
+            console.error('Fehler beim Aktualisieren aller Sheets:', e);
             throw e; // Fehlermeldung weiterleiten, damit sie in der Hauptfunktion angezeigt wird
         }
-    }
+    },
 };
 
 export default RefreshModule;

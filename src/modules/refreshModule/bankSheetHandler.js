@@ -1,8 +1,8 @@
-// modules/refreshModule/bankSheetHandler.js
+// src/modules/refreshModule/bankSheetHandler.js
 import matchingHandler from './matchingHandler.js';
+import formattingHandler from './formattingHandler.js';
 import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
-import formattingHandler from './formattingHandler.js';
 
 /**
  * Aktualisiert das Bankbewegungen-Sheet
@@ -12,6 +12,7 @@ import formattingHandler from './formattingHandler.js';
  */
 function refreshBankSheet(sheet, config) {
     try {
+        console.log('Refreshing bank sheet');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const lastRow = sheet.getLastRow();
         if (lastRow < 3) return true; // Nicht genügend Daten zum Aktualisieren
@@ -19,6 +20,8 @@ function refreshBankSheet(sheet, config) {
         const firstDataRow = 3; // Erste Datenzeile (nach Header-Zeile)
         const numDataRows = lastRow - firstDataRow + 1;
         const transRows = lastRow - firstDataRow - 1; // Anzahl der Transaktionszeilen ohne die letzte Zeile
+
+        console.log(`Found ${numDataRows} rows to process in bank sheet`);
 
         // Bankbewegungen-Konfiguration für Spalten
         const columns = config.bankbewegungen.columns;
@@ -31,10 +34,11 @@ function refreshBankSheet(sheet, config) {
 
         // 1. Saldo-Formeln setzen (jede Zeile verwendet den Saldo der vorherigen Zeile + aktuellen Betrag)
         if (transRows > 0) {
+            console.log(`Setting ${transRows} saldo formulas`);
             sheet.getRange(firstDataRow, columns.saldo, transRows, 1).setFormulas(
                 Array.from({length: transRows}, (_, i) =>
-                    [`=${columnLetters.saldo}${firstDataRow + i - 1}+${columnLetters.betrag}${firstDataRow + i}`]
-                )
+                    [`=${columnLetters.saldo}${firstDataRow + i - 1}+${columnLetters.betrag}${firstDataRow + i}`],
+                ),
             );
         }
 
@@ -42,20 +46,22 @@ function refreshBankSheet(sheet, config) {
         const amounts = sheet.getRange(firstDataRow, columns.betrag, numDataRows, 1).getValues();
         const typeValues = amounts.map(([val]) => {
             const amt = numberUtils.parseCurrency(val);
-            return [amt > 0 ? "Einnahme" : amt < 0 ? "Ausgabe" : ""];
+            return [amt > 0 ? 'Einnahme' : amt < 0 ? 'Ausgabe' : ''];
         });
         sheet.getRange(firstDataRow, columns.transaktionstyp, numDataRows, 1).setValues(typeValues);
 
         // 3. Dropdown-Validierungen für Typ, Kategorie und Konten
+        console.log('Applying bank sheet validations');
         formattingHandler.applyBankSheetValidations(sheet, firstDataRow, numDataRows, columns, config);
 
         // 4. Bedingte Formatierung für Transaktionstyp-Spalte
         formattingHandler.setConditionalFormattingForStatusColumn(sheet, columnLetters.transaktionstyp, [
-            {value: "Einnahme", background: "#C6EFCE", fontColor: "#006100"},
-            {value: "Ausgabe", background: "#FFC7CE", fontColor: "#9C0006"}
+            {value: 'Einnahme', background: '#C6EFCE', fontColor: '#006100'},
+            {value: 'Ausgabe', background: '#FFC7CE', fontColor: '#9C0006'},
         ]);
 
         // 5. REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
+        console.log('Performing bank reference matching');
         matchingHandler.performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters, config);
 
         // 6. Endsaldo-Zeile aktualisieren
@@ -64,9 +70,10 @@ function refreshBankSheet(sheet, config) {
         // 7. Spaltenbreiten anpassen
         sheet.autoResizeColumns(1, sheet.getLastColumn());
 
+        console.log('Bank sheet refreshed successfully');
         return true;
     } catch (e) {
-        console.error("Fehler beim Aktualisieren des Bankbewegungen-Sheets:", e);
+        console.error('Fehler beim Aktualisieren des Bankbewegungen-Sheets:', e);
         return false;
     }
 }
@@ -84,18 +91,18 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
     const formattedDate = Utilities.formatDate(
         new Date(),
         Session.getScriptTimeZone(),
-        "dd.MM.yyyy"
+        'dd.MM.yyyy',
     );
 
-    if (lastRowText === "endsaldo") {
+    if (lastRowText === 'endsaldo') {
         // Endsaldo-Zeile aktualisieren
         sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
         sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
     } else {
         // Neue Endsaldo-Zeile erstellen
-        const newRow = Array(sheet.getLastColumn()).fill("");
+        const newRow = Array(sheet.getLastColumn()).fill('');
         newRow[columns.datum - 1] = formattedDate;
-        newRow[columns.buchungstext - 1] = "Endsaldo";
+        newRow[columns.buchungstext - 1] = 'Endsaldo';
         newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
 
         sheet.appendRow(newRow);
@@ -103,5 +110,5 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
 }
 
 export default {
-    refreshBankSheet
+    refreshBankSheet,
 };
