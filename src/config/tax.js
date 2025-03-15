@@ -14,7 +14,7 @@ export default {
         koerperschaftsteuer: 15,
         solidaritaetszuschlag: 5.5,
         gewinnUebertragSteuerfrei: 95,  // % der Beteiligungserträge steuerfrei
-        gewinnUebertragSteuerpflichtig: 5  // % der Beteiligungserträge steuerpflichtig
+        gewinnUebertragSteuerpflichtig: 5,  // % der Beteiligungserträge steuerpflichtig
     },
 
     // Operative GmbH Steuersätze
@@ -23,6 +23,6 @@ export default {
         koerperschaftsteuer: 15,
         solidaritaetszuschlag: 5.5,
         gewinnUebertragSteuerfrei: 0,
-        gewinnUebertragSteuerpflichtig: 100
-    }
+        gewinnUebertragSteuerpflichtig: 100,
+    },
 };

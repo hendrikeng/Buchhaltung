@@ -1,4 +1,4 @@
-// src/utils/dateUtils.js
+// utils/dateUtils.js
 /**
  * Funktionen für die Verarbeitung und Formatierung von Datumsangaben
  */
@@ -20,7 +20,7 @@ function extractDateFromFilename(filename) {
         return _dateCache.get(cacheKey);
     }
 
-    const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+    const nameWithoutExtension = filename.replace(/\.[^/.]+$/, '');
     let dateStr = null;
 
     // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
@@ -31,19 +31,19 @@ function extractDateFromFilename(filename) {
         dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD für Date-Konstruktor
     } else {
         // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
-        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_.\/]\d{2}[-_.\/]\d{2})[^0-9]/);
+        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_./]\d{2}[-_./]\d{2})[^0-9]/);
         if (match?.[1]) {
-            dateStr = match[1].replace(/[-_.\/]/g, '-');
+            dateStr = match[1].replace(/[-_.]/g, '-');
         } else {
             // 3. Format: YYYY-MM-DD am Anfang oder Ende
-            match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_.\/]\d{2}[-_.\/]\d{2})($|[^0-9])/);
+            match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_./]\d{2}[-_./]\d{2})($|[^0-9])/);
             if (match?.[2]) {
-                dateStr = match[2].replace(/[-_.\/]/g, '-');
+                dateStr = match[2].replace(/[-_.]/g, '-');
             } else {
                 // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
-                match = nameWithoutExtension.match(/(\d{2})[-_.\/](\d{2})[-_.\/](\d{4})/);
+                match = nameWithoutExtension.match(/(\d{2})[-_./](\d{2})[-_./](\d{4})/);
                 if (match) {
-                    const [_, day, month, year] = match;
+                    const [, day, month, year] = match;
                     dateStr = `${year}-${month}-${day}`;
                 }
             }
@@ -66,12 +66,12 @@ function extractDateFromFilename(filename) {
 
 /**
  * Extrahiert den Monat (1-12) aus einer Zeile
- * @param {Array} row - Die Zeile mit Daten
- * @param {string} sheetType - Der Typ des Sheets (einnahmen, ausgaben, eigenbelege)
- * @param {Object} config - Die Konfiguration
+ * @param {Array} _row - Die Zeile mit Daten
+ * @param {string} _sheetType - Der Typ des Sheets (einnahmen, ausgaben, eigenbelege)
+ * @param {Object} _config - Die Konfiguration
  * @returns {number|null} - Der Monat (1-12) oder null
  */
-function getMonthFromRow(row, sheetType, config) {
+function getMonthFromRow(_row, _sheetType, _config) {
     // Vereinfachte Implementierung für Tests
     return 1;
 }
@@ -93,7 +93,7 @@ function parseDate(value) {
     // Deutsches Format (DD.MM.YYYY)
     const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
     if (germanFormat.test(dateStr)) {
-        const [_, day, month, year] = dateStr.match(germanFormat);
+        const [, day, month, year] = dateStr.match(germanFormat);
         return new Date(year, month - 1, day);
     }
 
@@ -111,5 +111,5 @@ function parseDate(value) {
 export default {
     extractDateFromFilename,
     getMonthFromRow,
-    parseDate
+    parseDate,
 };

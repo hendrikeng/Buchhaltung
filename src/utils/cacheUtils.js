@@ -19,9 +19,9 @@ const globalCache = {
             ausgaben: null,
             eigenbelege: null,
             gesellschafterkonto: null,
-            holdingTransfers: null
+            holdingTransfers: null,
         },
-        computed: new Map()
+        computed: new Map(),
     },
 
     /**
@@ -112,7 +112,7 @@ const globalCache = {
         const value = computeFn();
         this.set(type, key, value);
         return value;
-    }
+    },
 };
 
 export default globalCache;

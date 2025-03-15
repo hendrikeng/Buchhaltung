@@ -9,13 +9,13 @@
  * @returns {number} - Der geparste Währungswert oder 0 bei ungültigem Format
  */
 function parseCurrency(value) {
-    if (value === null || value === undefined || value === "") return 0;
-    if (typeof value === "number") return value;
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return value;
 
     // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
     const str = value.toString()
-        .replace(/[^\d,.-]/g, "")
-        .replace(/,/g, "."); // Alle Kommas durch Punkte ersetzen
+        .replace(/[^\d,.-]/g, '')
+        .replace(/,/g, '.'); // Alle Kommas durch Punkte ersetzen
 
     // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
     const parts = str.split('.');
@@ -38,20 +38,20 @@ function parseCurrency(value) {
  * @returns {number} - Der normalisierte MwSt-Satz (0-100)
  */
 function parseMwstRate(value, defaultMwst = 19) {
-    if (value === null || value === undefined || value === "") {
+    if (value === null || value === undefined || value === '') {
         return defaultMwst;
     }
 
     let result;
 
-    if (typeof value === "number") {
+    if (typeof value === 'number') {
         // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
         result = value < 1 ? value * 100 : value;
     } else {
         // String-Wert parsen und bereinigen
         const rateStr = value.toString()
-            .replace(/%/g, "")
-            .replace(/,/g, ".")
+            .replace(/%/g, '')
+            .replace(/,/g, '.')
             .trim();
 
         const rate = parseFloat(rateStr);
@@ -74,12 +74,12 @@ function parseMwstRate(value, defaultMwst = 19) {
  * @param {string} currency - Das Währungssymbol (Standard: "€")
  * @returns {string} - Der formatierte Betrag
  */
-function formatCurrency(amount, currency = "€") {
+function formatCurrency(amount, currency = '€') {
     const value = parseCurrency(amount);
     return value.toLocaleString('de-DE', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }) + " " + currency;
+        maximumFractionDigits: 2,
+    }) + ' ' + currency;
 }
 
 /**
@@ -110,7 +110,7 @@ function round(value, decimals = 2) {
  * @returns {boolean} - True, wenn der Wert keine gültige Zahl ist
  */
 function isInvalidNumber(v) {
-    if (v === null || v === undefined || v === "") return true;
+    if (v === null || v === undefined || v === '') return true;
     return isNaN(parseFloat(v.toString().trim()));
 }
 
@@ -120,5 +120,5 @@ export default {
     formatCurrency,
     isApproximatelyEqual,
     round,
-    isInvalidNumber
+    isInvalidNumber,
 };

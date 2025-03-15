@@ -20,10 +20,10 @@ function batchWriteToSheet(sheet, data, startRow, startCol) {
             startRow,
             startCol,
             data.length,
-            data[0].length
+            data[0].length,
         ).setValues(data);
     } catch (e) {
-        console.error("Fehler beim Batch-Schreiben in das Sheet:", e);
+        console.error('Fehler beim Batch-Schreiben in das Sheet:', e);
 
         // Fallback: Schreibe in kleineren Blöcken, falls der ursprüngliche Call fehlschlägt
         const BATCH_SIZE = 50; // Kleinere Batch-Größe für Fallback
@@ -35,7 +35,7 @@ function batchWriteToSheet(sheet, data, startRow, startCol) {
                     startRow + i,
                     startCol,
                     batchData.length,
-                    batchData[0].length
+                    batchData[0].length,
                 ).setValues(batchData);
 
                 // Kurze Pause, um API-Drosselung zu vermeiden
@@ -69,7 +69,7 @@ function setConditionalFormattingForColumn(sheet, column, conditions) {
             return !ranges.some(r =>
                 r.getColumn() === range.getColumn() &&
                 r.getRow() === range.getRow() &&
-                r.getNumColumns() === range.getNumColumns()
+                r.getNumColumns() === range.getNumColumns(),
             );
         });
 
@@ -77,10 +77,10 @@ function setConditionalFormattingForColumn(sheet, column, conditions) {
         const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
             let rule;
 
-            if (pattern === "beginsWith") {
+            if (pattern === 'beginsWith') {
                 rule = SpreadsheetApp.newConditionalFormatRule()
                     .whenTextStartsWith(value);
-            } else if (pattern === "contains") {
+            } else if (pattern === 'contains') {
                 rule = SpreadsheetApp.newConditionalFormatRule()
                     .whenTextContains(value);
             } else {
@@ -89,8 +89,8 @@ function setConditionalFormattingForColumn(sheet, column, conditions) {
             }
 
             return rule
-                .setBackground(background || "#ffffff")
-                .setFontColor(fontColor || "#000000")
+                .setBackground(background || '#ffffff')
+                .setFontColor(fontColor || '#000000')
                 .setRanges([range])
                 .build();
         });
@@ -98,7 +98,7 @@ function setConditionalFormattingForColumn(sheet, column, conditions) {
         // Regeln anwenden
         sheet.setConditionalFormatRules([...newRules, ...formatRules]);
     } catch (e) {
-        console.error("Fehler beim Setzen der bedingten Formatierung:", e);
+        console.error('Fehler beim Setzen der bedingten Formatierung:', e);
     }
 }
 
@@ -115,7 +115,7 @@ function getFolderByName(parent, name) {
         const folderIter = parent.getFoldersByName(name);
         return folderIter.hasNext() ? folderIter.next() : null;
     } catch (e) {
-        console.error("Fehler beim Suchen des Ordners:", e);
+        console.error('Fehler beim Suchen des Ordners:', e);
         return null;
     }
 }
@@ -140,5 +140,5 @@ export default {
     batchWriteToSheet,
     setConditionalFormattingForColumn,
     getFolderByName,
-    getOrCreateSheet
+    getOrCreateSheet,
 };

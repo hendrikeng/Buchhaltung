@@ -39,7 +39,7 @@ const config = {
         this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)];
 
         return this;
-    }
+    },
 };
 
 // Initialisierung ausführen und exportieren

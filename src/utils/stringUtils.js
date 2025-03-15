@@ -9,7 +9,7 @@
  * @returns {boolean} - true wenn der Wert leer ist
  */
 function isEmpty(value) {
-    return value === null || value === undefined || value.toString().trim() === "";
+    return value === null || value === undefined || value.toString().trim() === '';
 }
 
 /**
@@ -18,7 +18,7 @@ function isEmpty(value) {
  * @returns {string} - Der bereinigte Text
  */
 function normalizeText(text) {
-    if (!text) return "";
+    if (!text) return '';
     return text.toString()
         .toLowerCase()
         .replace(/[äöüß]/g, match => {
@@ -26,7 +26,7 @@ function normalizeText(text) {
                 'ä': 'ae',
                 'ö': 'oe',
                 'ü': 'ue',
-                'ß': 'ss'
+                'ß': 'ss',
             }[match];
         })
         .replace(/[^a-z0-9]/g, '');
@@ -55,7 +55,7 @@ function getColumnLetter(columnIndex) {
  * @param {string} prefix - Optional ein Präfix für die ID
  * @returns {string} - Eine eindeutige ID
  */
-function generateUniqueId(prefix = "") {
+function generateUniqueId(prefix = '') {
     const timestamp = new Date().getTime();
     const random = Math.floor(Math.random() * 10000);
     return `${prefix}${timestamp}${random}`;
@@ -65,5 +65,5 @@ export default {
     isEmpty,
     normalizeText,
     getColumnLetter,
-    generateUniqueId
+    generateUniqueId,
 };
