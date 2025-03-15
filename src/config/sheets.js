@@ -1,45 +1,7 @@
 /**
- * Konfiguration für die Buchhaltungsanwendung
- * Unterstützt die Buchhaltung für Holding und operative GmbH nach SKR04
+ * Sheet-spezifische Konfigurationen
  */
-const config = {
-    // Allgemeine Einstellungen
-    common: {
-        paymentType: ["Überweisung", "Bar", "Kreditkarte", "Paypal", "Lastschrift"],
-        months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
-        shareholders: ["Christopher Giebel", "Hendrik Werner"],
-        employees: [],
-        currentYear: new Date().getFullYear(),
-        version: "1.0.0"
-    },
-
-    // Steuerliche Einstellungen
-    tax: {
-        defaultMwst: 19,
-        allowedMwst: [0, 7, 19],  // Erlaubte MwSt-Sätze
-        stammkapital: 25000,
-        year: 2021,  // Geschäftsjahr
-        isHolding: false, // true bei Holding
-
-        // Holding-spezifische Steuersätze
-        holding: {
-            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
-            koerperschaftsteuer: 15,
-            solidaritaetszuschlag: 5.5,
-            gewinnUebertragSteuerfrei: 95,  // % der Beteiligungserträge steuerfrei
-            gewinnUebertragSteuerpflichtig: 5  // % der Beteiligungserträge steuerpflichtig
-        },
-
-        // Operative GmbH Steuersätze
-        operative: {
-            gewerbesteuer: 470,  // Angepasst an lokalen Hebesatz
-            koerperschaftsteuer: 15,
-            solidaritaetszuschlag: 5.5,
-            gewinnUebertragSteuerfrei: 0,
-            gewinnUebertragSteuerpflichtig: 100
-        }
-    },
-
+export default {
     // Einnahmen-Konfiguration
     einnahmen: {
         columns: {
@@ -472,7 +434,7 @@ const config = {
                 besonderheit: null
             }
         },
-        // Konten-Mapping für Eigenbelege hinzugefügt
+        // Konten-Mapping für Eigenbelege
         kontoMapping: {
             "Kleidung": {soll: "6800", gegen: "1200", vorsteuer: "1576"},
             "Trinkgeld": {soll: "6800", gegen: "1200"},
@@ -482,7 +444,7 @@ const config = {
             "Bewirtung": {soll: "6670", gegen: "1200", vorsteuer: "1576"},
             "Sonstiges": {soll: "6800", gegen: "1200", vorsteuer: "1576"}
         },
-        // BWA-Mapping für Eigenbelege hinzugefügt
+        // BWA-Mapping für Eigenbelege
         bwaMapping: {
             "Kleidung": "sonstigeAufwendungen",
             "Trinkgeld": "sonstigeAufwendungen",
@@ -538,7 +500,7 @@ const config = {
                 besonderheit: null
             }
         },
-        // Konten-Mapping für Gesellschafterkonto hinzugefügt
+        // Konten-Mapping für Gesellschafterkonto
         kontoMapping: {
             "Gesellschafterdarlehen": {soll: "1200", gegen: "3300"},
             "Ausschüttungen": {soll: "2000", gegen: "1200"},
@@ -546,7 +508,7 @@ const config = {
             "Privatentnahme": {soll: "1600", gegen: "1200"},
             "Privateinlage": {soll: "1200", gegen: "1600"}
         },
-        // BWA-Mapping für Gesellschafterkonto hinzugefügt
+        // BWA-Mapping für Gesellschafterkonto
         bwaMapping: {
             "Gesellschafterdarlehen": "gesellschafterdarlehen",
             "Ausschüttungen": "ausschuettungen",
@@ -560,7 +522,7 @@ const config = {
     holdingTransfers: {
         columns: {
             datum: 1,              // A: Datum
-            betrag: 2,              // B: Betrag
+            betrag: 2,             // B: Betrag
             art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
             buchungstext: 4,       // D: Buchungstext
             zahlungsstatus: 5,     // E: Status
@@ -580,12 +542,12 @@ const config = {
                 besonderheit: null
             }
         },
-        // Konten-Mapping für Holding Transfers hinzugefügt
+        // Konten-Mapping für Holding Transfers
         kontoMapping: {
             "Gewinnübertrag": {soll: "1200", gegen: "8999"},
             "Kapitalrückführung": {soll: "1200", gegen: "2000"}
         },
-        // BWA-Mapping für Holding Transfers hinzugefügt
+        // BWA-Mapping für Holding Transfers
         bwaMapping: {
             "Gewinnübertrag": "gesamtRueckstellungenTransfers",
             "Kapitalrückführung": "eigenkapitalveraenderungen"
@@ -612,7 +574,6 @@ const config = {
         defaultAccount: "1200"
     },
 
-
     // Änderungshistorie-Konfiguration
     aenderungshistorie: {
         columns: {
@@ -621,104 +582,5 @@ const config = {
             dateiname: 3,          // C: Dateiname
             dateilink: 4           // D: Link zur Datei
         }
-    },
-
-    // Kontenplan SKR04 (Auszug der wichtigsten Konten)
-    kontenplan: {
-        // Bestandskonten (Klasse 0-3)
-        "0000": "Eröffnungsbilanz",
-        "0100": "Immaterielle Vermögensgegenstände",
-        "0400": "Grundstücke ohne Bauten",
-        "0500": "Bauten auf eigenen Grundstücken",
-        "0650": "Technische Anlagen und Maschinen",
-        "0700": "Andere Anlagen, Betriebs- und Geschäftsausstattung",
-        "1200": "Bank",
-        "1210": "Kasse",
-        "1300": "Forderungen aus Lieferungen und Leistungen",
-        "1576": "Vorsteuer 19%",
-        "1577": "Vorsteuer 7%",
-        "1590": "Umsatzsteuer-Vorauszahlungen",
-        "1600": "Forderungen gegen Gesellschafter",
-        "1776": "Umsatzsteuer 19%",
-        "1777": "Umsatzsteuer 7%",
-        "1790": "Umsatzsteuer-Vorauszahlungen",
-        "2000": "Gezeichnetes Kapital",
-        "2100": "Kapitalrücklage",
-        "2970": "Gewinnvortrag vor Verwendung",
-        "2978": "Verlustvortrag vor Verwendung",
-        "3100": "Darlehen",
-        "3150": "Verbindlichkeiten gegenüber Kreditinstituten",
-        "3200": "Verbindlichkeiten aus Lieferungen und Leistungen",
-        "3300": "Verbindlichkeiten gegenüber Gesellschaftern",
-
-        // Erlöskonten (Klasse 4)
-        "4000": "Umsatzerlöse",
-        "4120": "Provisionserlöse",
-        "4130": "Zinsertrag",
-        "4180": "Erträge aus Vermietung und Verpachtung",
-        "4190": "Erträge aus Zuschüssen und Zulagen",
-        "4400": "Erlöse aus Lieferungen und Leistungen",
-        "4830": "Sonstige betriebliche Erträge",
-        "4840": "Erträge aus Währungsumrechnung",
-        "4855": "Erträge aus Anlagenabgang",
-
-        // Aufwandskonten (Klasse 5-7)
-        "5000": "Wareneinsatz",
-        "5300": "Bezogene Leistungen",
-        "5400": "Roh-, Hilfs- und Betriebsstoffe",
-        "6000": "Löhne und Gehälter",
-        "6010": "Gesetzliche soziale Aufwendungen",
-        "6020": "Sonstige Personalkosten",
-        "6200": "Abschreibungen auf Sachanlagen",
-        "6210": "Abschreibungen auf Büroausstattung",
-        "6220": "Abschreibungen auf immaterielle Vermögensgegenstände",
-        "6240": "Leasingkosten",
-        "6300": "Betriebskosten",
-        "6310": "Miete",
-        "6320": "Nebenkosten",
-        "6400": "Versicherungen",
-        "6500": "IT-Kosten",
-        "6600": "Werbekosten",
-        "6650": "Reisekosten",
-        "6670": "Bewirtungskosten",
-        "6800": "Sonstige betriebliche Aufwendungen",
-        "6805": "Telefon und Internet",
-        "6810": "Porto",
-        "6815": "Bürobedarf",
-        "6830": "Fortbildungskosten",
-        "7300": "Zinsaufwendungen für Bankdarlehen",
-        "7310": "Zinsaufwendungen für Gesellschafterdarlehen",
-        "7600": "Körperschaftsteuer",
-        "7610": "Gewerbesteuer",
-        "7620": "Solidaritätszuschlag",
-        "7630": "Sonstige Steuern",
-
-        // Abschlusskonten (Klasse 8-9)
-        "8000": "Eröffnungsbilanzkonto",
-        "8400": "Abschlussbilanzkonto",
-        "8999": "Gewinn- und Verlustkonto"
-    },
-
-    /**
-     * Initialisierungsfunktion für abgeleitete Daten
-     * Wird automatisch beim Import aufgerufen
-     */
-    initialize() {
-        // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-        this.bankbewegungen.categories = [
-            ...Object.keys(this.einnahmen.categories),
-            ...Object.keys(this.ausgaben.categories),
-            ...Object.keys(this.eigenbelege.categories),
-            ...Object.keys(this.gesellschafterkonto.categories),
-            ...Object.keys(this.holdingTransfers.categories),
-        ];
-
-        // Duplikate aus den Kategorien entfernen
-        this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)];
-
-        return this;
     }
 };
-
-// Initialisierung ausführen und exportieren
-export default config.initialize();

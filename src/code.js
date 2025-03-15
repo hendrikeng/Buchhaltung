@@ -1,18 +1,18 @@
 // file: src/code.js
 // imports
-import ImportModule from "./importModule.js";
-import RefreshModule from "./refreshModule.js";
-import UStVACalculator from "./uStVACalculator.js";
-import BWACalculator from "./bWACalculator.js";
-import BilanzCalculator from "./bilanzCalculator.js";
-import Validator from "./validator.js";
-import config from "./config.js";
+import config from './config/index.js';
+import ImportModule from './modules/importModule/index.js';
+import RefreshModule from './modules/refreshModule/index.js';
+import UStVAModule from './modules/ustvaModule/index.js';
+import BWAModule from './modules/bwaModule/index.js';
+import BilanzModule from './modules/bilanzModule/index.js';
+import ValidatorModule from './modules/validatorModule/index.js';
 
 // =================== Globale Funktionen ===================
 /**
  * Erstellt das Menü in der Google Sheets UI beim Öffnen der Tabelle
  */
-const onOpen = () => {
+function onOpen() {
     SpreadsheetApp.getUi()
         .createMenu("📂 Buchhaltung")
         .addItem("📥 Dateien importieren", "importDriveFiles")
@@ -21,7 +21,7 @@ const onOpen = () => {
         .addItem("📈 BWA berechnen", "calculateBWA")
         .addItem("📝 Bilanz erstellen", "calculateBilanz")
         .addToUi();
-};
+}
 
 /**
  * Wird bei jeder Bearbeitung des Spreadsheets ausgelöst
@@ -29,7 +29,7 @@ const onOpen = () => {
  *
  * @param {Object} e - Event-Objekt von Google Sheets
  */
-const onEdit = e => {
+function onEdit(e) {
     const {range} = e;
     const sheet = range.getSheet();
     const name = sheet.getName();
@@ -88,12 +88,12 @@ const onEdit = e => {
         sheet.getRange(range.getRow(), timestampCol, timestampValues.length, 1)
             .setValues(timestampValues);
     }
-};
+}
 
 /**
  * Richtet die notwendigen Trigger für das Spreadsheet ein
  */
-const setupTrigger = () => {
+function setupTrigger() {
     const triggers = ScriptApp.getProjectTriggers();
     // Prüfe, ob der onOpen Trigger bereits existiert
     if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
@@ -110,31 +110,31 @@ const setupTrigger = () => {
             .onEdit()
             .create();
     }
-};
+}
 
 /**
  * Validiert alle relevanten Sheets
  * @returns {boolean} - True wenn alle Sheets valide sind, False sonst
  */
-const validateSheets = () => {
+function validateSheets() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const revenueSheet = ss.getSheetByName("Einnahmen");
     const expenseSheet = ss.getSheetByName("Ausgaben");
     const bankSheet = ss.getSheetByName("Bankbewegungen");
     const eigenSheet = ss.getSheetByName("Eigenbelege");
 
-    return Validator.validateAllSheets(revenueSheet, expenseSheet, bankSheet, eigenSheet);
-};
+    return ValidatorModule.validateAllSheets(revenueSheet, expenseSheet, bankSheet, eigenSheet, config);
+}
 
 /**
  * Gemeinsame Fehlerbehandlungsfunktion für alle Berechnungsfunktionen
  * @param {Function} fn - Die auszuführende Funktion
  * @param {string} errorMessage - Die Fehlermeldung bei einem Fehler
  */
-const executeWithErrorHandling = (fn, errorMessage) => {
+function executeWithErrorHandling(fn, errorMessage) {
     try {
         // Zuerst alle Sheets aktualisieren
-        RefreshModule.refreshAllSheets();
+        RefreshModule.refreshAllSheets(config);
 
         // Dann Validierung durchführen
         if (!validateSheets()) {
@@ -149,50 +149,52 @@ const executeWithErrorHandling = (fn, errorMessage) => {
         SpreadsheetApp.getUi().alert(`${errorMessage}: ${error.message}`);
         console.error(`${errorMessage}:`, error);
     }
-};
+}
 
 /**
  * Aktualisiert das aktive Tabellenblatt
  */
-const refreshSheet = () => RefreshModule.refreshActiveSheet();
+function refreshSheet() {
+    RefreshModule.refreshActiveSheet(config);
+}
 
 /**
  * Berechnet die Umsatzsteuervoranmeldung
  */
-const calculateUStVA = () => {
+function calculateUStVA() {
     executeWithErrorHandling(
-        UStVACalculator.calculateUStVA,
+        () => UStVAModule.calculateUStVA(config),
         "Fehler bei der UStVA-Berechnung"
     );
-};
+}
 
 /**
  * Berechnet die BWA (Betriebswirtschaftliche Auswertung)
  */
-const calculateBWA = () => {
+function calculateBWA() {
     executeWithErrorHandling(
-        BWACalculator.calculateBWA,
+        () => BWAModule.calculateBWA(config),
         "Fehler bei der BWA-Berechnung"
     );
-};
+}
 
 /**
  * Erstellt die Bilanz
  */
-const calculateBilanz = () => {
+function calculateBilanz() {
     executeWithErrorHandling(
-        BilanzCalculator.calculateBilanz,
+        () => BilanzModule.calculateBilanz(config),
         "Fehler bei der Bilanzerstellung"
     );
-};
+}
 
 /**
  * Importiert Dateien aus Google Drive und aktualisiert alle Tabellenblätter
  */
-const importDriveFiles = () => {
+function importDriveFiles() {
     try {
-        ImportModule.importDriveFiles();
-        RefreshModule.refreshAllSheets();
+        ImportModule.importDriveFiles(config);
+        RefreshModule.refreshAllSheets(config);
 
         // Optional: Nach dem Import auch eine Validierung durchführen
         // validateSheets();
@@ -200,7 +202,7 @@ const importDriveFiles = () => {
         SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
         console.error("Import-Fehler:", error);
     }
-};
+}
 
 // Exportiere alle relevanten Funktionen in den globalen Namensraum,
 // damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
