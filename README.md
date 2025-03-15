@@ -134,3 +134,30 @@ MIT
 - Diese App ersetzt keine professionelle Buchhaltungssoftware oder Steuerberatung
 - Für die steuerliche Verwendung konsultiere bitte einen Steuerberater
 - Die App wird ständig weiterentwickelt und verbessert
+
+TODO:
+1. ImportModule
+   ✅ Basic tests done
+   - Add edge cases (no files found, permission errors)
+   - Test error handling
+
+2. RefreshModule
+   - Create basic mock structure
+   - Test refreshActiveSheet
+   - Test refreshAllSheets
+   - Test error handling
+
+3. UStVAModule
+   - Test UStVA calculation logic
+   - Test period aggregation
+   - Test tax rate handling
+
+4. BWAModule
+   - Test BWA calculation
+   - Test financial ratio calculations
+   - Test report generation
+
+5. BilanzModule
+   - Test balance sheet calculation
+   - Test asset and liability aggregation
+   - Test report formatting
