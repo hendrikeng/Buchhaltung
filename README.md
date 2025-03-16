@@ -143,7 +143,8 @@ TODO:
 
 2. RefreshModule
    - Create basic mock structure
-   - Test refreshActiveSheet
+   - Test refreshActiveSheet (einnahmen, ausgaben, eigenbelege, gesellschaftskonto, holding transfers)
+   - Test refreshBankSheet (bankbewegungen)
    - Test refreshAllSheets
    - Test error handling
 

@@ -5,24 +5,28 @@ export default {
     // Einnahmen-Konfiguration
     einnahmen: {
         columns: {
-            datum: 1,              // A: Rechnungsdatum
-            rechnungsnummer: 2,    // B: Rechnungsnummer
-            kategorie: 3,          // C: Kategorie
-            kunde: 4,              // D: Kunde
-            nettobetrag: 5,        // E: Nettobetrag
-            mwstSatz: 6,           // F: MwSt-Satz in %
-            mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
-            bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
-            bezahlt: 9,            // I: Bereits bezahlter Betrag
-            restbetragNetto: 10,   // J: Restbetrag Netto
-            quartal: 11,           // K: Berechnetes Quartal
-            zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 13,       // M: Zahlungsart
-            zahlungsdatum: 14,     // N: Zahlungsdatum
-            bankabgleich: 15,      // O: Bankabgleich-Information
-            zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
-            dateiname: 17,         // Q: Dateiname (für importierte Dateien)
-            dateilink: 18,          // R: Link zur Originaldatei
+            datum: 1,                  // A: Rechnungsdatum
+            rechnungsnummer: 2,        // B: Rechnungsnummer
+            kunde: 3,                  // C: Kunde
+            leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
+            notizen: 5,                // E: Notizen
+            kategorie: 6,              // F: Kategorie
+            buchungsKonto: 7,          // G: Buchungskonto
+            nettobetrag: 8,            // H: Nettobetrag
+            mwstSatz: 9,               // I: MwSt-Satz in %
+            mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
+            bruttoBetrag: 11,          // K: Bruttobetrag (H+J)
+            bezahlt: 12,               // L: Bereits bezahlter Betrag
+            restbetragNetto: 13,       // M: Restbetrag Netto
+            quartal: 14,               // N: Berechnetes Quartal
+            zahlungsstatus: 15,        // O: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 16,           // P: Zahlungsart
+            zahlungsdatum: 17,         // Q: Zahlungsdatum
+            bankabgleich: 18,          // R: Bankabgleich-Information
+            uebertragJahr: 19,         // S: Übertrag Jahr
+            zeitstempel: 20,           // T: Zeitstempel der letzten Änderung
+            dateiname: 21,             // U: Dateiname (für importierte Dateien)
+            dateilink: 22,             // V: Link zur Originaldatei
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
@@ -113,24 +117,28 @@ export default {
     // Ausgaben-Konfiguration
     ausgaben: {
         columns: {
-            datum: 1,              // A: Rechnungsdatum
-            rechnungsnummer: 2,    // B: Rechnungsnummer
-            kategorie: 3,          // C: Kategorie
-            kunde: 4,              // D: Lieferant
-            nettobetrag: 5,        // E: Nettobetrag
-            mwstSatz: 6,           // F: MwSt-Satz in %
-            mwstBetrag: 7,         // G: MwSt-Betrag (E*F)
-            bruttoBetrag: 8,       // H: Bruttobetrag (E+G)
-            bezahlt: 9,            // I: Bereits bezahlter Betrag
-            restbetragNetto: 10,   // J: Restbetrag Netto
-            quartal: 11,           // K: Berechnetes Quartal
-            zahlungsstatus: 12,    // L: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 13,       // M: Zahlungsart
-            zahlungsdatum: 14,     // N: Zahlungsdatum
-            bankabgleich: 15,      // O: Bankabgleich-Information
-            zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
-            dateiname: 17,         // Q: Dateiname (für importierte Dateien)
-            dateilink: 18,          // R: Link zur Originaldatei
+            datum: 1,                  // A: Rechnungsdatum
+            rechnungsnummer: 2,        // B: Rechnungsnummer
+            kunde: 3,                  // C: Lieferant
+            leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
+            notizen: 5,                // E: Notizen
+            kategorie: 6,              // F: Kategorie
+            buchungsKonto: 7,          // G: Buchungskonto
+            nettobetrag: 8,            // H: Nettobetrag
+            mwstSatz: 9,               // I: MwSt-Satz in %
+            mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
+            bruttoBetrag: 11,          // K: Bruttobetrag (H+J)
+            bezahlt: 12,               // L: Bereits bezahlter Betrag
+            restbetragNetto: 13,       // M: Restbetrag Netto
+            quartal: 14,               // N: Berechnetes Quartal
+            zahlungsstatus: 15,        // O: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 16,           // P: Zahlungsart
+            zahlungsdatum: 17,         // Q: Zahlungsdatum
+            bankabgleich: 18,          // R: Bankabgleich-Information
+            uebertragJahr: 19,         // S: Übertrag Jahr
+            zeitstempel: 20,           // T: Zeitstempel der letzten Änderung
+            dateiname: 21,             // U: Dateiname (für importierte Dateien)
+            dateilink: 22,             // V: Link zur Originaldatei
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
@@ -379,22 +387,25 @@ export default {
             datum: 1,              // A: Belegdatum
             rechnungsnummer: 2,    // B: Belegnummer
             ausgelegtVon: 3,       // C: Ausgelegt von (Person)
-            kategorie: 4,          // D: Kategorie
-            beschreibung: 5,       // E: Beschreibung
-            nettobetrag: 6,        // F: Nettobetrag
-            mwstSatz: 7,           // G: MwSt-Satz in %
-            mwstBetrag: 8,         // H: MwSt-Betrag (F*G)
-            bruttoBetrag: 9,       // I: Bruttobetrag (F+H)
-            bezahlt: 10,           // J: Bereits erstatteter Betrag
-            restbetragNetto: 11,   // K: Restbetrag Netto
-            quartal: 12,           // L: Berechnetes Quartal
-            zahlungsstatus: 13,    // M: Erstattungsstatus (Offen/Erstattet/Gebucht)
-            zahlungsart: 14,       // N: Erstattungsart
-            zahlungsdatum: 15,     // O: Erstattungsdatum
-            bankabgleich: 16,      // P: Bankabgleich-Information
-            zeitstempel: 17,       // Q: Zeitstempel der letzten Änderung
-            dateiname: 18,         // R: Dateiname (für importierte Dateien)
-            dateilink: 19,          // S: Link zum Originalbeleg
+            beschreibung: 4,       // D: Beschreibung
+            notizen: 5,            // E: Notizen
+            kategorie: 6,          // F: Kategorie
+            buchungsKonto: 7,      // G: Buchungskonto
+            nettobetrag: 8,        // H: Nettobetrag
+            mwstSatz: 9,           // I: MwSt-Satz in %
+            mwstBetrag: 10,        // J: MwSt-Betrag (H*I)
+            bruttoBetrag: 11,      // K: Bruttobetrag (H+J)
+            bezahlt: 12,           // L: Bereits erstatteter Betrag
+            restbetragNetto: 13,   // M: Restbetrag Netto
+            quartal: 14,           // N: Berechnetes Quartal
+            zahlungsstatus: 15,    // O: Erstattungsstatus (Offen/Erstattet/Gebucht)
+            zahlungsart: 16,       // P: Erstattungsart
+            zahlungsdatum: 17,     // Q: Erstattungsdatum
+            bankabgleich: 18,      // R: Bankabgleich-Information
+            uebertragJahr: 19,     // S: Übertrag Jahr
+            zeitstempel: 20,       // T: Zeitstempel der letzten Änderung
+            dateiname: 21,         // U: Dateiname (für importierte Dateien)
+            dateilink: 22,         // V: Link zum Originalbeleg
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
@@ -460,17 +471,21 @@ export default {
     gesellschafterkonto: {
         columns: {
             datum: 1,              // A: Datum
-            beschreibung: 2,       // B: Beschreibung
-            kategorie: 3,          // C: Kategorie (Darlehen/Ausschüttung/Kapitalrückführung)
-            betrag: 4,             // D: Betrag
-            gesellschafter: 5,     // E: Gesellschafter
-            anmerkung: 6,          // F: Anmerkung
-            kontoSoll: 7,          // G: Konto (Soll)
-            kontoHaben: 8,         // H: Gegenkonto (Haben)
-            buchungsdatum: 9,      // I: Buchungsdatum
-            beleg: 10,             // J: Beleg/Referenz
-            saldo: 11,             // K: Saldo (berechnet)
-            zeitstempel: 12,        // L: Zeitstempel der letzten Änderung
+            referenz: 2,           // B: Referenz/Belegnummer
+            gesellschafter: 3,     // C: Gesellschafter
+            art: 4,                // D: Art (Darlehen/Ausschüttung/Kapitalrückführung)
+            notizen: 5,            // E: Notizen/Kommentare
+            buchungskonto: 6,      // F: Buchungskonto
+            betragen: 7,           // G: Betrag
+            bezahlt: 8,            // H: Bereits bezahlter Betrag
+            restbetrag: 9,         // I: Restbetrag
+            quartal: 10,           // J: Berechnetes Quartal
+            zahlungsstatus: 11,    // K: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 12,       // L: Zahlungsart
+            zahlungsdatum: 13,     // M: Zahlungsdatum
+            bankabgleich: 14,      // N: Bankabgleich-Information
+            uebertragJahr: 15,     // O: Übertrag Jahr
+            zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
         },
         // Kategorien als Objekte mit einheitlicher Struktur
         categories: {
@@ -521,13 +536,20 @@ export default {
     // Holding Transfers-Konfiguration
     holdingTransfers: {
         columns: {
-            datum: 1,              // A: Datum
-            betrag: 2,             // B: Betrag
-            art: 3,                // C: Art (Gewinnübertrag/Kapitalrückführung)
-            buchungstext: 4,       // D: Buchungstext
-            zahlungsstatus: 5,     // E: Status
-            referenz: 6,           // F: Referenznummer zur Bankbewegung
-            zeitstempel: 7,         // G: Zeitstempel der letzten Änderung
+            datum: 1,              // A: Buchungsdatum
+            referenz: 2,           // B: Referenz/Belegnummer
+            ziel: 3,               // C: Zielgesellschaft
+            art: 4,                // D: Art (Gewinnübertrag/Kapitalrückführung)
+            verwendungszweck: 5,   // E: Verwendungszweck
+            notizen: 6,            // F: Notizen/Kommentare
+            buchungskonto: 7,      // G: Buchungskonto
+            betragen: 8,           // H: Betrag
+            zahlungsstatus: 11,    // I: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 12,       // J: Zahlungsart
+            zahlungsdatum: 13,     // K: Zahlungsdatum
+            bankabgleich: 14,      // L: Bankabgleich-Information
+            uebertragJahr: 15,     // M: Übertrag Jahr
+            zeitstempel: 16,       // N: Zeitstempel der letzten Änderung
         },
         // Kategorien als Objekte mit einheitlicher Struktur
         categories: {
