@@ -1,6 +1,7 @@
 // src/modules/refreshModule/syncHandler.js
 import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
+import dateUtils from '../../utils/dateUtils.js';
 
 /**
  * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
@@ -27,11 +28,6 @@ function markPaidInvoices(ss, bankZuordnungen, config) {
 /**
  * Markiert bezahlte Zeilen in einem Sheet
  */
-// src/modules/refreshModule/syncHandler.js
-
-/**
- * Markiert bezahlte Zeilen in einem Sheet
- */
 function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     // Konfiguration für das Sheet
     const columns = config[sheetType].columns;
@@ -50,6 +46,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         columns.bruttoBetrag || 0,
         columns.zahlungsstatus || 0,
         columns.nettobetrag || 0,  // Important for gutschrift detection based on negative amount
+        columns.rechnungsnummer || 0, // Add this for reference validation
     );
 
     if (maxCol === 0) return; // Keine relevanten Spalten verfügbar
@@ -79,30 +76,39 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         // Get the sheet or doctype prefix
         const prefix = getDocumentTypePrefix(sheetType);
 
-        // Enhanced: Also check if this row is referenced as a Gutschrift
-        // This addresses rows that are Einnahmen but are actually credit notes
-        const zuordnungsKey = `${prefix}#${row}`;
-        const gutschriftKey = `gutschrift#${row}`;
-
-        // Check both regular key and gutschrift key
-        const bankzuordnung = bankZuordnungen[zuordnungsKey] || bankZuordnungen[gutschriftKey];
-        const hatBankzuordnung = bankzuordnung !== undefined;
-
-        // Get gutschrift info from current row or from bank match
-        let isGutschrift = false;
-
-        // Method 1: Check the amount sign
-        if (columns.nettobetrag) {
-            const nettobetrag = numberUtils.parseCurrency(data[i][columns.nettobetrag - 1]);
-            isGutschrift = nettobetrag < 0;
+        // For Einnahmen, check both regular and gutschrift matches
+        // For other sheets, ONLY use regular matches (no gutschrift)
+        let bankzuordnung = null;
+        if (sheetType === 'einnahmen') {
+            const zuordnungsKey = `${prefix}#${row}`;
+            const gutschriftKey = `gutschrift#${row}`;
+            bankzuordnung = bankZuordnungen[zuordnungsKey] || bankZuordnungen[gutschriftKey];
+        } else {
+            const zuordnungsKey = `${prefix}#${row}`;
+            bankzuordnung = bankZuordnungen[zuordnungsKey];
         }
 
-        // Method 2: Check bank match info for Gutschrift status
-        if (hatBankzuordnung && (bankzuordnung.isGutschrift ||
-            bankzuordnung.transTyp === 'Gutschrift' ||
-            bankzuordnung.typ === 'gutschrift' ||
-            (bankzuordnung.matchInfo && bankzuordnung.matchInfo.includes('Gutschrift')))) {
-            isGutschrift = true;
+        const hatBankzuordnung = bankzuordnung !== undefined;
+
+        // Get the document's reference number for validation
+        let docReference = '';
+        if (columns.rechnungsnummer) {
+            docReference = String(data[i][columns.rechnungsnummer - 1] || '').trim();
+        }
+
+        // Skip processing if this is a false match by comparing reference numbers
+        if (hatBankzuordnung && docReference &&
+            bankzuordnung.originalRef &&
+            !isGoodReferenceMatch(docReference, bankzuordnung.originalRef)) {
+            // This is likely a false match - skip this row
+            continue;
+        }
+
+        // Get gutschrift info from current row - ONLY for Einnahmen
+        let isGutschrift = false;
+        if (sheetType === 'einnahmen' && columns.nettobetrag) {
+            const nettobetrag = numberUtils.parseCurrency(data[i][columns.nettobetrag - 1]);
+            isGutschrift = nettobetrag < 0;
         }
 
         // For gutschrifts with bank matches, we handle them specially
@@ -120,14 +126,13 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 
             // And set payment date for gutschrift if we have bank info
             if (columns.zahlungsdatum && hatBankzuordnung && bankzuordnung.bankDatum) {
-                zahlungsdatumUpdates.push({
-                    row,
-                    value: Utilities.formatDate(
-                        new Date(bankzuordnung.bankDatum),
-                        Session.getScriptTimeZone(),
-                        'dd.MM.yyyy',
-                    ),
-                });
+                // Only set date if currently empty
+                if (!data[i][columns.zahlungsdatum - 1] || data[i][columns.zahlungsdatum - 1] === '') {
+                    zahlungsdatumUpdates.push({
+                        row,
+                        value: formatDate(bankzuordnung.bankDatum),
+                    });
+                }
             }
 
             // Set payment method for gutschrift
@@ -150,37 +155,53 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             rowCategories[rowData.category].push(row);
         }
 
-        // Updates für verschiedene Felder hinzufügen
+        // Check if dates differ and we need to add correction note
+        let dateCorrection = false;
+        if (rowData.bankDatum && columns.zahlungsdatum) {
+            const existingDate = data[i][columns.zahlungsdatum - 1];
+            if (existingDate && existingDate !== '') {
+                // Format both dates to compare them
+                const existingDateStr = formatDate(existingDate);
+                const bankDateStr = formatDate(rowData.bankDatum);
+
+                if (existingDateStr !== bankDateStr) {
+                    dateCorrection = true;
+                }
+            }
+        }
+
+        // Updates für Bank-Abgleich-Info with date correction note if needed
         if (rowData.bankInfo && columns.bankabgleich) {
+            let bankInfo = rowData.bankInfo;
+            if (dateCorrection) {
+                bankInfo += ' (Datum korrigiert)';
+            }
+
             bankabgleichUpdates.push({
                 row,
-                value: rowData.bankInfo,
+                value: bankInfo,
             });
         }
 
-        // Add a note about corrected date when the bank date is different from existing date
+        // Update payment date if:
+        // 1. It's empty OR
+        // 2. It's different from the bank date (date correction needed)
         if (rowData.bankDatum && columns.zahlungsdatum) {
             const existingDate = data[i][columns.zahlungsdatum - 1];
-            let newValue = Utilities.formatDate(
-                new Date(rowData.bankDatum),
-                Session.getScriptTimeZone(),
-                'dd.MM.yyyy',
-            );
 
-            // If there's an existing date and it's different, add a note
-            if (existingDate && existingDate !== '') {
-                const existingDateStr = typeof existingDate === 'string' ? existingDate :
-                    Utilities.formatDate(new Date(existingDate), Session.getScriptTimeZone(), 'dd.MM.yyyy');
-
-                if (existingDateStr !== newValue) {
-                    newValue += ' (Datum korrigiert)';
-                }
+            if (!existingDate || existingDate === '') {
+                // If date is empty, set it from bank date
+                zahlungsdatumUpdates.push({
+                    row,
+                    value: formatDate(rowData.bankDatum),
+                });
+            } else if (dateCorrection) {
+                // If date is different, update it with bank date
+                zahlungsdatumUpdates.push({
+                    row,
+                    value: formatDate(rowData.bankDatum),
+                });
             }
-
-            zahlungsdatumUpdates.push({
-                row,
-                value: newValue,
-            });
         }
 
         // Zahlungsart auf "Überweisung" setzen, wenn eine Bankbuchung gefunden wurde
@@ -229,27 +250,74 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 }
 
 /**
+ * Helper function to determine if two reference numbers match well enough
+ * @param {string} ref1 - First reference
+ * @param {string} ref2 - Second reference
+ * @returns {boolean} - Whether they're a good match
+ */
+function isGoodReferenceMatch(ref1, ref2) {
+    // Handle empty values
+    if (!ref1 || !ref2) return false;
+
+    // Quick check for exact match
+    if (ref1 === ref2) return true;
+
+    // See if one contains the other
+    if (ref1.includes(ref2) || ref2.includes(ref1)) {
+        // For short references (less than 5 chars), be more strict
+        const shorter = ref1.length <= ref2.length ? ref1 : ref2;
+        if (shorter.length < 5) {
+            return ref1.startsWith(ref2) || ref2.startsWith(ref1);
+        }
+        return true;
+    }
+
+    // If neither contains the other, they're not a good match
+    return false;
+}
+
+/**
+ * Helper function to format dates consistently
+ */
+function formatDate(date) {
+    try {
+        const dateObj = typeof date === 'string' ?
+            dateUtils.parseDate(date) :
+            new Date(date);
+
+        return Utilities.formatDate(
+            dateObj,
+            Session.getScriptTimeZone(),
+            'dd.MM.yyyy',
+        );
+    } catch (e) {
+        return String(date);
+    }
+}
+
+/**
  * Kategorisiert eine Zeile basierend auf ihren Daten
  */
-// Updated categorizeRow function in syncHandler.js
-
 function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, config) {
     const nettobetrag = columns.nettobetrag ? numberUtils.parseCurrency(rowData[columns.nettobetrag - 1]) : 0;
     const bezahltBetrag = columns.bezahlt ? numberUtils.parseCurrency(rowData[columns.bezahlt - 1]) : 0;
     const zahlungsDatum = columns.zahlungsdatum ? rowData[columns.zahlungsdatum - 1] : null;
 
-    // Enhanced Gutschrift detection - check both negative amount and keys
-    const isGutschrift = nettobetrag < 0;
+    // Enhanced Gutschrift detection - ONLY for Einnahmen
+    const isGutschrift = sheetType === 'einnahmen' && nettobetrag < 0;
 
     // Check if this row has banking matches
     const prefix = getDocumentTypePrefix(sheetType);
     const zuordnungsKey = `${prefix}#${rowIndex}`;
-    const gutschriftKey = `gutschrift#${rowIndex}`;  // Also check gutschrift key
 
-    // Check both regular key and gutschrift key
-    let bankzuordnung = bankZuordnungen[zuordnungsKey];
-    if (!bankzuordnung && isGutschrift) {
-        bankzuordnung = bankZuordnungen[gutschriftKey];
+    // For Einnahmen, check both regular and gutschrift matches
+    // For other sheets, ONLY use regular matches
+    let bankzuordnung = null;
+    if (sheetType === 'einnahmen' && isGutschrift) {
+        const gutschriftKey = `gutschrift#${rowIndex}`;
+        bankzuordnung = bankZuordnungen[zuordnungsKey] || bankZuordnungen[gutschriftKey];
+    } else {
+        bankzuordnung = bankZuordnungen[zuordnungsKey];
     }
 
     const hatBankzuordnung = bankzuordnung !== undefined;

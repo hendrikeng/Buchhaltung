@@ -256,6 +256,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                 }
 
                 // Falls keine Übereinstimmung, noch nach Gutschriften in Einnahmen suchen
+                // ABER NUR wenn es Einnahmen sind, da Gutschriften nur negative Einnahmen sein können
                 if (!matchFound) {
                     matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
                         columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
@@ -294,14 +295,23 @@ function addEmptyResults(matchResults, kontoSollResults, kontoHabenResults, cate
 /**
  * Verarbeitet eine Dokumententyp-Übereinstimmung
  */
-
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
     matchResults, kontoSollResults, kontoHabenResults, categoryResults,
     bankZuordnungen, category, config, isGutschrift = false) {
 
+    // Only allow gutschrift processing for einnahme type
+    if (isGutschrift && docType !== 'einnahme') {
+        return false;
+    }
+
     // Important: When checking for Gutschriften (credit notes), we need to handle the sign differently
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
+
+    // Validate reference match - ensure they have some relation
+    if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
+        return false;
+    }
 
     // Match-Info erstellen basierend auf Dokumenttyp
     const matchInfo = createMatchInfo(matchResult, docType, betragValue);
@@ -356,9 +366,37 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
         isGutschrift: isActualGutschrift, // Add explicit flag
+        originalRef: matchResult.ref, // Store the original reference for validation
     };
 
     return true;
+}
+
+/**
+ * Helper function to determine if two reference numbers match well enough
+ * @param {string} ref1 - First reference
+ * @param {string} ref2 - Second reference
+ * @returns {boolean} - Whether they're a good match
+ */
+function isGoodReferenceMatch(ref1, ref2) {
+    // Handle empty values
+    if (!ref1 || !ref2) return false;
+
+    // Quick check for exact match
+    if (ref1 === ref2) return true;
+
+    // See if one contains the other
+    if (ref1.includes(ref2) || ref2.includes(ref1)) {
+        // For short references (less than 5 chars), be more strict
+        const shorter = ref1.length <= ref2.length ? ref1 : ref2;
+        if (shorter.length < 5) {
+            return ref1.startsWith(ref2) || ref2.startsWith(ref1);
+        }
+        return true;
+    }
+
+    // If neither contains the other, they're not a good match
+    return false;
 }
 
 /**
@@ -396,7 +434,7 @@ function findMatch(reference, refMap, betrag = null) {
 
         // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
         for (const key of candidateKeys) {
-            if (typeof key === 'string' && (key.includes(refString) || refString.includes(key))) {
+            if (typeof key === 'string' && isGoodReferenceMatch(key, refString)) {
                 match = evaluateMatch(refMap[key], betrag);
                 if (match) {
                     matchedKey = key;
@@ -409,7 +447,7 @@ function findMatch(reference, refMap, betrag = null) {
         if (!match && normalizedRef) {
             for (const key of candidateKeys) {
                 const normalizedKey = stringUtils.normalizeText(key);
-                if (typeof normalizedKey === 'string' && (normalizedKey.includes(normalizedRef) || normalizedRef.includes(normalizedKey))) {
+                if (typeof normalizedKey === 'string' && isGoodReferenceMatch(normalizedKey, normalizedRef)) {
                     match = evaluateMatch(refMap[key], betrag);
                     if (match) {
                         matchedKey = key;
@@ -423,6 +461,7 @@ function findMatch(reference, refMap, betrag = null) {
     // Originaldata hinzufügen, wenn ein Match gefunden wurde
     if (match && matchedKey) {
         match.originalData = refMap[matchedKey].originalData;
+        match.ref = refMap[matchedKey].ref; // Store original reference for validation
     }
 
     return match;
@@ -524,7 +563,6 @@ function createMatchInfo(matchResult, docType, betragValue) {
     return `${docTypeName} #${matchResult.row}${matchStatus}`;
 }
 
-
 /**
  * Setzt Standard-Konten basierend auf der Kategorie und Transaktionstyp
  */
@@ -573,4 +611,5 @@ export default {
     performBankReferenceMatching,
     findMatch,
     evaluateMatch,
+    isGoodReferenceMatch,
 };

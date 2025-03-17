@@ -53,7 +53,7 @@ function refreshDataSheet(sheet, sheetName, config) {
         if (columns.mwstBetrag && columns.nettobetrag && columns.mwstSatz) {
             formulasBatch[columns.mwstBetrag] = Array.from(
                 {length: numRows},
-                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}/100`],
+                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}`],
             );
         }
 
@@ -69,7 +69,7 @@ function refreshDataSheet(sheet, sheetName, config) {
         if (columns.restbetragNetto && columns.bruttoBetrag && columns.bezahlt && columns.mwstSatz) {
             formulasBatch[columns.restbetragNetto] = Array.from(
                 {length: numRows},
-                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2}/100)`],
+                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`],
             );
         }
 
