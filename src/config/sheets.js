@@ -473,8 +473,8 @@ export default {
             datum: 1,              // A: Datum
             referenz: 2,           // B: Referenz/Belegnummer
             gesellschafter: 3,     // C: Gesellschafter
-            kategorie: 4,          // D: Kategorie
-            notizen: 5,            // E: Notizen/Kommentare
+            notizen: 4,            // D: Notizen/Kommentare
+            kategorie: 5,          // E: Kategorie
             buchungskonto: 6,      // F: Buchungskonto
             betrag: 7,             // G: Betrag
             quartal: 8,            // H: Berechnetes Quartal
@@ -536,9 +536,9 @@ export default {
             datum: 1,              // A: Buchungsdatum
             referenz: 2,           // B: Referenz/Belegnummer
             ziel: 3,               // C: Zielgesellschaft
-            kategorie: 4,          // D: Kategorie
-            verwendungszweck: 5,   // E: Verwendungszweck
-            notizen: 6,            // F: Notizen/Kommentare
+            verwendungszweck: 4,   // D: Verwendungszweck
+            notizen: 5,            // E: Notizen/Kommentare
+            kategorie: 6,          // F: Kategorie
             buchungskonto: 7,      // G: Buchungskonto
             betrag: 8,             // H: Betrag
             quartal: 9,            // I: Quartal

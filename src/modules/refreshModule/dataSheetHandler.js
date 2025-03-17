@@ -1,4 +1,5 @@
 // src/modules/refreshModule/dataSheetHandler.js
+
 import stringUtils from '../../utils/stringUtils.js';
 import formattingHandler from './formattingHandler.js';
 import cellValidator from '../validatorModule/cellValidator.js';
@@ -20,19 +21,24 @@ function refreshDataSheet(sheet, sheetName, config) {
 
         // Passende Spaltenkonfiguration für das entsprechende Sheet auswählen
         let columns;
+        let configKey;
+
         if (sheetName === 'Einnahmen') {
-            columns = config.einnahmen.columns;
+            configKey = 'einnahmen';
         } else if (sheetName === 'Ausgaben') {
-            columns = config.ausgaben.columns;
+            configKey = 'ausgaben';
         } else if (sheetName === 'Eigenbelege') {
-            columns = config.eigenbelege.columns;
+            configKey = 'eigenbelege';
         } else if (sheetName === 'Gesellschafterkonto') {
-            columns = config.gesellschafterkonto.columns;
+            configKey = 'gesellschafterkonto';
         } else if (sheetName === 'Holding Transfers') {
-            columns = config.holdingTransfers.columns;
+            configKey = 'holdingTransfers';
         } else {
             return false; // Unbekanntes Sheet
         }
+
+        columns = config[configKey].columns;
+        const kontoMapping = config[configKey].kontoMapping;
 
         console.log(`Found ${numRows} rows to process with columns:`, columns);
 
@@ -49,7 +55,7 @@ function refreshDataSheet(sheet, sheetName, config) {
         if (columns.mwstBetrag && columns.nettobetrag && columns.mwstSatz) {
             formulasBatch[columns.mwstBetrag] = Array.from(
                 {length: numRows},
-                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}`],
+                (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}/100`],
             );
         }
 
@@ -65,7 +71,7 @@ function refreshDataSheet(sheet, sheetName, config) {
         if (columns.restbetragNetto && columns.bruttoBetrag && columns.bezahlt && columns.mwstSatz) {
             formulasBatch[columns.restbetragNetto] = Array.from(
                 {length: numRows},
-                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`],
+                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2}/100)`],
             );
         }
 
@@ -140,6 +146,9 @@ function refreshDataSheet(sheet, sheetName, config) {
             }
         }
 
+        // NEU: Buchungskonto basierend auf Kategorie setzen
+        updateBookingAccounts(sheet, configKey, config);
+
         // Spaltenbreiten automatisch anpassen
         sheet.autoResizeColumns(1, sheet.getLastColumn());
 
@@ -151,6 +160,68 @@ function refreshDataSheet(sheet, sheetName, config) {
     }
 }
 
+/**
+ * Aktualisiert die Buchungskonten basierend auf der ausgewählten Kategorie
+ * @param {Sheet} sheet - Das Sheet
+ * @param {string} configKey - Konfigurationsschlüssel (einnahmen, ausgaben, etc.)
+ * @param {Object} config - Die Konfiguration
+ */
+function updateBookingAccounts(sheet, configKey, config) {
+    const columns = config[configKey].columns;
+    const kontoMapping = config[configKey].kontoMapping;
+
+    if (!columns.kategorie || !columns.buchungsKonto) {
+        console.log(`Keine Kategorie- oder Buchungskonto-Spalten für ${configKey} gefunden.`);
+        return;
+    }
+
+    try {
+        const lastRow = sheet.getLastRow();
+        const numRows = lastRow - 1;
+
+        if (numRows <= 0) return;
+
+        console.log(`Updating booking accounts for ${numRows} rows in ${configKey}`);
+
+        // Kategorie-Daten holen
+        const kategorieRange = sheet.getRange(2, columns.kategorie, numRows, 1);
+        const kategorieValues = kategorieRange.getValues();
+
+        // Aktuelle Buchungskonto-Daten holen
+        const kontoRange = sheet.getRange(2, columns.buchungsKonto, numRows, 1);
+        const kontoValues = kontoRange.getValues();
+
+        // Neue Buchungskonto-Werte basierend auf Kategorien erstellen
+        const updatedKontoValues = [];
+
+        for (let i = 0; i < numRows; i++) {
+            const kategorie = kategorieValues[i][0] ? kategorieValues[i][0].toString().trim() : '';
+            let buchungskonto = kontoValues[i][0] ? kontoValues[i][0].toString() : '';
+
+            // Wenn Kategorie vorhanden und ein Mapping existiert, setze das Konto
+            if (kategorie && kontoMapping[kategorie]) {
+                // Je nach Sheet-Typ unterschiedliche Konto-Informationen verwenden
+                if (configKey === 'einnahmen') {
+                    buchungskonto = kontoMapping[kategorie].gegen || '';
+                } else {
+                    buchungskonto = kontoMapping[kategorie].soll || '';
+                }
+            }
+
+            updatedKontoValues.push([buchungskonto]);
+        }
+
+        // Konten in Batch aktualisieren
+        if (updatedKontoValues.length > 0) {
+            kontoRange.setValues(updatedKontoValues);
+            console.log(`Updated ${updatedKontoValues.length} booking accounts in ${configKey}`);
+        }
+    } catch (e) {
+        console.error(`Fehler beim Aktualisieren der Buchungskonten für ${configKey}:`, e);
+    }
+}
+
 export default {
     refreshDataSheet,
+    updateBookingAccounts,
 };
