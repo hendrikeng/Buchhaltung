@@ -21,12 +21,13 @@ function performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, last
     const sheetData = loadReferenceData(ss, config);
 
     // Bankbewegungen Daten für Verarbeitung holen
-    const bankData = sheet.getRange(firstDataRow, 1, numDataRows, columns.matchInfo).getDisplayValues();
+    const bankData = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn()).getValues();
 
     // Vorbereitung für Batch-Updates
     const matchResults = [];
     const kontoSollResults = [];
     const kontoHabenResults = [];
+    const categoryResults = [];
     const bankZuordnungen = {};
 
     // Kontoinformationen sammeln
@@ -34,12 +35,12 @@ function performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, last
 
     // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
     processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
-        matchResults, kontoSollResults, kontoHabenResults,
+        matchResults, kontoSollResults, kontoHabenResults, categoryResults,
         bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config);
 
     // Batch-Updates ausführen für bessere Performance
     performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
-        matchResults, kontoSollResults, kontoHabenResults);
+        matchResults, kontoSollResults, kontoHabenResults, categoryResults);
 
     // Formatiere die gesamten Zeilen basierend auf dem Match-Typ
     formattingHandler.formatMatchedRows(sheet, firstDataRow, matchResults, columns);
@@ -93,16 +94,8 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
     if (numRows <= 0) return map;
 
-    // Die benötigten Spalten bestimmen
-    const columnsToLoad = Math.max(
-        columns.rechnungsnummer,
-        columns.nettobetrag,
-        columns.mwstSatz || 0,
-        columns.bezahlt || 0,
-    );
-
-    // Die relevanten Spalten laden
-    const data = sheet.getRange(2, 1, numRows, columnsToLoad).getValues();
+    // Alle Daten laden, um alle relevanten Spalten zu erfassen
+    const data = sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getValues();
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
@@ -110,22 +103,20 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
         if (stringUtils.isEmpty(ref)) continue;
 
-        // Entferne "G-" Prefix für den Key, falls vorhanden (für Gutschriften)
-        let key = ref.toString().trim();
-        const isGutschrift = key.startsWith('G-');
-
-        if (isGutschrift) {
-            key = key.substring(2);
-        }
-
-        const normalizedKey = stringUtils.normalizeText(key);
+        // Key immer ohne G-Prefix, da wir jetzt mit dem Betrag arbeiten
+        const key = String(ref).trim();
 
         // Werte extrahieren
         let betrag = 0;
         if (!stringUtils.isEmpty(row[columns.nettobetrag - 1])) {
             betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
-            betrag = Math.abs(betrag);
         }
+
+        // Prüfe auf Gutschrift anhand des Betrags
+        const isGutschrift = betrag < 0;
+
+        // Normalisierung des Schlüssels
+        const normalizedKey = stringUtils.normalizeText(key);
 
         let mwstRate = 0;
         if (columns.mwstSatz && !stringUtils.isEmpty(row[columns.mwstSatz - 1])) {
@@ -138,19 +129,41 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
             bezahlt = Math.abs(bezahlt);
         }
 
-        // Bruttobetrag berechnen
-        const brutto = betrag * (1 + mwstRate/100);
+        // Kategorie extrahieren
+        let kategorie = '';
+        if (columns.kategorie && !stringUtils.isEmpty(row[columns.kategorie - 1])) {
+            kategorie = row[columns.kategorie - 1].toString().trim();
+        }
 
+        // Buchungskonto extrahieren
+        let buchungskonto = '';
+        if (columns.buchungskonto && !stringUtils.isEmpty(row[columns.buchungskonto - 1])) {
+            buchungskonto = row[columns.buchungskonto - 1].toString().trim();
+        }
+
+        // Bruttobetrag berechnen (immer als Absolutwert für Vergleiche)
+        const bruttoAbs = Math.abs(betrag) * (1 + mwstRate/100);
+
+        // Originalzeile vollständig speichern für spätere Referenz
         map[key] = {
-            ref: ref.toString().trim(),
+            ref: String(ref).trim(),
             normalizedRef: normalizedKey,
             row: i + 2, // 1-basiert + Überschrift
             betrag: betrag,
             mwstRate: mwstRate,
-            brutto: brutto,
+            brutto: bruttoAbs * (isGutschrift ? -1 : 1), // Preserve sign for display
             bezahlt: bezahlt,
-            offen: numberUtils.round(brutto - bezahlt, 2),
+            offen: numberUtils.round(bruttoAbs - bezahlt, 2) * (isGutschrift ? -1 : 1), // Preserve sign
             isGutschrift: isGutschrift,
+            kategorie: kategorie,
+            buchungskonto: buchungskonto,
+            originalData: {
+                kategorie: kategorie,
+                buchungskonto: buchungskonto,
+                betrag: betrag, // Keep the original value with sign
+                rowData: row, // Komplette Zeile speichern
+                sheetType: sheetType, // Typ des Sheets speichern
+            },
         };
 
         // Normalisierter Key als Alternative
@@ -192,7 +205,7 @@ function collectAccountInfo(config) {
  * Verarbeitet alle Bankeinträge und sucht nach Übereinstimmungen
  */
 function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
-    matchResults, kontoSollResults, kontoHabenResults,
+    matchResults, kontoSollResults, kontoHabenResults, categoryResults,
     bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config) {
 
     // Fallback-Konten
@@ -206,7 +219,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
 
         // Prüfe, ob es sich um die Endsaldo-Zeile handelt
         if (isEndSaldoRow(rowIndex, lastRow, row, columns)) {
-            addEmptyResults(matchResults, kontoSollResults, kontoHabenResults);
+            addEmptyResults(matchResults, kontoSollResults, kontoHabenResults, categoryResults);
             continue;
         }
 
@@ -223,7 +236,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
             if (tranType === 'Einnahme') {
                 matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'einnahme', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    matchResults, kontoSollResults, kontoHabenResults,
+                    matchResults, kontoSollResults, kontoHabenResults, categoryResults,
                     bankZuordnungen, category, config);
             } else if (tranType === 'Ausgabe') {
                 const docTypes = [
@@ -237,7 +250,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                 for (const docType of docTypes) {
                     matchFound = processDocumentTypeMatching(docType.data, refNumber, betragValue, row,
                         columns, docType.type, docType.cols, docType.mapping,
-                        matchResults, kontoSollResults, kontoHabenResults,
+                        matchResults, kontoSollResults, kontoHabenResults, categoryResults,
                         bankZuordnungen, category, config);
                     if (matchFound) break;
                 }
@@ -246,7 +259,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                 if (!matchFound) {
                     matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
                         columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                        matchResults, kontoSollResults, kontoHabenResults,
+                        matchResults, kontoSollResults, kontoHabenResults, categoryResults,
                         bankZuordnungen, category, config, true);
                 }
             }
@@ -255,35 +268,61 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
         // Wenn keine Übereinstimmung gefunden, default Konten basierend auf Kategorie setzen
         if (!matchFound) {
             setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
-                matchResults, kontoSollResults, kontoHabenResults);
+                matchResults, kontoSollResults, kontoHabenResults, categoryResults);
         }
     }
 }
 
-// Weitere Hilfsfunktionen
+/**
+ * Prüft, ob es sich um die Endsaldo-Zeile handelt
+ */
 function isEndSaldoRow(rowIndex, lastRow, row, columns) {
     const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : '';
     return rowIndex === lastRow && label === 'endsaldo';
 }
 
-function addEmptyResults(matchResults, kontoSollResults, kontoHabenResults) {
+/**
+ * Fügt leere Ergebnisse zu den Arrays hinzu
+ */
+function addEmptyResults(matchResults, kontoSollResults, kontoHabenResults, categoryResults) {
     matchResults.push(['']);
     kontoSollResults.push(['']);
     kontoHabenResults.push(['']);
+    categoryResults.push(['']);
 }
 
+/**
+ * Verarbeitet eine Dokumententyp-Übereinstimmung
+ */
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
-    matchResults, kontoSollResults, kontoHabenResults, bankZuordnungen,
-    category, config, isGutschrift = false) {
+    matchResults, kontoSollResults, kontoHabenResults, categoryResults,
+    bankZuordnungen, category, config, isGutschrift = false) {
+
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
 
     // Match-Info erstellen basierend auf Dokumenttyp
     const matchInfo = createMatchInfo(matchResult, docType, betragValue);
 
+    // Kategorie und Konto aus dem gefundenen Dokument verwenden, nicht aus der Bankbuchung
+    let sourceCategory = '';
+    let sourceKonto = '';
+
+    if (matchResult.originalData) {
+        sourceCategory = matchResult.originalData.kategorie || '';
+        sourceKonto = matchResult.originalData.buchungskonto || '';
+    }
+
     // Konten aus dem Mapping setzen
     let kontoSoll = '', kontoHaben = '';
-    if (category && kontoMapping[category]) {
+
+    // Immer die Kategorie aus dem Quelldokument verwenden, wenn vorhanden
+    if (sourceCategory && kontoMapping[sourceCategory]) {
+        const mapping = kontoMapping[sourceCategory];
+        kontoSoll = mapping.soll || '';
+        kontoHaben = mapping.gegen || '';
+    } else if (category && kontoMapping[category]) {
+        // Fallback auf Bank-Kategorie
         const mapping = kontoMapping[category];
         kontoSoll = mapping.soll || '';
         kontoHaben = mapping.gegen || '';
@@ -294,62 +333,96 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     kontoSollResults.push([kontoSoll]);
     kontoHabenResults.push([kontoHaben]);
 
+    // WICHTIG: Immer die Kategorie aus dem Quelldokument verwenden
+    categoryResults.push([sourceCategory || category]);
+
     // Für spätere Markierung merken
     const key = `${docType}#${matchResult.row}`;
+
     bankZuordnungen[key] = {
         typ: docType === 'gutschrift' ? 'einnahme' : docType,
         row: matchResult.row,
         bankDatum: row[columns.datum - 1],
         matchInfo: matchInfo,
         transTyp: docType === 'gutschrift' ? 'Gutschrift' : row[columns.transaktionstyp - 1],
+        category: sourceCategory,
+        kontoSoll: kontoSoll,
+        kontoHaben: kontoHaben,
     };
 
     return true;
 }
 
+/**
+ * Findet eine Übereinstimmung in der Referenz-Map
+ */
 function findMatch(reference, refMap, betrag = null) {
     // Keine Daten
     if (!reference || !refMap) return null;
 
+    // Ensure reference is a string
+    const refString = String(reference);
+
     // Normalisierte Suche vorbereiten
-    const normalizedRef = stringUtils.normalizeText(reference);
+    const normalizedRef = stringUtils.normalizeText(refString);
 
-    // Priorität der Matching-Strategien:
-    // 1. Exakte Übereinstimmung
-    // 2. Normalisierte Übereinstimmung
-    // 3. Enthält-Beziehung (in beide Richtungen)
+    // Matching-Strategien
+    let match = null;
+    let matchedKey = null;
 
     // 1. Exakte Übereinstimmung
-    if (refMap[reference]) {
-        return evaluateMatch(refMap[reference], betrag);
+    if (refMap[refString]) {
+        match = evaluateMatch(refMap[refString], betrag);
+        matchedKey = refString;
     }
 
     // 2. Normalisierte Übereinstimmung
-    if (normalizedRef && refMap[normalizedRef]) {
-        return evaluateMatch(refMap[normalizedRef], betrag);
+    if (!match && normalizedRef && refMap[normalizedRef]) {
+        match = evaluateMatch(refMap[normalizedRef], betrag);
+        matchedKey = normalizedRef;
     }
 
-    // 3. Teilweise Übereinstimmung (mit Cache für Performance)
-    const candidateKeys = Object.keys(refMap);
+    // 3. Teilweise Übereinstimmung
+    if (!match) {
+        const candidateKeys = Object.keys(refMap);
 
-    // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
-    for (const key of candidateKeys) {
-        if (key.includes(reference) || reference.includes(key)) {
-            return evaluateMatch(refMap[key], betrag);
+        // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
+        for (const key of candidateKeys) {
+            if (typeof key === 'string' && (key.includes(refString) || refString.includes(key))) {
+                match = evaluateMatch(refMap[key], betrag);
+                if (match) {
+                    matchedKey = key;
+                    break;
+                }
+            }
+        }
+
+        // Falls keine exakten Treffer, probieren wir es mit normalisierten Werten
+        if (!match && normalizedRef) {
+            for (const key of candidateKeys) {
+                const normalizedKey = stringUtils.normalizeText(key);
+                if (typeof normalizedKey === 'string' && (normalizedKey.includes(normalizedRef) || normalizedRef.includes(normalizedKey))) {
+                    match = evaluateMatch(refMap[key], betrag);
+                    if (match) {
+                        matchedKey = key;
+                        break;
+                    }
+                }
+            }
         }
     }
 
-    // Falls keine exakten Treffer, probieren wir es mit normalisierten Werten
-    for (const key of candidateKeys) {
-        const normalizedKey = stringUtils.normalizeText(key);
-        if (normalizedKey.includes(normalizedRef) || normalizedRef.includes(normalizedKey)) {
-            return evaluateMatch(refMap[key], betrag);
-        }
+    // Originaldata hinzufügen, wenn ein Match gefunden wurde
+    if (match && matchedKey) {
+        match.originalData = refMap[matchedKey].originalData;
     }
 
-    return null;
+    return match;
 }
 
+/**
+ * Bewertet die Qualität einer Übereinstimmung basierend auf Beträgen
+ */
 function evaluateMatch(match, betrag = null) {
     if (!match) return null;
 
@@ -399,6 +472,9 @@ function evaluateMatch(match, betrag = null) {
     return result;
 }
 
+/**
+ * Erstellt einen Informationstext für eine Match-Übereinstimmung
+ */
 function createMatchInfo(matchResult, docType, betragValue) {
     let matchStatus = '';
 
@@ -410,8 +486,8 @@ function createMatchInfo(matchResult, docType, betragValue) {
         }
     }
 
-    // Spezialbehandlung für Gutschriften
-    if (docType === 'gutschrift') {
+    // Spezialbehandlung für Gutschriften - jetzt basierend auf negativem Betrag
+    if (docType === 'gutschrift' || (matchResult.originalData && matchResult.originalData.betrag < 0)) {
         const gutschriftBetrag = Math.abs(matchResult.brutto);
 
         if (numberUtils.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
@@ -437,8 +513,11 @@ function createMatchInfo(matchResult, docType, betragValue) {
     return `${docTypeName} #${matchResult.row}${matchStatus}`;
 }
 
+/**
+ * Setzt Standard-Konten basierend auf der Kategorie und Transaktionstyp
+ */
 function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
-    matchResults, kontoSollResults, kontoHabenResults) {
+    matchResults, kontoSollResults, kontoHabenResults, categoryResults) {
     let kontoSoll = fallbackKontoSoll;
     let kontoHaben = fallbackKontoHaben;
 
@@ -459,15 +538,27 @@ function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallb
     matchResults.push(['']);
     kontoSollResults.push([kontoSoll]);
     kontoHabenResults.push([kontoHaben]);
+    categoryResults.push([category]); // Ursprüngliche Kategorie beibehalten
 }
 
+/**
+ * Führt Batch-Updates für alle betroffenen Spalten aus
+ */
 function performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
-    matchResults, kontoSollResults, kontoHabenResults) {
+    matchResults, kontoSollResults, kontoHabenResults, categoryResults) {
+
     sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchResults);
     sheet.getRange(firstDataRow, columns.kontoSoll, numDataRows, 1).setValues(kontoSollResults);
     sheet.getRange(firstDataRow, columns.kontoHaben, numDataRows, 1).setValues(kontoHabenResults);
+
+    // Kategorien aktualisieren, wenn Kategorie-Spalte existiert
+    if (columns.kategorie && categoryResults.length === numDataRows) {
+        sheet.getRange(firstDataRow, columns.kategorie, numDataRows, 1).setValues(categoryResults);
+    }
 }
 
 export default {
     performBankReferenceMatching,
+    findMatch,
+    evaluateMatch,
 };

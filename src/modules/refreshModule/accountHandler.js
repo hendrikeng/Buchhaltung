@@ -132,6 +132,29 @@ function updateBookingAccounts(sheet, sheetType, config, isBankSheet = false) {
     }
 }
 
+/**
+ * Checks if the Soll and Haben accounts are compatible with the category
+ * and updates them if they don't match
+ * @param {Object} row - Row data
+ * @param {Object} category - Category information
+ * @param {Object} mapping - Account mapping
+ * @returns {Object} Updated accounts
+ */
+function validateAccountsForCategory(kategorie, sollKonto, habenKonto, mapping) {
+    if (!mapping) return { sollKonto, habenKonto };
+
+    // Check if accounts match the expected accounts for the category
+    const expectedSoll = mapping.soll || '';
+    const expectedHaben = mapping.gegen || '';
+
+    // Return updated accounts if they don't match
+    return {
+        sollKonto: expectedSoll || sollKonto,
+        habenKonto: expectedHaben || habenKonto,
+    };
+}
+
 export default {
     updateBookingAccounts,
+    validateAccountsForCategory,
 };

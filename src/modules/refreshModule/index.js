@@ -1,9 +1,10 @@
-// src/modules/refreshModule/index.js (modified)
+// src/modules/refreshModule/index.js
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
 import matchingHandler from './matchingHandler.js';
 import formattingHandler from './formattingHandler.js';
 import accountHandler from './accountHandler.js';
+import syncHandler from './syncHandler.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
@@ -95,8 +96,12 @@ const RefreshModule = {
         }
     },
 
-    // Expose the account handler for external use
+    // Expose internal modules for external use
     accountHandler,
+    matchingHandler,
+    dataSheetHandler,
+    bankSheetHandler,
+    syncHandler,
 };
 
 export default RefreshModule;

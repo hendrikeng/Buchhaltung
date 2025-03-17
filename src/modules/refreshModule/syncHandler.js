@@ -4,6 +4,7 @@ import numberUtils from '../../utils/numberUtils.js';
 
 /**
  * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
+ * und aktualisiert den Zahlungsstatus
  */
 function markPaidInvoices(ss, bankZuordnungen, config) {
     // Alle relevanten Sheets abrufen
@@ -36,8 +37,14 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 
     // Bestimme die maximale Anzahl an Spalten, die benötigt werden
     const maxCol = Math.max(
+        sheet.getLastColumn(),  // Use the full sheet to ensure we get all data
         columns.zahlungsdatum || 0,
         columns.bankabgleich || 0,
+        columns.zahlungsart || 0,
+        columns.bezahlt || 0,
+        columns.bruttoBetrag || 0,
+        columns.zahlungsstatus || 0,
+        columns.nettobetrag || 0,  // Important for gutschrift detection based on negative amount
     );
 
     if (maxCol === 0) return; // Keine relevanten Spalten verfügbar
@@ -54,8 +61,11 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         normalRows: [],
     };
 
-    // Bank-Abgleich-Updates sammeln
+    // Updates für verschiedene Felder sammeln
     const bankabgleichUpdates = [];
+    const zahlungsdatumUpdates = [];
+    const zahlungsartUpdates = [];
+    const bezahltUpdates = [];
 
     // Datenzeilen durchgehen und in Kategorien einteilen
     for (let i = 0; i < data.length; i++) {
@@ -67,12 +77,45 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             rowCategories[rowData.category].push(row);
         }
 
-        // Bank-Abgleich-Info hinzufügen wenn vorhanden
-        if (rowData.bankInfo) {
+        // Updates für verschiedene Felder hinzufügen
+        if (rowData.bankInfo && columns.bankabgleich) {
             bankabgleichUpdates.push({
                 row,
                 value: rowData.bankInfo,
             });
+        }
+
+        // Zahlungsdatum setzen, wenn eine Bankbuchung gefunden wurde
+        if (rowData.bankDatum && columns.zahlungsdatum) {
+            // Always update with bank date when a bank transaction is found
+            zahlungsdatumUpdates.push({
+                row,
+                value: Utilities.formatDate(
+                    new Date(rowData.bankDatum),
+                    Session.getScriptTimeZone(),
+                    'dd.MM.yyyy',
+                ),
+            });
+        }
+
+        // Zahlungsart auf "Überweisung" setzen, wenn eine Bankbuchung gefunden wurde
+        if (rowData.bankFound && columns.zahlungsart) {
+            zahlungsartUpdates.push({
+                row,
+                value: 'Überweisung',
+            });
+        }
+
+        // Bezahlt-Betrag aktualisieren, wenn der Betrag eine Bankbuchung ist
+        if (rowData.bezahltBetrag !== null && columns.bezahlt) {
+            // Nur aktualisieren, wenn der neue Betrag größer ist
+            const currentBezahlt = numberUtils.parseCurrency(data[i][columns.bezahlt - 1]);
+            if (rowData.bezahltBetrag > currentBezahlt) {
+                bezahltUpdates.push({
+                    row,
+                    value: rowData.bezahltBetrag,
+                });
+            }
         }
     }
 
@@ -80,37 +123,67 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     applyColorToRowCategories(sheet, rowCategories);
 
     // Bank-Abgleich-Updates in Batches ausführen
-    applyBankInfoUpdates(sheet, bankabgleichUpdates, columns);
+    if (bankabgleichUpdates.length > 0) {
+        applyUpdates(sheet, bankabgleichUpdates, columns.bankabgleich);
+    }
+
+    // Zahlungsdatum-Updates ausführen
+    if (zahlungsdatumUpdates.length > 0) {
+        applyUpdates(sheet, zahlungsdatumUpdates, columns.zahlungsdatum);
+    }
+
+    // Zahlungsart-Updates ausführen
+    if (zahlungsartUpdates.length > 0) {
+        applyUpdates(sheet, zahlungsartUpdates, columns.zahlungsart);
+    }
+
+    // Bezahlt-Updates ausführen
+    if (bezahltUpdates.length > 0) {
+        applyUpdates(sheet, bezahltUpdates, columns.bezahlt);
+    }
 }
 
 /**
  * Kategorisiert eine Zeile basierend auf ihren Daten
  */
 function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, config) {
-    const nettobetrag = numberUtils.parseCurrency(rowData[columns.nettobetrag - 1]);
-    const bezahltBetrag = numberUtils.parseCurrency(rowData[columns.bezahlt - 1]);
-    const zahlungsDatum = rowData[columns.zahlungsdatum - 1];
-    const referenz = rowData[columns.rechnungsnummer - 1];
+    const nettobetrag = columns.nettobetrag ? numberUtils.parseCurrency(rowData[columns.nettobetrag - 1]) : 0;
+    const bezahltBetrag = columns.bezahlt ? numberUtils.parseCurrency(rowData[columns.bezahlt - 1]) : 0;
+    const zahlungsDatum = columns.zahlungsdatum ? rowData[columns.zahlungsdatum - 1] : null;
 
-    // Prüfe, ob es eine Gutschrift ist
-    const isGutschrift = referenz && referenz.toString().startsWith('G-');
+    // Prüfe, ob es eine Gutschrift ist - jetzt basierend auf negativem Betrag
+    const isGutschrift = nettobetrag < 0;
 
     // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
     const prefix = getDocumentTypePrefix(sheetType);
     const zuordnungsKey = `${prefix}#${rowIndex}`;
-    const hatBankzuordnung = bankZuordnungen[zuordnungsKey] !== undefined;
+    const bankzuordnung = bankZuordnungen[zuordnungsKey];
+    const hatBankzuordnung = bankzuordnung !== undefined;
 
-    // Zahlungsstatus berechnen
+    // Zahlungsstatus berechnen - Betrag immer als absoluten Wert verwenden
+    const nettoAbs = Math.abs(nettobetrag);
     const mwst = columns.mwstSatz ?
         numberUtils.parseMwstRate(rowData[columns.mwstSatz - 1], config.tax.defaultMwst) / 100 : 0;
-    const bruttoBetrag = nettobetrag * (1 + mwst);
-    const isPaid = Math.abs(bezahltBetrag) >= Math.abs(bruttoBetrag) * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
+    const bruttoBetrag = nettoAbs * (1 + mwst);
+    const isPaid = Math.abs(bezahltBetrag) >= bruttoBetrag * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
     const isPartialPaid = !isPaid && bezahltBetrag > 0;
 
-    // Bankabgleich-Info aus der Zuordnung
-    const bankInfo = hatBankzuordnung ?
-        getZuordnungsInfo(bankZuordnungen[zuordnungsKey]) :
-        undefined;
+    // Bankabgleich-Info und Datum aus der Zuordnung
+    const bankInfo = hatBankzuordnung ? getZuordnungsInfo(bankzuordnung) : undefined;
+    const bankDatum = hatBankzuordnung ? bankzuordnung.bankDatum : undefined;
+
+    // Bezahlt-Betrag berechnen
+    let newBezahltBetrag = null;
+    if (hatBankzuordnung) {
+        // Wenn Bankzuordnung gefunden wurde und es eine Vollzahlung ist, setze den Bruttobetrag
+        if (bankzuordnung.matchInfo.includes('Vollständige Zahlung')) {
+            newBezahltBetrag = bruttoBetrag;
+        }
+        // Bei Teilzahlung den aktuellen Stand beibehalten oder erhöhen
+        else if (bankzuordnung.matchInfo.includes('Teilzahlung')) {
+            newBezahltBetrag = Math.max(bezahltBetrag, bruttoBetrag * 0.5); // Mindestens 50%
+        }
+    }
 
     // Kategorie bestimmen
     let category = null;
@@ -131,16 +204,28 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
         category = 'normalRows';
     }
 
-    return { category, bankInfo };
+    return {
+        category,
+        bankInfo,
+        bankDatum,
+        bankFound: hatBankzuordnung,
+        bezahltBetrag: newBezahltBetrag,
+        isGutschrift: isGutschrift,
+    };
 }
 
 /**
  * Ermittelt das Präfix für einen Dokumenttyp
  */
 function getDocumentTypePrefix(sheetType) {
-    return sheetType === 'eigenbelege' ? 'eigenbeleg' :
-        sheetType === 'gesellschafterkonto' ? 'gesellschafterkonto' :
-            sheetType === 'holdingTransfers' ? 'holdingtransfer' : sheetType;
+    const prefixMap = {
+        'einnahmen': 'einnahme',
+        'ausgaben': 'ausgabe',
+        'eigenbelege': 'eigenbeleg',
+        'gesellschafterkonto': 'gesellschafterkonto',
+        'holdingTransfers': 'holdingtransfer',
+    };
+    return prefixMap[sheetType] || sheetType;
 }
 
 /**
@@ -194,10 +279,10 @@ function applyColorToRows(sheet, rows, color) {
 }
 
 /**
- * Führt Bank-Info-Updates in Batches aus
+ * Führt Updates für eine Spalte in Batches aus
  */
-function applyBankInfoUpdates(sheet, updates, columns) {
-    if (updates.length === 0 || !columns.bankabgleich) return;
+function applyUpdates(sheet, updates, columnIndex) {
+    if (updates.length === 0 || !columnIndex) return;
 
     // Gruppiere Updates nach Wert für effizientere Batch-Updates
     const groupedUpdates = {};
@@ -217,7 +302,7 @@ function applyBankInfoUpdates(sheet, updates, columns) {
         for (let i = 0; i < rows.length; i += batchSize) {
             const batchRows = rows.slice(i, i + batchSize);
             batchRows.forEach(row => {
-                sheet.getRange(row, columns.bankabgleich).setValue(value);
+                sheet.getRange(row, columnIndex).setValue(value);
             });
 
             // Kurze Pause, um API-Limits zu vermeiden
@@ -234,9 +319,27 @@ function applyBankInfoUpdates(sheet, updates, columns) {
 function getZuordnungsInfo(zuordnung) {
     if (!zuordnung) return '';
 
-    let infoText = '✓ Bank: ' + zuordnung.bankDatum;
+    let infoText = '✓ Bank: ';
 
-    // Wenn es mehrere Zuordnungen gibt (z.B. bei aufgeteilten Zahlungen)
+    // Format the date to Berlin timezone
+    try {
+        const date = zuordnung.bankDatum;
+        if (date) {
+            // Format as DD.MM.YYYY
+            const formattedDate = Utilities.formatDate(
+                new Date(date),
+                Session.getScriptTimeZone(),
+                'dd.MM.yyyy',
+            );
+            infoText += formattedDate;
+        } else {
+            infoText += 'Datum unbekannt';
+        }
+    } catch (e) {
+        infoText += String(zuordnung.bankDatum);
+    }
+
+    // Additional info if available
     if (zuordnung.additional && zuordnung.additional.length > 0) {
         infoText += ' + ' + zuordnung.additional.length + ' weitere';
     }

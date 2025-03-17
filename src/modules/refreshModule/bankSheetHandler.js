@@ -1,4 +1,4 @@
-// src/modules/refreshModule/bankSheetHandler.js (modified)
+// src/modules/refreshModule/bankSheetHandler.js
 import matchingHandler from './matchingHandler.js';
 import formattingHandler from './formattingHandler.js';
 import accountHandler from './accountHandler.js';
@@ -97,7 +97,7 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
         Session.getScriptTimeZone(),
         'dd.MM.yyyy',
     );
-
+    
     if (lastRowText === 'endsaldo') {
         // Endsaldo-Zeile aktualisieren
         sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
