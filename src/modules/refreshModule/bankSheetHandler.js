@@ -1,6 +1,7 @@
-// src/modules/refreshModule/bankSheetHandler.js
+// src/modules/refreshModule/bankSheetHandler.js (modified)
 import matchingHandler from './matchingHandler.js';
 import formattingHandler from './formattingHandler.js';
+import accountHandler from './accountHandler.js';
 import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 
@@ -60,14 +61,17 @@ function refreshBankSheet(sheet, config) {
             {value: 'Ausgabe', background: '#FFC7CE', fontColor: '#9C0006'},
         ]);
 
-        // 5. REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
+        // 5. Buchungskonten (KontoSoll, KontoHaben) mit accountHandler aktualisieren
+        accountHandler.updateBookingAccounts(sheet, 'bankbewegungen', config, true);
+
+        // 6. REFERENZEN-MATCHING: Suche nach Referenzen in Einnahmen- und Ausgaben-Sheets
         console.log('Performing bank reference matching');
         matchingHandler.performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, columnLetters, config);
 
-        // 6. Endsaldo-Zeile aktualisieren
+        // 7. Endsaldo-Zeile aktualisieren
         updateEndSaldoRow(sheet, lastRow, columns, columnLetters);
 
-        // 7. Spaltenbreiten anpassen
+        // 8. Spaltenbreiten anpassen
         sheet.autoResizeColumns(1, sheet.getLastColumn());
 
         console.log('Bank sheet refreshed successfully');
@@ -111,4 +115,5 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
 
 export default {
     refreshBankSheet,
+    updateEndSaldoRow,
 };

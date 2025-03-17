@@ -1,8 +1,9 @@
-// src/modules/refreshModule/index.js
+// src/modules/refreshModule/index.js (modified)
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
 import matchingHandler from './matchingHandler.js';
 import formattingHandler from './formattingHandler.js';
+import accountHandler from './accountHandler.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
@@ -93,6 +94,9 @@ const RefreshModule = {
             throw e; // Fehlermeldung weiterleiten, damit sie in der Hauptfunktion angezeigt wird
         }
     },
+
+    // Expose the account handler for external use
+    accountHandler,
 };
 
 export default RefreshModule;
