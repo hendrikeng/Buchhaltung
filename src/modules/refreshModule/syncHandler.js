@@ -27,6 +27,11 @@ function markPaidInvoices(ss, bankZuordnungen, config) {
 /**
  * Markiert bezahlte Zeilen in einem Sheet
  */
+// src/modules/refreshModule/syncHandler.js
+
+/**
+ * Markiert bezahlte Zeilen in einem Sheet
+ */
 function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     // Konfiguration für das Sheet
     const columns = config[sheetType].columns;
@@ -70,6 +75,58 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     // Datenzeilen durchgehen und in Kategorien einteilen
     for (let i = 0; i < data.length; i++) {
         const row = i + 2; // Aktuelle Zeile im Sheet
+
+        // Check if this row has been linked in bankZuordnungen
+        const prefix = getDocumentTypePrefix(sheetType);
+        const zuordnungsKey = `${prefix}#${row}`;
+        const bankzuordnung = bankZuordnungen[zuordnungsKey];
+        const hasMatch = bankzuordnung !== undefined;
+
+        // Get gutschrift info from current row
+        let isGutschrift = false;
+        if (columns.nettobetrag) {
+            const nettobetrag = numberUtils.parseCurrency(data[i][columns.nettobetrag - 1]);
+            isGutschrift = nettobetrag < 0;
+        }
+
+        // For gutschrifts with bank matches, we handle them specially
+        if (isGutschrift && hasMatch) {
+            // Add to gutschrift category for coloring
+            rowCategories.gutschriftRows.push(row);
+
+            // Also add bank info for gutschrift
+            if (columns.bankabgleich) {
+                bankabgleichUpdates.push({
+                    row,
+                    value: getZuordnungsInfo(bankzuordnung),
+                });
+            }
+
+            // And set payment date for gutschrift
+            if (columns.zahlungsdatum && bankzuordnung.bankDatum) {
+                zahlungsdatumUpdates.push({
+                    row,
+                    value: Utilities.formatDate(
+                        new Date(bankzuordnung.bankDatum),
+                        Session.getScriptTimeZone(),
+                        'dd.MM.yyyy',
+                    ),
+                });
+            }
+
+            // Set payment method for gutschrift
+            if (columns.zahlungsart) {
+                zahlungsartUpdates.push({
+                    row,
+                    value: 'Überweisung',
+                });
+            }
+
+            // Continue to next row
+            continue;
+        }
+
+        // For normal rows, use standard categorization
         const rowData = categorizeRow(data[i], row, columns, sheetType, bankZuordnungen, config);
 
         // Zu entsprechender Kategorie hinzufügen
@@ -85,16 +142,28 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             });
         }
 
-        // Zahlungsdatum setzen, wenn eine Bankbuchung gefunden wurde
+        // Add a note about corrected date when the bank date is different from existing date
         if (rowData.bankDatum && columns.zahlungsdatum) {
-            // Always update with bank date when a bank transaction is found
+            const existingDate = data[i][columns.zahlungsdatum - 1];
+            let newValue = Utilities.formatDate(
+                new Date(rowData.bankDatum),
+                Session.getScriptTimeZone(),
+                'dd.MM.yyyy',
+            );
+
+            // If there's an existing date and it's different, add a note
+            if (existingDate && existingDate !== '') {
+                const existingDateStr = typeof existingDate === 'string' ? existingDate :
+                    Utilities.formatDate(new Date(existingDate), Session.getScriptTimeZone(), 'dd.MM.yyyy');
+
+                if (existingDateStr !== newValue) {
+                    newValue += ' (Datum korrigiert)';
+                }
+            }
+
             zahlungsdatumUpdates.push({
                 row,
-                value: Utilities.formatDate(
-                    new Date(rowData.bankDatum),
-                    Session.getScriptTimeZone(),
-                    'dd.MM.yyyy',
-                ),
+                value: newValue,
             });
         }
 
