@@ -473,19 +473,16 @@ export default {
             datum: 1,              // A: Datum
             referenz: 2,           // B: Referenz/Belegnummer
             gesellschafter: 3,     // C: Gesellschafter
-            art: 4,                // D: Art (Darlehen/Ausschüttung/Kapitalrückführung)
+            kategorie: 4,          // D: Kategorie
             notizen: 5,            // E: Notizen/Kommentare
             buchungskonto: 6,      // F: Buchungskonto
-            betragen: 7,           // G: Betrag
-            bezahlt: 8,            // H: Bereits bezahlter Betrag
-            restbetrag: 9,         // I: Restbetrag
-            quartal: 10,           // J: Berechnetes Quartal
-            zahlungsstatus: 11,    // K: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 12,       // L: Zahlungsart
-            zahlungsdatum: 13,     // M: Zahlungsdatum
-            bankabgleich: 14,      // N: Bankabgleich-Information
-            uebertragJahr: 15,     // O: Übertrag Jahr
-            zeitstempel: 16,       // P: Zeitstempel der letzten Änderung
+            betrag: 7,             // G: Betrag
+            quartal: 8,            // H: Berechnetes Quartal
+            zahlungsart: 9,        // I: Zahlungsart
+            zahlungsdatum: 10,     // J: Zahlungsdatum
+            bankabgleich: 11,      // K: Bankabgleich-Information
+            uebertragJahr: 12,     // L: Übertrag Jahr
+            zeitstempel: 13,       // M: Zeitstempel der letzten Änderung
         },
         // Kategorien als Objekte mit einheitlicher Struktur
         categories: {
@@ -539,17 +536,17 @@ export default {
             datum: 1,              // A: Buchungsdatum
             referenz: 2,           // B: Referenz/Belegnummer
             ziel: 3,               // C: Zielgesellschaft
-            art: 4,                // D: Art (Gewinnübertrag/Kapitalrückführung)
+            kategorie: 4,          // D: Kategorie
             verwendungszweck: 5,   // E: Verwendungszweck
             notizen: 6,            // F: Notizen/Kommentare
             buchungskonto: 7,      // G: Buchungskonto
-            betragen: 8,           // H: Betrag
-            zahlungsstatus: 11,    // I: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 12,       // J: Zahlungsart
-            zahlungsdatum: 13,     // K: Zahlungsdatum
-            bankabgleich: 14,      // L: Bankabgleich-Information
-            uebertragJahr: 15,     // M: Übertrag Jahr
-            zeitstempel: 16,       // N: Zeitstempel der letzten Änderung
+            betrag: 8,             // H: Betrag
+            quartal: 9,            // I: Quartal
+            zahlungsart: 10,       // J: Zahlungsart
+            zahlungsdatum: 11,     // K: Zahlungsdatum
+            bankabgleich: 12,      // L: Bankabgleich-Information
+            uebertragJahr: 13,     // M: Übertrag Jahr
+            zeitstempel: 14,       // N: Zeitstempel der letzten Änderung
         },
         // Kategorien als Objekte mit einheitlicher Struktur
         categories: {

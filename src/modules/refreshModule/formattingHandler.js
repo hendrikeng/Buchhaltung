@@ -32,7 +32,6 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
             Object.keys(config.ausgaben.categories),
         );
     } else if (sheetName === 'Eigenbelege') {
-        // Kategorie-Dropdown für Eigenbelege
         cellValidator.validateDropdown(
             sheet, 2, columns.kategorie, numRows, 1,
             Object.keys(config.eigenbelege.categories),
@@ -61,10 +60,15 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
             config.common.shareholders,
         );
     } else if (sheetName === 'Holding Transfers') {
-        // Art-Dropdown für Holding Transfers
+        // Kategorie-Dropdown für Holding Transfers
         cellValidator.validateDropdown(
-            sheet, 2, columns.art, numRows, 1,
+            sheet, 2, columns.kategorie, numRows, 1,
             Object.keys(config.holdingTransfers.categories),
+        );
+        // Zielgesellschaft-Dropdown für Holding Transfers
+        cellValidator.validateDropdown(
+            sheet, 2, columns.ziel, numRows, 1,
+            config.common.companies,
         );
     }
 

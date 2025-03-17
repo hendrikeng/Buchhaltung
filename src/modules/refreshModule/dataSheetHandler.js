@@ -85,7 +85,7 @@ function refreshDataSheet(sheet, sheetName, config) {
                     {length: numRows},
                     (_, i) => [`=IF(VALUE(${columnLetters.bezahlt}${i + 2})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${i + 2})>=VALUE(${columnLetters.bruttoBetrag}${i + 2});"Bezahlt";"Teilbezahlt"))`],
                 );
-            } else {
+            } else if (sheetName === 'Eigenbelege') {
                 // Für Eigenbelege: Zahlungsstatus
                 formulasBatch[columns.zahlungsstatus] = Array.from(
                     {length: numRows},
@@ -130,7 +130,7 @@ function refreshDataSheet(sheet, sheetName, config) {
                     {value: 'Teilbezahlt', background: '#FFEB9C', fontColor: '#9C6500'},
                     {value: 'Bezahlt', background: '#C6EFCE', fontColor: '#006100'},
                 ]);
-            } else {
+            } else if (sheetName === 'Eigenbelege') {
                 // Für Eigenbelege: Status
                 formattingHandler.setConditionalFormattingForStatusColumn(sheet, columnLetters.zahlungsstatus, [
                     {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
