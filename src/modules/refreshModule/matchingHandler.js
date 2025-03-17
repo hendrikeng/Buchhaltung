@@ -226,6 +226,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
         const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
         const refNumber = row[columns.referenz - 1];       // Referenznummer
         const betragValue = Math.abs(numberUtils.parseCurrency(row[columns.betrag - 1]));
+        const betragOriginal = numberUtils.parseCurrency(row[columns.betrag - 1]); // Original with sign
         const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : '';
 
         // Match-Informationen
@@ -233,12 +234,30 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
 
         // Matching-Logik basierend auf Transaktionstyp
         if (!stringUtils.isEmpty(refNumber)) {
-            if (tranType === 'Einnahme') {
+            // IMPORTANT FIX: For negative amounts (Ausgabe in bank but potentially Gutschrift),
+            // first try to find a matching gutschrift in Einnahmen
+            if (tranType === 'Ausgabe' && betragOriginal < 0) {
+                // First try to match as gutschrift in Einnahmen
+                matchFound = processDocumentTypeMatching(
+                    sheetData.einnahmen, refNumber, betragValue, row,
+                    columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
+                    matchResults, kontoSollResults, kontoHabenResults, categoryResults,
+                    bankZuordnungen, category, config, true);
+
+                // If gutschrift match found, continue to next row
+                if (matchFound) continue;
+            }
+
+            // Standard logic for Einnahme
+            if (tranType === 'Einnahme' && !matchFound) {
                 matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'einnahme', config.einnahmen.columns, config.einnahmen.kontoMapping,
                     matchResults, kontoSollResults, kontoHabenResults, categoryResults,
                     bankZuordnungen, category, config);
-            } else if (tranType === 'Ausgabe') {
+            }
+
+            // Standard logic for Ausgabe
+            if (tranType === 'Ausgabe' && !matchFound) {
                 const docTypes = [
                     { data: sheetData.ausgaben, type: 'ausgabe', cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
                     { data: sheetData.eigenbelege, type: 'eigenbeleg', cols: config.eigenbelege.columns, mapping: config.eigenbelege.kontoMapping },
@@ -253,15 +272,6 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                         matchResults, kontoSollResults, kontoHabenResults, categoryResults,
                         bankZuordnungen, category, config);
                     if (matchFound) break;
-                }
-
-                // Falls keine Übereinstimmung, noch nach Gutschriften in Einnahmen suchen
-                // ABER NUR wenn es Einnahmen sind, da Gutschriften nur negative Einnahmen sein können
-                if (!matchFound) {
-                    matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
-                        columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                        matchResults, kontoSollResults, kontoHabenResults, categoryResults,
-                        bankZuordnungen, category, config, true);
                 }
             }
         }
@@ -300,13 +310,18 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     bankZuordnungen, category, config, isGutschrift = false) {
 
     // Only allow gutschrift processing for einnahme type
-    if (isGutschrift && docType !== 'einnahme') {
+    if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift') {
         return false;
     }
 
     // Important: When checking for Gutschriften (credit notes), we need to handle the sign differently
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
+
+    // For gutschrift matching, verify the amount is negative in the original data
+    if (isGutschrift && (!matchResult.originalData || matchResult.originalData.betrag >= 0)) {
+        return false; // Not actually a gutschrift, skip this match
+    }
 
     // Validate reference match - ensure they have some relation
     if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
@@ -533,12 +548,13 @@ function createMatchInfo(matchResult, docType, betragValue) {
         }
     }
 
-    // Enhanced Gutschrift detection - check both docType and the actual data
+    // Improved gutschrift detection - explicitly check both docType and the actual data
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
     if (isActualGutschrift) {
-        const gutschriftBetrag = Math.abs(matchResult.brutto);
+        const gutschriftBetrag = Math.abs(matchResult.originalData ?
+            matchResult.originalData.betrag : matchResult.brutto);
 
         if (numberUtils.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
             matchStatus = ' (Vollständige Gutschrift)';

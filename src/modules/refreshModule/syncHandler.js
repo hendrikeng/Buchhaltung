@@ -160,12 +160,28 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         if (rowData.bankDatum && columns.zahlungsdatum) {
             const existingDate = data[i][columns.zahlungsdatum - 1];
             if (existingDate && existingDate !== '') {
-                // Format both dates to compare them
-                const existingDateStr = formatDate(existingDate);
-                const bankDateStr = formatDate(rowData.bankDatum);
+                try {
+                    // Normalize both dates to compare them properly
+                    const existingDateObj = dateUtils.parseDate(existingDate);
+                    const bankDateObj = dateUtils.parseDate(rowData.bankDatum);
 
-                if (existingDateStr !== bankDateStr) {
-                    dateCorrection = true;
+                    if (existingDateObj && bankDateObj) {
+                        // Format to YYYY-MM-DD for proper comparison
+                        const existingNormalized = Utilities.formatDate(
+                            existingDateObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                        const bankNormalized = Utilities.formatDate(
+                            bankDateObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+                        // Only mark as corrected if dates are actually different
+                        dateCorrection = existingNormalized !== bankNormalized;
+                    } else {
+                        // If either date couldn't be parsed, don't mark as correction
+                        dateCorrection = false;
+                    }
+                } catch (e) {
+                    // If date parsing fails, don't mark as correction
+                    console.error('Error comparing dates:', e);
+                    dateCorrection = false;
                 }
             }
         }

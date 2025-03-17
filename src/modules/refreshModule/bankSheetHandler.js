@@ -97,7 +97,7 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
         Session.getScriptTimeZone(),
         'dd.MM.yyyy',
     );
-    
+
     if (lastRowText === 'endsaldo') {
         // Endsaldo-Zeile aktualisieren
         sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
