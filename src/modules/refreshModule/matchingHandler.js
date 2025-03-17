@@ -294,10 +294,12 @@ function addEmptyResults(matchResults, kontoSollResults, kontoHabenResults, cate
 /**
  * Verarbeitet eine Dokumententyp-Übereinstimmung
  */
+
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
     matchResults, kontoSollResults, kontoHabenResults, categoryResults,
     bankZuordnungen, category, config, isGutschrift = false) {
 
+    // Important: When checking for Gutschriften (credit notes), we need to handle the sign differently
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
 
@@ -337,17 +339,23 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     categoryResults.push([sourceCategory || category]);
 
     // Für spätere Markierung merken
+    // Fix: Make sure we're properly marking whether this is a Gutschrift
     const key = `${docType}#${matchResult.row}`;
 
+    // Enhanced: Store whether this is a Gutschrift based on original data
+    const isActualGutschrift = docType === 'gutschrift' ||
+        (matchResult.originalData && matchResult.originalData.betrag < 0);
+
     bankZuordnungen[key] = {
-        typ: docType === 'gutschrift' ? 'einnahme' : docType,
+        typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
         bankDatum: row[columns.datum - 1],
         matchInfo: matchInfo,
-        transTyp: docType === 'gutschrift' ? 'Gutschrift' : row[columns.transaktionstyp - 1],
+        transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
         category: sourceCategory,
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
+        isGutschrift: isActualGutschrift, // Add explicit flag
     };
 
     return true;
@@ -486,8 +494,11 @@ function createMatchInfo(matchResult, docType, betragValue) {
         }
     }
 
-    // Spezialbehandlung für Gutschriften - jetzt basierend auf negativem Betrag
-    if (docType === 'gutschrift' || (matchResult.originalData && matchResult.originalData.betrag < 0)) {
+    // Enhanced Gutschrift detection - check both docType and the actual data
+    const isActualGutschrift = docType === 'gutschrift' ||
+        (matchResult.originalData && matchResult.originalData.betrag < 0);
+
+    if (isActualGutschrift) {
         const gutschriftBetrag = Math.abs(matchResult.brutto);
 
         if (numberUtils.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
@@ -512,6 +523,7 @@ function createMatchInfo(matchResult, docType, betragValue) {
 
     return `${docTypeName} #${matchResult.row}${matchStatus}`;
 }
+
 
 /**
  * Setzt Standard-Konten basierend auf der Kategorie und Transaktionstyp

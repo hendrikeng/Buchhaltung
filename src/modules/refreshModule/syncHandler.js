@@ -76,34 +76,50 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
     for (let i = 0; i < data.length; i++) {
         const row = i + 2; // Aktuelle Zeile im Sheet
 
-        // Check if this row has been linked in bankZuordnungen
+        // Get the sheet or doctype prefix
         const prefix = getDocumentTypePrefix(sheetType);
-        const zuordnungsKey = `${prefix}#${row}`;
-        const bankzuordnung = bankZuordnungen[zuordnungsKey];
-        const hasMatch = bankzuordnung !== undefined;
 
-        // Get gutschrift info from current row
+        // Enhanced: Also check if this row is referenced as a Gutschrift
+        // This addresses rows that are Einnahmen but are actually credit notes
+        const zuordnungsKey = `${prefix}#${row}`;
+        const gutschriftKey = `gutschrift#${row}`;
+
+        // Check both regular key and gutschrift key
+        const bankzuordnung = bankZuordnungen[zuordnungsKey] || bankZuordnungen[gutschriftKey];
+        const hatBankzuordnung = bankzuordnung !== undefined;
+
+        // Get gutschrift info from current row or from bank match
         let isGutschrift = false;
+
+        // Method 1: Check the amount sign
         if (columns.nettobetrag) {
             const nettobetrag = numberUtils.parseCurrency(data[i][columns.nettobetrag - 1]);
             isGutschrift = nettobetrag < 0;
         }
 
+        // Method 2: Check bank match info for Gutschrift status
+        if (hatBankzuordnung && (bankzuordnung.isGutschrift ||
+            bankzuordnung.transTyp === 'Gutschrift' ||
+            bankzuordnung.typ === 'gutschrift' ||
+            (bankzuordnung.matchInfo && bankzuordnung.matchInfo.includes('Gutschrift')))) {
+            isGutschrift = true;
+        }
+
         // For gutschrifts with bank matches, we handle them specially
-        if (isGutschrift && hasMatch) {
+        if (isGutschrift) {
             // Add to gutschrift category for coloring
             rowCategories.gutschriftRows.push(row);
 
             // Also add bank info for gutschrift
-            if (columns.bankabgleich) {
+            if (columns.bankabgleich && hatBankzuordnung) {
                 bankabgleichUpdates.push({
                     row,
                     value: getZuordnungsInfo(bankzuordnung),
                 });
             }
 
-            // And set payment date for gutschrift
-            if (columns.zahlungsdatum && bankzuordnung.bankDatum) {
+            // And set payment date for gutschrift if we have bank info
+            if (columns.zahlungsdatum && hatBankzuordnung && bankzuordnung.bankDatum) {
                 zahlungsdatumUpdates.push({
                     row,
                     value: Utilities.formatDate(
@@ -115,14 +131,14 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             }
 
             // Set payment method for gutschrift
-            if (columns.zahlungsart) {
+            if (columns.zahlungsart && hatBankzuordnung) {
                 zahlungsartUpdates.push({
                     row,
                     value: 'Überweisung',
                 });
             }
 
-            // Continue to next row
+            // Continue to next row - we've handled this gutschrift
             continue;
         }
 
@@ -215,18 +231,27 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 /**
  * Kategorisiert eine Zeile basierend auf ihren Daten
  */
+// Updated categorizeRow function in syncHandler.js
+
 function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, config) {
     const nettobetrag = columns.nettobetrag ? numberUtils.parseCurrency(rowData[columns.nettobetrag - 1]) : 0;
     const bezahltBetrag = columns.bezahlt ? numberUtils.parseCurrency(rowData[columns.bezahlt - 1]) : 0;
     const zahlungsDatum = columns.zahlungsdatum ? rowData[columns.zahlungsdatum - 1] : null;
 
-    // Prüfe, ob es eine Gutschrift ist - jetzt basierend auf negativem Betrag
+    // Enhanced Gutschrift detection - check both negative amount and keys
     const isGutschrift = nettobetrag < 0;
 
-    // Prüfe, ob diese Position im Banking-Sheet zugeordnet wurde
+    // Check if this row has banking matches
     const prefix = getDocumentTypePrefix(sheetType);
     const zuordnungsKey = `${prefix}#${rowIndex}`;
-    const bankzuordnung = bankZuordnungen[zuordnungsKey];
+    const gutschriftKey = `gutschrift#${rowIndex}`;  // Also check gutschrift key
+
+    // Check both regular key and gutschrift key
+    let bankzuordnung = bankZuordnungen[zuordnungsKey];
+    if (!bankzuordnung && isGutschrift) {
+        bankzuordnung = bankZuordnungen[gutschriftKey];
+    }
+
     const hatBankzuordnung = bankzuordnung !== undefined;
 
     // Zahlungsstatus berechnen - Betrag immer als absoluten Wert verwenden
@@ -245,16 +270,16 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     let newBezahltBetrag = null;
     if (hatBankzuordnung) {
         // Wenn Bankzuordnung gefunden wurde und es eine Vollzahlung ist, setze den Bruttobetrag
-        if (bankzuordnung.matchInfo.includes('Vollständige Zahlung')) {
+        if (bankzuordnung.matchInfo && bankzuordnung.matchInfo.includes('Vollständige Zahlung')) {
             newBezahltBetrag = bruttoBetrag;
         }
         // Bei Teilzahlung den aktuellen Stand beibehalten oder erhöhen
-        else if (bankzuordnung.matchInfo.includes('Teilzahlung')) {
+        else if (bankzuordnung.matchInfo && bankzuordnung.matchInfo.includes('Teilzahlung')) {
             newBezahltBetrag = Math.max(bezahltBetrag, bruttoBetrag * 0.5); // Mindestens 50%
         }
     }
 
-    // Kategorie bestimmen
+    // Kategorie bestimmen - handle Gutschriften with priority
     let category = null;
 
     if (isGutschrift) {
@@ -293,6 +318,7 @@ function getDocumentTypePrefix(sheetType) {
         'eigenbelege': 'eigenbeleg',
         'gesellschafterkonto': 'gesellschafterkonto',
         'holdingTransfers': 'holdingtransfer',
+        'gutschrift': 'gutschrift',  // Add explicit mapping for gutschrift
     };
     return prefixMap[sheetType] || sheetType;
 }
