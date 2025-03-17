@@ -170,7 +170,7 @@ function updateBookingAccounts(sheet, configKey, config) {
     const columns = config[configKey].columns;
     const kontoMapping = config[configKey].kontoMapping;
 
-    if (!columns.kategorie || !columns.buchungsKonto) {
+    if (!columns.kategorie || !columns.buchungskonto) {
         console.log(`Keine Kategorie- oder Buchungskonto-Spalten für ${configKey} gefunden.`);
         return;
     }
@@ -188,7 +188,7 @@ function updateBookingAccounts(sheet, configKey, config) {
         const kategorieValues = kategorieRange.getValues();
 
         // Aktuelle Buchungskonto-Daten holen
-        const kontoRange = sheet.getRange(2, columns.buchungsKonto, numRows, 1);
+        const kontoRange = sheet.getRange(2, columns.buchungskonto, numRows, 1);
         const kontoValues = kontoRange.getValues();
 
         // Neue Buchungskonto-Werte basierend auf Kategorien erstellen

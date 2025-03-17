@@ -11,7 +11,7 @@ export default {
             leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
             notizen: 5,                // E: Notizen
             kategorie: 6,              // F: Kategorie
-            buchungsKonto: 7,          // G: Buchungskonto
+            buchungskonto: 7,          // G: Buchungskonto
             nettobetrag: 8,            // H: Nettobetrag
             mwstSatz: 9,               // I: MwSt-Satz in %
             mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
@@ -123,7 +123,7 @@ export default {
             leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
             notizen: 5,                // E: Notizen
             kategorie: 6,              // F: Kategorie
-            buchungsKonto: 7,          // G: Buchungskonto
+            buchungskonto: 7,          // G: Buchungskonto
             nettobetrag: 8,            // H: Nettobetrag
             mwstSatz: 9,               // I: MwSt-Satz in %
             mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
@@ -390,7 +390,7 @@ export default {
             beschreibung: 4,       // D: Beschreibung
             notizen: 5,            // E: Notizen
             kategorie: 6,          // F: Kategorie
-            buchungsKonto: 7,      // G: Buchungskonto
+            buchungskonto: 7,      // G: Buchungskonto
             nettobetrag: 8,        // H: Nettobetrag
             mwstSatz: 9,           // I: MwSt-Satz in %
             mwstBetrag: 10,        // J: MwSt-Betrag (H*I)
