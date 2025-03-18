@@ -1,4 +1,4 @@
-// src/utils/dateUtils.js
+// utils/dateUtils.js
 /**
  * Funktionen für die Verarbeitung und Formatierung von Datumsangaben
  */
@@ -21,40 +21,34 @@ function extractDateFromFilename(filename) {
     }
 
     const nameWithoutExtension = filename.replace(/\.[^/.]+$/, '');
-    let dateStr = null;
 
-    // Verschiedene Formate erkennen (vom spezifischsten zum allgemeinsten)
-    // 1. Format: DD.MM.YYYY im Dateinamen (deutsches Format)
-    let match = nameWithoutExtension.match(/(\d{2}[.]\d{2}[.]\d{4})/);
-    if (match?.[1]) {
-        const parts = match[1].split('.');
-        dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD für Date-Konstruktor
-    } else {
-        // 2. Format: RE-YYYY-MM-DD oder ähnliches mit Trennzeichen
-        match = nameWithoutExtension.match(/[^0-9](\d{4}[-_./]\d{2}[-_./]\d{2})[^0-9]/);
-        if (match?.[1]) {
-            dateStr = match[1].replace(/[-_.]/g, '-');
-        } else {
-            // 3. Format: YYYY-MM-DD am Anfang oder Ende
-            match = nameWithoutExtension.match(/(^|[^0-9])(\d{4}[-_./]\d{2}[-_./]\d{2})($|[^0-9])/);
-            if (match?.[2]) {
-                dateStr = match[2].replace(/[-_.]/g, '-');
-            } else {
-                // 4. Format: DD-MM-YYYY mit verschiedenen Trennzeichen
-                match = nameWithoutExtension.match(/(\d{2})[-_./](\d{2})[-_./](\d{4})/);
-                if (match) {
-                    const [, day, month, year] = match;
-                    dateStr = `${year}-${month}-${day}`;
-                }
-            }
-        }
-    }
+    // Simplified regex approach - test in order of probability
+    const datePatterns = [
+        // DD.MM.YYYY (German format)
+        {
+            regex: /(\d{2})[.](\d{2})[.](\d{4})/,
+            process: (m) => new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])),
+        },
+        // YYYY-MM-DD format
+        {
+            regex: /(\d{4})[-_./](\d{2})[-_./](\d{2})/,
+            process: (m) => new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])),
+        },
+        // DD-MM-YYYY format with various separators
+        {
+            regex: /(\d{2})[-_./](\d{2})[-_./](\d{4})/,
+            process: (m) => new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])),
+        },
+    ];
 
     let result = null;
-    if (dateStr) {
-        result = new Date(dateStr);
-        // Prüfen ob das Datum valide ist
-        if (isNaN(result.getTime())) {
+    for (const pattern of datePatterns) {
+        const match = nameWithoutExtension.match(pattern.regex);
+        if (match) {
+            result = pattern.process(match);
+            if (!isNaN(result.getTime())) {
+                break;
+            }
             result = null;
         }
     }
@@ -78,6 +72,12 @@ function getMonthFromRow(row, sheetType, config) {
     const columns = config[sheetType]?.columns;
     if (!columns) return null;
 
+    // Cache key for frequent lookups
+    const cacheKey = `month_${sheetType}_${JSON.stringify(row)}`;
+    if (_dateCache.has(cacheKey)) {
+        return _dateCache.get(cacheKey);
+    }
+
     // First try to use the payment date, which is most relevant for tax calculations
     let dateToUse = null;
 
@@ -91,21 +91,20 @@ function getMonthFromRow(row, sheetType, config) {
     }
 
     // If we have a valid date, extract month (1-12)
+    let result = null;
     if (dateToUse && !isNaN(dateToUse.getTime())) {
         // Check if the year matches the configured year
         const targetYear = config?.tax?.year || new Date().getFullYear();
 
         if (dateToUse.getFullYear() === targetYear) {
-            return dateToUse.getMonth() + 1; // JavaScript months are 0-based
+            result = dateToUse.getMonth() + 1; // JavaScript months are 0-based
         }
     }
 
-    // Could not determine a valid month
-    return null;
+    // Cache the result
+    _dateCache.set(cacheKey, result);
+    return result;
 }
-
-// src/utils/dateUtils.js
-// We only need standard date parsing/formatting without timezone complexity
 
 /**
  * Parst ein Datum aus verschiedenen Formaten
@@ -120,26 +119,52 @@ function parseDate(value) {
         return value;
     }
 
+    // Cache for parsed dates
+    const cacheKey = `parse_${value}`;
+    if (_dateCache.has(cacheKey)) {
+        return _dateCache.get(cacheKey);
+    }
+
     // String-Wert parsen
     const dateStr = value.toString().trim();
+    let result = null;
 
-    // Deutsches Format (DD.MM.YYYY)
-    const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
-    if (germanFormat.test(dateStr)) {
-        const [, day, month, year] = dateStr.match(germanFormat);
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    // Unified regex approach to date parsing
+    const datePatterns = [
+        // DD.MM.YYYY (German format)
+        {
+            regex: /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,
+            process: (m) => new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])),
+        },
+        // YYYY-MM-DD (ISO format)
+        {
+            regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+            process: (m) => new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])),
+        },
+    ];
+
+    for (const pattern of datePatterns) {
+        const match = dateStr.match(pattern.regex);
+        if (match) {
+            result = pattern.process(match);
+            if (!isNaN(result.getTime())) {
+                break;
+            }
+            result = null;
+        }
     }
 
-    // ISO Format (YYYY-MM-DD)
-    const isoFormat = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
-    if (isoFormat.test(dateStr)) {
-        const [, year, month, day] = dateStr.match(isoFormat);
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    // Fallback to standard Date constructor if patterns didn't match
+    if (!result) {
+        const fallbackDate = new Date(dateStr);
+        if (!isNaN(fallbackDate.getTime())) {
+            result = fallbackDate;
+        }
     }
 
-    // Fallback
-    const parsedDate = new Date(dateStr);
-    return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    // Cache the result
+    _dateCache.set(cacheKey, result);
+    return result;
 }
 
 /**
@@ -150,28 +175,45 @@ function parseDate(value) {
 function formatDate(date) {
     if (!date) return '';
 
-    let dateObj;
+    // Cache for formatted dates
+    const cacheKey = `format_${date}`;
+    if (_dateCache.has(cacheKey)) {
+        return _dateCache.get(cacheKey);
+    }
+
+    let result = '';
+
     if (typeof date === 'string') {
         // If already in DD.MM.YYYY format, return it
         if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(date)) {
-            return date;
+            result = date;
+        } else {
+            const dateObj = parseDate(date);
+            if (dateObj && !isNaN(dateObj.getTime())) {
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                result = `${day}.${month}.${year}`;
+            } else {
+                result = String(date);
+            }
         }
-        dateObj = parseDate(date);
     } else if (date instanceof Date) {
-        dateObj = date;
+        if (!isNaN(date.getTime())) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            result = `${day}.${month}.${year}`;
+        } else {
+            result = '';
+        }
     } else {
-        return String(date);
+        result = String(date);
     }
 
-    if (!dateObj || isNaN(dateObj.getTime())) {
-        return String(date);
-    }
-
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const year = dateObj.getFullYear();
-
-    return `${day}.${month}.${year}`;
+    // Cache the result
+    _dateCache.set(cacheKey, result);
+    return result;
 }
 
 export default {

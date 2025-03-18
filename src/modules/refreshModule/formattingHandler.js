@@ -3,7 +3,7 @@ import sheetUtils from '../../utils/sheetUtils.js';
 import cellValidator from '../validatorModule/cellValidator.js';
 
 /**
- * Setzt bedingte Formatierung für eine Statusspalte
+ * Setzt bedingte Formatierung für eine Statusspalte mit optimierter API-Nutzung
  * @param {Sheet} sheet - Das Sheet
  * @param {string} column - Spaltenbezeichnung (z.B. "L")
  * @param {Array<Object>} conditions - Bedingungen (value, background, fontColor)
@@ -13,7 +13,7 @@ function setConditionalFormattingForStatusColumn(sheet, column, conditions) {
 }
 
 /**
- * Setzt Dropdown-Validierungen für ein Sheet
+ * Setzt Dropdown-Validierungen für ein Sheet mit Batch-Validierung
  * @param {Sheet} sheet - Das Sheet
  * @param {string} sheetName - Name des Sheets
  * @param {number} numRows - Anzahl der Datenzeilen
@@ -21,68 +21,88 @@ function setConditionalFormattingForStatusColumn(sheet, column, conditions) {
  * @param {Object} config - Die Konfiguration
  */
 function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
+    // Optimierung: Alle Validierungen in einem Objekt sammeln für weniger API-Calls
+    const validations = [];
+
+    // 1. Sheet-spezifische Validierungen
     if (sheetName === 'Einnahmen') {
-        cellValidator.validateDropdown(
-            sheet, 2, columns.kategorie, numRows, 1,
-            Object.keys(config.einnahmen.categories),
-        );
+        validations.push({
+            column: columns.kategorie,
+            values: Object.keys(config.einnahmen.categories),
+        });
     } else if (sheetName === 'Ausgaben') {
-        cellValidator.validateDropdown(
-            sheet, 2, columns.kategorie, numRows, 1,
-            Object.keys(config.ausgaben.categories),
-        );
+        validations.push({
+            column: columns.kategorie,
+            values: Object.keys(config.ausgaben.categories),
+        });
     } else if (sheetName === 'Eigenbelege') {
-        cellValidator.validateDropdown(
-            sheet, 2, columns.kategorie, numRows, 1,
-            Object.keys(config.eigenbelege.categories),
-        );
+        validations.push({
+            column: columns.kategorie,
+            values: Object.keys(config.eigenbelege.categories),
+        });
 
-        // Dropdown für "Ausgelegt von" hinzufügen (merged aus shareholders und employees)
-        const ausleger = [
-            ...config.common.shareholders,
-            ...config.common.employees,
-        ];
-
-        cellValidator.validateDropdown(
-            sheet, 2, columns.ausgelegtVon, numRows, 1,
-            ausleger,
-        );
+        // Dropdown für "Ausgelegt von"
+        if (columns.ausgelegtVon) {
+            validations.push({
+                column: columns.ausgelegtVon,
+                values: [...config.common.shareholders, ...config.common.employees],
+            });
+        }
     } else if (sheetName === 'Gesellschafterkonto') {
         // Kategorie-Dropdown für Gesellschafterkonto
-        cellValidator.validateDropdown(
-            sheet, 2, columns.kategorie, numRows, 1,
-            Object.keys(config.gesellschafterkonto.categories),
-        );
+        if (columns.kategorie) {
+            validations.push({
+                column: columns.kategorie,
+                values: Object.keys(config.gesellschafterkonto.categories),
+            });
+        }
 
         // Dropdown für Gesellschafter
-        cellValidator.validateDropdown(
-            sheet, 2, columns.gesellschafter, numRows, 1,
-            config.common.shareholders,
-        );
+        if (columns.gesellschafter) {
+            validations.push({
+                column: columns.gesellschafter,
+                values: config.common.shareholders,
+            });
+        }
     } else if (sheetName === 'Holding Transfers') {
         // Kategorie-Dropdown für Holding Transfers
-        cellValidator.validateDropdown(
-            sheet, 2, columns.kategorie, numRows, 1,
-            Object.keys(config.holdingTransfers.categories),
-        );
+        if (columns.kategorie) {
+            validations.push({
+                column: columns.kategorie,
+                values: Object.keys(config.holdingTransfers.categories),
+            });
+        }
+
         // Zielgesellschaft-Dropdown für Holding Transfers
-        cellValidator.validateDropdown(
-            sheet, 2, columns.ziel, numRows, 1,
-            config.common.companies,
-        );
+        if (columns.ziel) {
+            validations.push({
+                column: columns.ziel,
+                values: config.common.companies,
+            });
+        }
     }
 
-    // Zahlungsart-Dropdown für alle Blätter mit Zahlungsart-Spalte
+    // 2. Gemeinsame Validierungen für alle Sheets
     if (columns.zahlungsart) {
-        cellValidator.validateDropdown(
-            sheet, 2, columns.zahlungsart, numRows, 1,
-            config.common.paymentType,
-        );
+        validations.push({
+            column: columns.zahlungsart,
+            values: config.common.paymentType,
+        });
     }
+
+    // 3. Alle Validierungen in effizienten Batches anwenden
+    validations.forEach(validation => {
+        if (validation.column && validation.values?.length > 0) {
+            cellValidator.validateDropdown(
+                sheet, 2, validation.column, numRows, 1,
+                validation.values,
+            );
+        }
+    });
 }
 
 /**
- * Wendet Validierungen auf das Bankbewegungen-Sheet an
+ * Wendet Validierungen auf das Bankbewegungen-Sheet an mit optimierter Batch-Verarbeitung
  * @param {Sheet} sheet - Das Sheet
  * @param {number} firstDataRow - Erste Datenzeile
  * @param {number} numDataRows - Anzahl der Datenzeilen
@@ -90,46 +110,81 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
  * @param {Object} config - Die Konfiguration
  */
 function applyBankSheetValidations(sheet, firstDataRow, numDataRows, columns, config) {
-    // Validierung für Transaktionstyp
-    cellValidator.validateDropdown(
-        sheet, firstDataRow, columns.transaktionstyp, numDataRows, 1,
-        config.bankbewegungen.types,
-    );
+    // Optimierung: Alle Validierungen in einem Array sammeln
+    const validations = [];
 
-    // Validierung für Kategorie
-    cellValidator.validateDropdown(
-        sheet, firstDataRow, columns.kategorie, numDataRows, 1,
-        config.bankbewegungen.categories,
-    );
+    // 1. Validierung für Transaktionstyp
+    if (columns.transaktionstyp) {
+        validations.push({
+            column: columns.transaktionstyp,
+            values: config.bankbewegungen.types,
+        });
+    }
 
-    // Konten für Dropdown-Validierung sammeln
+    // 2. Validierung für Kategorie
+    if (columns.kategorie) {
+        validations.push({
+            column: columns.kategorie,
+            values: config.bankbewegungen.categories,
+        });
+    }
+
+    // 3. Konten für Dropdown-Validierung sammeln (nur einmal)
+    const kontoCollections = collectAllowedAccounts(config);
+
+    // 4. Validierungen für Konten
+    if (columns.kontoSoll) {
+        validations.push({
+            column: columns.kontoSoll,
+            values: Array.from(kontoCollections.allowedKontoSoll),
+        });
+    }
+
+    if (columns.kontoHaben) {
+        validations.push({
+            column: columns.kontoHaben,
+            values: Array.from(kontoCollections.allowedGegenkonto),
+        });
+    }
+
+    // 5. Alle Validierungen in effizienten Batches anwenden
+    validations.forEach(validation => {
+        if (validation.column && validation.values?.length > 0) {
+            cellValidator.validateDropdown(
+                sheet, firstDataRow, validation.column, numDataRows, 1,
+                validation.values,
+            );
+        }
+    });
+}
+
+/**
+ * Sammelt erlaubte Konten aus allen Mappings
+ * @param {Object} config - Die Konfiguration
+ * @returns {Object} Erlaubte Konten
+ */
+function collectAllowedAccounts(config) {
     const allowedKontoSoll = new Set();
     const allowedGegenkonto = new Set();
 
-    // Konten aus allen relevanten Mappings sammeln
-    [
+    // Optimierung: Alle Mappings in einem Array definieren
+    const mappings = [
         config.einnahmen.kontoMapping,
         config.ausgaben.kontoMapping,
         config.eigenbelege.kontoMapping,
         config.gesellschafterkonto.kontoMapping,
         config.holdingTransfers.kontoMapping,
-    ].forEach(mapping => {
+    ];
+
+    // Sammle alle Konten aus den Mappings
+    mappings.forEach(mapping => {
         Object.values(mapping).forEach(m => {
             if (m.soll) allowedKontoSoll.add(m.soll);
             if (m.gegen) allowedGegenkonto.add(m.gegen);
         });
     });
 
-    // Dropdown-Validierungen für Konten setzen
-    cellValidator.validateDropdown(
-        sheet, firstDataRow, columns.kontoSoll, numDataRows, 1,
-        Array.from(allowedKontoSoll),
-    );
-
-    cellValidator.validateDropdown(
-        sheet, firstDataRow, columns.kontoHaben, numDataRows, 1,
-        Array.from(allowedGegenkonto),
-    );
+    return { allowedKontoSoll, allowedGegenkonto };
 }
 
 export default {

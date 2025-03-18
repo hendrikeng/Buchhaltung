@@ -3,6 +3,9 @@
  * Funktionen für die Verarbeitung von Strings
  */
 
+// Cache für häufig verwendete Operationen
+const _stringCache = new Map();
+
 /**
  * Prüft, ob ein Wert leer oder undefiniert ist
  * @param {*} value - Der zu prüfende Wert
@@ -19,17 +22,27 @@ function isEmpty(value) {
  */
 function normalizeText(text) {
     if (!text) return '';
-    return text.toString()
+
+    // Cache-Lookup für häufige Normalisierungen
+    const cacheKey = `normalize_${text}`;
+    if (_stringCache.has(cacheKey)) {
+        return _stringCache.get(cacheKey);
+    }
+
+    // Optimierte Zeichenersetzung mit Map-Lookup statt mehreren replace-Aufrufen
+    const replacements = {
+        'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
+        'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue',
+    };
+
+    const result = text.toString()
         .toLowerCase()
-        .replace(/[äöüß]/g, match => {
-            return {
-                'ä': 'ae',
-                'ö': 'oe',
-                'ü': 'ue',
-                'ß': 'ss',
-            }[match];
-        })
+        .replace(/[äöüßÄÖÜ]/g, match => replacements[match] || match)
         .replace(/[^a-z0-9]/g, '');
+
+    // Ergebnis cachen
+    _stringCache.set(cacheKey, result);
+    return result;
 }
 
 /**
@@ -38,6 +51,19 @@ function normalizeText(text) {
  * @returns {string} - Spaltenbuchstabe(n)
  */
 function getColumnLetter(columnIndex) {
+    // Cache für häufig verwendete Spaltenindizes
+    const cacheKey = `column_${columnIndex}`;
+    if (_stringCache.has(cacheKey)) {
+        return _stringCache.get(cacheKey);
+    }
+
+    // Quick return für häufige Spalten
+    if (columnIndex >= 1 && columnIndex <= 26) {
+        const letter = String.fromCharCode(64 + columnIndex);
+        _stringCache.set(cacheKey, letter);
+        return letter;
+    }
+
     let letter = '';
     let colIndex = columnIndex;
 
@@ -47,6 +73,8 @@ function getColumnLetter(columnIndex) {
         colIndex = Math.floor((colIndex - modulo) / 26);
     }
 
+    // Ergebnis cachen
+    _stringCache.set(cacheKey, letter);
     return letter;
 }
 

@@ -30,26 +30,24 @@ const globalCache = {
      */
     clear(type = null) {
         if (type === null) {
-            // Alles löschen
-            this._store.dates.clear();
-            this._store.currency.clear();
-            this._store.mwstRates.clear();
-            this._store.columnLetters.clear();
-            this._store.sheets.clear();
-            this._store.computed.clear();
-            this._store.references.einnahmen = null;
-            this._store.references.ausgaben = null;
-            this._store.references.eigenbelege = null;
-            this._store.references.gesellschafterkonto = null;
-            this._store.references.holdingTransfers = null;
+            // Optimized: Dynamically clear all maps
+            Object.entries(this._store).forEach(([key, value]) => {
+                if (value instanceof Map) {
+                    value.clear();
+                } else if (key === 'references') {
+                    Object.keys(this._store.references).forEach(refKey => {
+                        this._store.references[refKey] = null;
+                    });
+                }
+            });
         } else if (type === 'references') {
-            this._store.references.einnahmen = null;
-            this._store.references.ausgaben = null;
-            this._store.references.eigenbelege = null;
-            this._store.references.gesellschafterkonto = null;
-            this._store.references.holdingTransfers = null;
+            Object.keys(this._store.references).forEach(refKey => {
+                this._store.references[refKey] = null;
+            });
         } else if (this._store[type]) {
-            this._store[type].clear();
+            if (this._store[type] instanceof Map) {
+                this._store[type].clear();
+            }
         }
     },
 
@@ -109,9 +107,15 @@ const globalCache = {
             return this.get(type, key);
         }
 
-        const value = computeFn();
-        this.set(type, key, value);
-        return value;
+        // Added error handling for compute function
+        try {
+            const value = computeFn();
+            this.set(type, key, value);
+            return value;
+        } catch (error) {
+            console.error(`Error computing cache value for ${type}.${key}:`, error);
+            return undefined;
+        }
     },
 };
 

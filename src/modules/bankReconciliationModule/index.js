@@ -11,15 +11,17 @@ import stringUtils from '../../utils/stringUtils.js';
  */
 const BankReconciliationModule = {
     /**
-     * Cache leeren
+     * Cache leeren mit gezielter Bereinigung
      */
     clearCache() {
         console.log('Clearing cache for bank reconciliation');
-        globalCache.clear();
+        // Gezieltes Löschen relevanter Cache-Bereiche
+        globalCache.clear('computed');
+        globalCache.clear('references');
     },
 
     /**
-     * Hauptfunktion für den Bankabgleich
+     * Hauptfunktion für den Bankabgleich mit optimierter Fehlerbehandlung und Performance
      * @param {Object} config - Die Konfiguration
      * @returns {boolean} - true bei erfolgreichem Abgleich
      */
@@ -31,7 +33,7 @@ const BankReconciliationModule = {
             // Cache zurücksetzen
             this.clearCache();
 
-            // Bankbewegungen-Sheet finden
+            // 1. Bankbewegungen-Sheet validieren
             const bankSheet = ss.getSheetByName('Bankbewegungen');
             if (!bankSheet) {
                 ui.alert('Fehler: Das Bankbewegungen-Sheet wurde nicht gefunden.');
@@ -45,44 +47,58 @@ const BankReconciliationModule = {
                 return false;
             }
 
-            const firstDataRow = 3; // Erste Datenzeile (nach Header-Zeile und Anfangssaldo)
+            console.log(`Bank reconciliation starting with ${lastRow} rows`);
+
+            // 2. Parameter für den Abgleich definieren
+            const firstDataRow = 3; // Nach Header-Zeile und Anfangssaldo
             const numDataRows = lastRow - firstDataRow + 1;
 
             // Spalten-Konfiguration für Bankbewegungen
             const columns = config.bankbewegungen.columns;
 
-            // Spaltenbuchstaben aus den Indizes generieren
+            // 3. Spaltenbuchstaben aus den Indizes generieren (einmalig)
             const columnLetters = {};
             Object.entries(columns).forEach(([key, index]) => {
                 columnLetters[key] = stringUtils.getColumnLetter(index);
             });
 
-            // Durchführung des eigentlichen Bankabgleichs
-            console.log('Starting bank reconciliation...');
+            // 4. Bankabgleich starten - mit besserer Fehlerbehandlung
+            console.log('Starting bank reconciliation process...');
 
-            // 1. Matching zwischen Bankbewegungen und Rechnungen
-            const matchResults = matchingHandler.performBankReferenceMatching(
-                ss, bankSheet, firstDataRow, numDataRows, lastRow, columns, config);
+            try {
+                // 5. Matching zwischen Bankbewegungen und Rechnungen
+                const matchResults = matchingHandler.performBankReferenceMatching(
+                    ss, bankSheet, firstDataRow, numDataRows, lastRow, columns, config);
 
-            // 2. Formatierung der Bankbewegungen basierend auf den Match-Ergebnissen
-            formattingHandler.formatMatchedRows(
-                bankSheet, firstDataRow, matchResults.matchInfo, columns);
+                if (!matchResults) {
+                    throw new Error('Der Bankabgleich konnte keine Übereinstimmungen finden.');
+                }
 
-            // 3. Match-Spalte formatieren
-            if (columns.matchInfo) {
-                formattingHandler.setMatchColumnFormatting(
-                    bankSheet, columnLetters.matchInfo);
+                console.log(`Found ${Object.keys(matchResults.bankZuordnungen).length} matches`);
+
+                // 6. Formatierung der Bankbewegungen basierend auf den Match-Ergebnissen
+                formattingHandler.formatMatchedRows(
+                    bankSheet, firstDataRow, matchResults.matchInfo, columns);
+
+                // 7. Match-Spalte formatieren
+                if (columns.matchInfo) {
+                    formattingHandler.setMatchColumnFormatting(
+                        bankSheet, columnLetters.matchInfo);
+                }
+
+                // 8. Aktualisierung der Zahlungsstatus in den Dokument-Sheets
+                syncHandler.markPaidInvoices(ss, matchResults.bankZuordnungen, config);
+
+                ui.alert('Bankabgleich erfolgreich durchgeführt!');
+                return true;
+            } catch (reconciliationError) {
+                console.error('Fehler beim Bankabgleich-Prozess:', reconciliationError);
+                ui.alert(`Fehler beim Bankabgleich: ${reconciliationError.message}`);
+                return false;
             }
-
-            // 4. Aktualisierung der Zahlungsstatus in den Dokument-Sheets
-            syncHandler.markPaidInvoices(ss, matchResults.bankZuordnungen, config);
-
-            ui.alert('Bankabgleich erfolgreich durchgeführt!');
-            return true;
-
         } catch (e) {
-            console.error('Fehler beim Bankabgleich:', e);
-            SpreadsheetApp.getUi().alert('Ein Fehler ist beim Bankabgleich aufgetreten: ' + e.toString());
+            console.error('Schwerwiegender Fehler beim Bankabgleich:', e);
+            SpreadsheetApp.getUi().alert('Ein schwerwiegender Fehler ist beim Bankabgleich aufgetreten: ' + e.toString());
             return false;
         }
     },

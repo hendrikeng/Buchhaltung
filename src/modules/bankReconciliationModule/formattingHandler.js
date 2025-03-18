@@ -2,110 +2,166 @@
 import stringUtils from '../../utils/stringUtils.js';
 
 /**
- * Formatiert Zeilen basierend auf dem Match-Typ
+ * Formatiert Zeilen basierend auf dem Match-Typ mit optimierter Batch-Verarbeitung
  * @param {Sheet} sheet - Das Sheet
  * @param {number} firstDataRow - Erste Datenzeile
  * @param {Array} matchResults - Match-Ergebnisse
  * @param {Object} columns - Spaltenkonfiguration
  */
 function formatMatchedRows(sheet, firstDataRow, matchResults, columns) {
-    // Performance-optimiertes Batch-Update vorbereiten
-    const formatBatches = {
-        'Einnahme': { rows: [], color: '#EAF1DD' },
-        'Vollständige Zahlung (Einnahme)': { rows: [], color: '#C6EFCE' },
-        'Teilzahlung (Einnahme)': { rows: [], color: '#FCE4D6' },
-        'Ausgabe': { rows: [], color: '#FFCCCC' },
-        'Vollständige Zahlung (Ausgabe)': { rows: [], color: '#FFC7CE' },
-        'Teilzahlung (Ausgabe)': { rows: [], color: '#FCE4D6' },
-        'Eigenbeleg': { rows: [], color: '#DDEBF7' },
-        'Vollständige Zahlung (Eigenbeleg)': { rows: [], color: '#9BC2E6' },
-        'Teilzahlung (Eigenbeleg)': { rows: [], color: '#FCE4D6' },
-        'Gesellschafterkonto': { rows: [], color: '#E2EFDA' },
-        'Holding Transfer': { rows: [], color: '#FFF2CC' },
-        'Gutschrift': { rows: [], color: '#E6E0FF' },
-        'Gesellschaftskonto/Holding': { rows: [], color: '#FFEB9C' },
+    // Performance-optimiertes Batch-Update - Kategorien definieren
+    const matchCategories = {
+        'Einnahme': { color: '#EAF1DD' },
+        'Vollständige Zahlung (Einnahme)': { color: '#C6EFCE' },
+        'Teilzahlung (Einnahme)': { color: '#FCE4D6' },
+        'Ausgabe': { color: '#FFCCCC' },
+        'Vollständige Zahlung (Ausgabe)': { color: '#FFC7CE' },
+        'Teilzahlung (Ausgabe)': { color: '#FCE4D6' },
+        'Eigenbeleg': { color: '#DDEBF7' },
+        'Vollständige Zahlung (Eigenbeleg)': { color: '#9BC2E6' },
+        'Teilzahlung (Eigenbeleg)': { color: '#FCE4D6' },
+        'Gesellschafterkonto': { color: '#E2EFDA' },
+        'Holding Transfer': { color: '#FFF2CC' },
+        'Gutschrift': { color: '#E6E0FF' },
+        'Gesellschaftskonto/Holding': { color: '#FFEB9C' },
     };
 
-    // Zeilen nach Kategorien gruppieren
+    // Optimiert: In einem Durchgang kategorisieren
+    const rowsByCategory = {};
+
+    // Initialisiere Kategorien
+    Object.keys(matchCategories).forEach(category => {
+        rowsByCategory[category] = [];
+    });
+
+    // Kategorisiere Zeilen in einem Durchgang
     matchResults.forEach((matchInfo, index) => {
         const rowIndex = firstDataRow + index;
         const matchText = (matchInfo && matchInfo[0]) ? matchInfo[0].toString() : '';
 
         if (!matchText) return; // Überspringe leere Matches
 
+        // Optimierung: Mit einer einzigen if-Kette statt mehreren Prüfungen
         if (matchText.includes('Einnahme')) {
             if (matchText.includes('Vollständige Zahlung')) {
-                formatBatches['Vollständige Zahlung (Einnahme)'].rows.push(rowIndex);
+                rowsByCategory['Vollständige Zahlung (Einnahme)'].push(rowIndex);
             } else if (matchText.includes('Teilzahlung')) {
-                formatBatches['Teilzahlung (Einnahme)'].rows.push(rowIndex);
+                rowsByCategory['Teilzahlung (Einnahme)'].push(rowIndex);
             } else {
-                formatBatches['Einnahme'].rows.push(rowIndex);
+                rowsByCategory['Einnahme'].push(rowIndex);
             }
         } else if (matchText.includes('Ausgabe')) {
             if (matchText.includes('Vollständige Zahlung')) {
-                formatBatches['Vollständige Zahlung (Ausgabe)'].rows.push(rowIndex);
+                rowsByCategory['Vollständige Zahlung (Ausgabe)'].push(rowIndex);
             } else if (matchText.includes('Teilzahlung')) {
-                formatBatches['Teilzahlung (Ausgabe)'].rows.push(rowIndex);
+                rowsByCategory['Teilzahlung (Ausgabe)'].push(rowIndex);
             } else {
-                formatBatches['Ausgabe'].rows.push(rowIndex);
+                rowsByCategory['Ausgabe'].push(rowIndex);
             }
         } else if (matchText.includes('Eigenbeleg')) {
             if (matchText.includes('Vollständige Zahlung')) {
-                formatBatches['Vollständige Zahlung (Eigenbeleg)'].rows.push(rowIndex);
+                rowsByCategory['Vollständige Zahlung (Eigenbeleg)'].push(rowIndex);
             } else if (matchText.includes('Teilzahlung')) {
-                formatBatches['Teilzahlung (Eigenbeleg)'].rows.push(rowIndex);
+                rowsByCategory['Teilzahlung (Eigenbeleg)'].push(rowIndex);
             } else {
-                formatBatches['Eigenbeleg'].rows.push(rowIndex);
+                rowsByCategory['Eigenbeleg'].push(rowIndex);
             }
         } else if (matchText.includes('Gesellschafterkonto')) {
-            formatBatches['Gesellschafterkonto'].rows.push(rowIndex);
+            rowsByCategory['Gesellschafterkonto'].push(rowIndex);
         } else if (matchText.includes('Holding Transfer')) {
-            formatBatches['Holding Transfer'].rows.push(rowIndex);
+            rowsByCategory['Holding Transfer'].push(rowIndex);
         } else if (matchText.includes('Gutschrift')) {
-            formatBatches['Gutschrift'].rows.push(rowIndex);
+            rowsByCategory['Gutschrift'].push(rowIndex);
         } else if (matchText.includes('Gesellschaftskonto') || matchText.includes('Holding')) {
-            formatBatches['Gesellschaftskonto/Holding'].rows.push(rowIndex);
+            rowsByCategory['Gesellschaftskonto/Holding'].push(rowIndex);
         }
     });
 
-    // Batch-Formatting anwenden
-    Object.values(formatBatches).forEach(batch => {
-        if (batch.rows.length > 0) {
-            // Gruppen von maximal 20 Zeilen formatieren (API-Limits vermeiden)
-            applyFormatBatches(sheet, batch.rows, batch.color, columns.matchInfo);
+    // Batch-Formatting für jede Kategorie anwenden
+    Object.entries(rowsByCategory).forEach(([category, rows]) => {
+        if (rows.length > 0) {
+            applyFormatBatches(sheet, rows, matchCategories[category].color, columns.matchInfo);
         }
     });
 }
 
 /**
- * Wendet Formatierung auf Batches von Zeilen an
+ * Wendet Formatierung auf Batches von Zeilen an - optimiert für weniger API-Calls
+ * @param {Sheet} sheet - Das Sheet
+ * @param {Array} rows - Die zu formatierenden Zeilen
+ * @param {string} color - Die Hintergrundfarbe
+ * @param {number} maxColumn - Die maximale Spalte
  */
 function applyFormatBatches(sheet, rows, color, maxColumn) {
-    const chunkSize = 20;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
-        chunk.forEach(rowIndex => {
-            try {
-                sheet.getRange(rowIndex, 1, 1, maxColumn)
-                    .setBackground(color);
-            } catch (e) {
-                console.error(`Fehler beim Formatieren von Zeile ${rowIndex}:`, e);
-            }
-        });
+    // Optimierung: Größere Chunks verwenden, um API-Calls zu reduzieren
+    const chunkSize = 50;
 
-        // Kurze Pause um API-Limits zu vermeiden
-        if (i + chunkSize < rows.length) {
-            Utilities.sleep(50);
+    // Rows nach Intervallen gruppieren für effizientere Formatierung
+    const contiguousRanges = [];
+    let currentRange = [];
+
+    // Sortieren für effizientere Intervallverarbeitung
+    rows.sort((a, b) => a - b);
+
+    // Zusammenhängende Zeilen identifizieren
+    for (let i = 0; i < rows.length; i++) {
+        if (i === 0 || rows[i] !== rows[i-1] + 1) {
+            // Neue Gruppe starten
+            if (currentRange.length > 0) {
+                contiguousRanges.push(currentRange);
+            }
+            currentRange = [rows[i]];
+        } else {
+            // Aktuelle Gruppe erweitern
+            currentRange.push(rows[i]);
         }
     }
+
+    // Letzte Gruppe hinzufügen
+    if (currentRange.length > 0) {
+        contiguousRanges.push(currentRange);
+    }
+
+    // Zusammenhängende Bereiche formatieren (reduziert API-Calls drastisch)
+    contiguousRanges.forEach(range => {
+        try {
+            const startRow = range[0];
+            const numRows = range.length;
+            sheet.getRange(startRow, 1, numRows, maxColumn)
+                .setBackground(color);
+        } catch (e) {
+            console.error(`Fehler beim Formatieren von Zeilenbereich ${range[0]}-${range[range.length-1]}:`, e);
+
+            // Fallback: Einzelne Zeilen formatieren
+            for (let i = 0; i < range.length; i += chunkSize) {
+                const chunk = range.slice(i, i + chunkSize);
+                try {
+                    chunk.forEach(rowIndex => {
+                        sheet.getRange(rowIndex, 1, 1, maxColumn)
+                            .setBackground(color);
+                    });
+                } catch (innerError) {
+                    console.error('Fehler beim Formatieren von Zeilen-Chunk:', innerError);
+                }
+
+                // Pause um API-Limits zu vermeiden
+                if (i + chunkSize < range.length) {
+                    Utilities.sleep(100);
+                }
+            }
+        }
+    });
 }
 
 /**
- * Setzt bedingte Formatierung für die Match-Spalte
+ * Setzt bedingte Formatierung für die Match-Spalte mit optimierten Regeln
+ * @param {Sheet} sheet - Das Sheet
+ * @param {string} columnLetter - Der Spaltenbuchstabe
  */
 function setMatchColumnFormatting(sheet, columnLetter) {
+    // Optimierter Array von Formatierungsbedingungen
     const conditions = [
-        // Grundlegende Match-Typen
+        // Grundlegende Match-Typen (mit Formatierungs-Patterns)
         {value: 'Einnahme', background: '#C6EFCE', fontColor: '#006100', pattern: 'beginsWith'},
         {value: 'Ausgabe', background: '#FFC7CE', fontColor: '#9C0006', pattern: 'beginsWith'},
         {value: 'Eigenbeleg', background: '#DDEBF7', fontColor: '#2F5597', pattern: 'beginsWith'},
@@ -124,43 +180,52 @@ function setMatchColumnFormatting(sheet, columnLetter) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
-    const range = sheet.getRange(`${columnLetter}2:${columnLetter}${lastRow}`);
+    // Verwende die optimierte Methode für bedingte Formatierung
+    try {
+        // Automatisch vorhandene Regeln entfernen und neue hinzufügen
+        const range = sheet.getRange(`${columnLetter}2:${columnLetter}${lastRow}`);
 
-    // Bestehende Regeln für die Spalte löschen
-    const existingRules = sheet.getConditionalFormatRules();
-    const newRules = existingRules.filter(rule => {
-        const ranges = rule.getRanges();
-        return !ranges.some(r =>
-            r.getColumn() === range.getColumn() &&
-            r.getRow() === range.getRow() &&
-            r.getNumColumns() === range.getNumColumns(),
-        );
-    });
+        // Bestehende Regeln für die Spalte abrufen und filtern
+        const existingRules = sheet.getConditionalFormatRules();
+        const newRules = existingRules.filter(rule => {
+            const ranges = rule.getRanges();
+            return !ranges.some(r =>
+                r.getColumn() === range.getColumn() &&
+                r.getRow() === range.getRow() &&
+                r.getNumColumns() === range.getNumColumns(),
+            );
+        });
 
-    // Neue Regeln erstellen
-    const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
-        let rule;
+        // Neue Regeln erstellen mit korrektem Typ
+        const formatRules = conditions.map(({ value, background, fontColor, pattern }) => {
+            let rule;
 
-        if (pattern === 'beginsWith') {
-            rule = SpreadsheetApp.newConditionalFormatRule()
-                .whenTextStartsWith(value);
-        } else if (pattern === 'contains') {
-            rule = SpreadsheetApp.newConditionalFormatRule()
-                .whenTextContains(value);
-        } else {
-            rule = SpreadsheetApp.newConditionalFormatRule()
-                .whenTextEqualTo(value);
-        }
+            switch (pattern) {
+            case 'beginsWith':
+                rule = SpreadsheetApp.newConditionalFormatRule()
+                    .whenTextStartsWith(value);
+                break;
+            case 'contains':
+                rule = SpreadsheetApp.newConditionalFormatRule()
+                    .whenTextContains(value);
+                break;
+            default:
+                rule = SpreadsheetApp.newConditionalFormatRule()
+                    .whenTextEqualTo(value);
+            }
 
-        return rule
-            .setBackground(background)
-            .setFontColor(fontColor)
-            .setRanges([range])
-            .build();
-    });
+            return rule
+                .setBackground(background)
+                .setFontColor(fontColor)
+                .setRanges([range])
+                .build();
+        });
 
-    // Regeln anwenden
-    sheet.setConditionalFormatRules([...newRules, ...formatRules]);
+        // Regeln in einem API-Call anwenden
+        sheet.setConditionalFormatRules([...newRules, ...formatRules]);
+    } catch (e) {
+        console.error('Fehler beim Setzen der bedingten Formatierung für Match-Spalte:', e);
+    }
 }
 
 export default {

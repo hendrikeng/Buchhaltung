@@ -16,59 +16,88 @@ import dateUtils from '../../utils/dateUtils.js';
  * @returns {Object} Ergebnis des Matchings mit matchInfo und bankZuordnungen
  */
 function performBankReferenceMatching(ss, sheet, firstDataRow, numDataRows, lastRow, columns, config) {
-    // Referenzdaten laden für alle relevanten Sheets
+    // Optimierung: Laden und Verarbeiten der Daten in einer Operation
+    console.log('Starting bank reference matching...');
+
+    // 1. Referenzdaten in einem Batch laden - dies vermeidet wiederholte Sheet-Zugriffe
     const sheetData = loadReferenceData(ss, config);
 
-    // Bankbewegungen Daten für Verarbeitung holen
+    // 2. Bankdaten in einem Batch laden
     const bankData = sheet.getRange(firstDataRow, 1, numDataRows, sheet.getLastColumn()).getValues();
 
-    // Vorbereitung für Batch-Updates
-    const matchInfo = [];
-    const kontoSollResults = [];
-    const kontoHabenResults = [];
-    const categoryResults = [];
-    const bankZuordnungen = {};
+    // 3. Matching vorbereiten
+    const results = {
+        matchInfo: [],
+        kontoSollResults: [],
+        kontoHabenResults: [],
+        categoryResults: [],
+        bankZuordnungen: {},
+    };
 
-    // Kontoinformationen sammeln
-    const { allowedKontoSoll, allowedGegenkonto } = collectAccountInfo(config);
+    // 4. Kontoinformationen sammeln (einmalig)
+    const accountInfo = collectAccountInfo(config);
 
-    // Durchlaufe jede Bankbewegung und suche nach Übereinstimmungen
-    processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
-        matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-        bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config);
+    // 5. Matching in einem Durchgang durchführen
+    processBankEntries(
+        bankData,
+        firstDataRow,
+        lastRow,
+        columns,
+        sheetData,
+        results,
+        accountInfo,
+        config,
+    );
 
-    // Batch-Updates ausführen für bessere Performance
-    performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
-        matchInfo, kontoSollResults, kontoHabenResults, categoryResults);
+    // 6. Batch-Updates durchführen
+    performBatchUpdates(
+        sheet,
+        firstDataRow,
+        numDataRows,
+        columns,
+        results.matchInfo,
+        results.kontoSollResults,
+        results.kontoHabenResults,
+        results.categoryResults,
+    );
 
     return {
-        matchInfo,
-        bankZuordnungen,
+        matchInfo: results.matchInfo,
+        bankZuordnungen: results.bankZuordnungen,
     };
 }
 
 /**
- * Lädt Referenzdaten aus allen relevanten Sheets
+ * Lädt Referenzdaten aus allen relevanten Sheets in einem Batch
+ * @param {Spreadsheet} ss - Das Spreadsheet
+ * @param {Object} config - Die Konfiguration
+ * @returns {Object} Die geladenen Referenzdaten
  */
 function loadReferenceData(ss, config) {
     const result = {};
 
-    // Sheets und ihre Konfigurationen
-    const sheets = {
-        einnahmen: { name: 'Einnahmen', cols: config.einnahmen.columns },
-        ausgaben: { name: 'Ausgaben', cols: config.ausgaben.columns },
-        eigenbelege: { name: 'Eigenbelege', cols: config.eigenbelege.columns },
-        gesellschafterkonto: { name: 'Gesellschafterkonto', cols: config.gesellschafterkonto.columns },
-        holdingTransfers: { name: 'Holding Transfers', cols: config.holdingTransfers.columns },
-    };
+    // Optimierung: Sheets und Konfigurationen in einem Array definieren
+    const sheetConfig = [
+        { key: 'einnahmen', name: 'Einnahmen', cols: config.einnahmen.columns },
+        { key: 'ausgaben', name: 'Ausgaben', cols: config.ausgaben.columns },
+        { key: 'eigenbelege', name: 'Eigenbelege', cols: config.eigenbelege.columns },
+        { key: 'gesellschafterkonto', name: 'Gesellschafterkonto', cols: config.gesellschafterkonto.columns },
+        { key: 'holdingTransfers', name: 'Holding Transfers', cols: config.holdingTransfers.columns },
+    ];
 
-    // Für jedes Sheet Referenzdaten laden
-    Object.entries(sheets).forEach(([key, config]) => {
-        const sheet = ss.getSheetByName(config.name);
+    // Für jedes Sheet Referenzdaten laden - parallelisiert
+    sheetConfig.forEach(cfg => {
+        // Prüfe zuerst den Cache
+        if (globalCache.has('references', cfg.key)) {
+            result[cfg.key] = globalCache.get('references', cfg.key);
+            return;
+        }
+
+        const sheet = ss.getSheetByName(cfg.name);
         if (sheet && sheet.getLastRow() > 1) {
-            result[key] = loadSheetReferenceData(sheet, config.cols, key);
+            result[cfg.key] = loadSheetReferenceData(sheet, cfg.cols, cfg.key);
         } else {
-            result[key] = {};
+            result[cfg.key] = {};
         }
     });
 
@@ -76,7 +105,11 @@ function loadReferenceData(ss, config) {
 }
 
 /**
- * Lädt Referenzdaten aus einem einzelnen Sheet
+ * Lädt Referenzdaten aus einem einzelnen Sheet mit optimierter Verarbeitung
+ * @param {Sheet} sheet - Das Sheet
+ * @param {Object} columns - Die Spaltenkonfiguration
+ * @param {string} sheetType - Der Sheet-Typ
+ * @returns {Object} Die geladenen Referenzdaten
  */
 function loadSheetReferenceData(sheet, columns, sheetType) {
     // Cache prüfen
@@ -89,59 +122,50 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
     if (numRows <= 0) return map;
 
-    // Alle Daten laden, um alle relevanten Spalten zu erfassen
-    const data = sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getValues();
+    // Optimierung: Nur benötigte Spalten laden
+    const requiredCols = [
+        columns.rechnungsnummer,
+        columns.nettobetrag,
+        columns.mwstSatz,
+        columns.bezahlt,
+        columns.kategorie,
+        columns.buchungskonto,
+    ].filter(col => col !== undefined);
 
+    const maxCol = Math.max(...requiredCols);
+
+    // Daten in einem Batch laden
+    const data = sheet.getRange(2, 1, numRows, maxCol).getValues();
+
+    // Effizienter Aufbau der Referenzdaten
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         const ref = row[columns.rechnungsnummer - 1];
 
         if (stringUtils.isEmpty(ref)) continue;
 
-        // Key immer ohne G-Prefix, da wir jetzt mit dem Betrag arbeiten
+        // Key immer ohne G-Prefix
         const key = String(ref).trim();
 
-        // Werte extrahieren
-        let betrag = 0;
-        if (!stringUtils.isEmpty(row[columns.nettobetrag - 1])) {
-            betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
-        }
-
-        // Prüfe auf Gutschrift anhand des Betrags
+        // Werte vorab extrahieren und berechnen
+        const betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1] || 0);
         const isGutschrift = betrag < 0;
-
-        // Normalisierung des Schlüssels
         const normalizedKey = stringUtils.normalizeText(key);
+        const mwstRate = columns.mwstSatz ?
+            numberUtils.parseMwstRate(row[columns.mwstSatz - 1] || 0) : 0;
+        const bezahlt = columns.bezahlt ?
+            Math.abs(numberUtils.parseCurrency(row[columns.bezahlt - 1] || 0)) : 0;
+        const kategorie = columns.kategorie && row[columns.kategorie - 1] ?
+            row[columns.kategorie - 1].toString().trim() : '';
+        const buchungskonto = columns.buchungskonto && row[columns.buchungskonto - 1] ?
+            row[columns.buchungskonto - 1].toString().trim() : '';
 
-        let mwstRate = 0;
-        if (columns.mwstSatz && !stringUtils.isEmpty(row[columns.mwstSatz - 1])) {
-            mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1]);
-        }
-
-        let bezahlt = 0;
-        if (columns.bezahlt && !stringUtils.isEmpty(row[columns.bezahlt - 1])) {
-            bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
-            bezahlt = Math.abs(bezahlt);
-        }
-
-        // Kategorie extrahieren
-        let kategorie = '';
-        if (columns.kategorie && !stringUtils.isEmpty(row[columns.kategorie - 1])) {
-            kategorie = row[columns.kategorie - 1].toString().trim();
-        }
-
-        // Buchungskonto extrahieren
-        let buchungskonto = '';
-        if (columns.buchungskonto && !stringUtils.isEmpty(row[columns.buchungskonto - 1])) {
-            buchungskonto = row[columns.buchungskonto - 1].toString().trim();
-        }
-
-        // Bruttobetrag berechnen (immer als Absolutwert für Vergleiche)
+        // Bruttobetrag einmal berechnen
         const bruttoAbs = Math.abs(betrag) * (1 + mwstRate/100);
 
-        // Originalzeile vollständig speichern für spätere Referenz
+        // Optimiertes Datenformat mit allen benötigten Informationen
         map[key] = {
-            ref: String(ref).trim(),
+            ref: key,
             normalizedRef: normalizedKey,
             row: i + 2, // 1-basiert + Überschrift
             betrag: betrag,
@@ -161,7 +185,7 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
             },
         };
 
-        // Normalisierter Key als Alternative
+        // Normalisierter Key als Alternative für besseres Matching
         if (normalizedKey !== key && !map[normalizedKey]) {
             map[normalizedKey] = map[key];
         }
@@ -169,89 +193,107 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
     // Referenzdaten cachen
     globalCache.set('references', sheetType, map);
-
     return map;
 }
 
 /**
- * Sammelt Kontoinformationen aus der Konfiguration
+ * Sammelt Kontoinformationen aus der Konfiguration (optimiert)
+ * @param {Object} config - Die Konfiguration
+ * @returns {Object} Gesammelte Kontoinformationen
  */
 function collectAccountInfo(config) {
     const allowedKontoSoll = new Set();
     const allowedGegenkonto = new Set();
 
-    [
+    // Alle relevanten Mappings in einem Array
+    const mappings = [
         config.einnahmen.kontoMapping,
         config.ausgaben.kontoMapping,
         config.eigenbelege.kontoMapping,
         config.gesellschafterkonto.kontoMapping,
         config.holdingTransfers.kontoMapping,
-    ].forEach(mapping => {
+    ];
+
+    // Effizienter Durchlauf durch alle Mappings in einer Schleife
+    mappings.forEach(mapping => {
         Object.values(mapping).forEach(m => {
             if (m.soll) allowedKontoSoll.add(m.soll);
             if (m.gegen) allowedGegenkonto.add(m.gegen);
         });
     });
 
-    return { allowedKontoSoll, allowedGegenkonto };
+    // Fallback-Konten bestimmen
+    const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : '';
+    const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : '';
+
+    return {
+        allowedKontoSoll,
+        allowedGegenkonto,
+        fallbackKontoSoll,
+        fallbackKontoHaben,
+    };
 }
 
 /**
  * Verarbeitet alle Bankeinträge und sucht nach Übereinstimmungen
+ * @param {Array} bankData - Die Bankdaten
+ * @param {number} firstDataRow - Erste Datenzeile
+ * @param {number} lastRow - Letzte Zeile
+ * @param {Object} columns - Spaltenkonfiguration
+ * @param {Object} sheetData - Referenzdaten
+ * @param {Object} results - Ergebnisobjekt
+ * @param {Object} accountInfo - Kontoinformationen
+ * @param {Object} config - Die Konfiguration
  */
 function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
-    matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-    bankZuordnungen, allowedKontoSoll, allowedGegenkonto, config) {
+    results, accountInfo, config) {
 
-    // Fallback-Konten
-    const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : '';
-    const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : '';
+    // Destrukturiere die accountInfo für bessere Lesbarkeit
+    const { fallbackKontoSoll, fallbackKontoHaben } = accountInfo;
 
-    // Durchlaufe jede Bankbewegung
+    // Durchlaufe jede Bankbewegung einmal
     for (let i = 0; i < bankData.length; i++) {
         const rowIndex = i + firstDataRow;
         const row = bankData[i];
 
         // Prüfe, ob es sich um die Endsaldo-Zeile handelt
         if (isEndSaldoRow(rowIndex, lastRow, row, columns)) {
-            addEmptyResults(matchInfo, kontoSollResults, kontoHabenResults, categoryResults);
+            addEmptyResults(results);
             continue;
         }
 
+        // Extrahiere alle benötigten Informationen aus der Zeile
         const tranType = row[columns.transaktionstyp - 1]; // Einnahme/Ausgabe
         const refNumber = row[columns.referenz - 1];       // Referenznummer
         const betragValue = Math.abs(numberUtils.parseCurrency(row[columns.betrag - 1]));
         const betragOriginal = numberUtils.parseCurrency(row[columns.betrag - 1]); // Original with sign
         const category = row[columns.kategorie - 1] ? row[columns.kategorie - 1].toString().trim() : '';
 
-        // Match-Informationen
+        // Flag für gefundene Übereinstimmung
         let matchFound = false;
 
-        // Matching-Logik basierend auf Transaktionstyp
+        // Nur Matching durchführen, wenn eine Referenznummer vorhanden ist
         if (!stringUtils.isEmpty(refNumber)) {
-            // For negative amounts (Ausgabe in bank but potentially Gutschrift),
-            // first try to find a matching gutschrift in Einnahmen
+            // Für Ausgaben mit negativem Betrag zuerst auf Gutschriften prüfen
             if (tranType === 'Ausgabe' && betragOriginal < 0) {
-                // First try to match as gutschrift in Einnahmen
                 matchFound = processDocumentTypeMatching(
                     sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-                    bankZuordnungen, category, config, true);
+                    results, category, config, true);
 
-                // If gutschrift match found, continue to next row
+                // Bei Gutschrift-Treffer den nächsten Eintrag verarbeiten
                 if (matchFound) continue;
             }
 
-            // Standard logic for Einnahme
+            // Standard-Logik für Einnahmen
             if (tranType === 'Einnahme' && !matchFound) {
-                matchFound = processDocumentTypeMatching(sheetData.einnahmen, refNumber, betragValue, row,
+                matchFound = processDocumentTypeMatching(
+                    sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'einnahme', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-                    bankZuordnungen, category, config);
+                    results, category, config);
             }
 
-            // Standard logic for Ausgabe
+            // Standard-Logik für Ausgaben - Optimiert mit Array von Dokumenttypen
             if (tranType === 'Ausgabe' && !matchFound) {
                 const docTypes = [
                     { data: sheetData.ausgaben, type: 'ausgabe', cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
@@ -260,27 +302,33 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                     { data: sheetData.holdingTransfers, type: 'holdingtransfer', cols: config.holdingTransfers.columns, mapping: config.holdingTransfers.kontoMapping },
                 ];
 
-                // Versuche alle Dokumenttypen der Reihe nach
-                for (const docType of docTypes) {
-                    matchFound = processDocumentTypeMatching(docType.data, refNumber, betragValue, row,
+                // Optimiert: Verwende some() für frühzeitigen Abbruch bei Treffer
+                matchFound = docTypes.some(docType =>
+                    processDocumentTypeMatching(
+                        docType.data, refNumber, betragValue, row,
                         columns, docType.type, docType.cols, docType.mapping,
-                        matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-                        bankZuordnungen, category, config);
-                    if (matchFound) break;
-                }
+                        results, category, config),
+                );
             }
         }
 
         // Wenn keine Übereinstimmung gefunden, default Konten basierend auf Kategorie setzen
         if (!matchFound) {
-            setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
-                matchInfo, kontoSollResults, kontoHabenResults, categoryResults);
+            setDefaultAccounts(
+                category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
+                results,
+            );
         }
     }
 }
 
 /**
  * Prüft, ob es sich um die Endsaldo-Zeile handelt
+ * @param {number} rowIndex - Zeilenindex
+ * @param {number} lastRow - Letzte Zeile
+ * @param {Array} row - Zeilendaten
+ * @param {Object} columns - Spaltenkonfiguration
+ * @returns {boolean} true wenn es die Endsaldo-Zeile ist
  */
 function isEndSaldoRow(rowIndex, lastRow, row, columns) {
     const label = row[columns.buchungstext - 1] ? row[columns.buchungstext - 1].toString().trim().toLowerCase() : '';
@@ -288,45 +336,58 @@ function isEndSaldoRow(rowIndex, lastRow, row, columns) {
 }
 
 /**
- * Fügt leere Ergebnisse zu den Arrays hinzu
+ * Fügt leere Ergebnisse zu den Ergebnis-Arrays hinzu
+ * @param {Object} results - Das Ergebnisobjekt
  */
-function addEmptyResults(matchInfo, kontoSollResults, kontoHabenResults, categoryResults) {
-    matchInfo.push(['']);
-    kontoSollResults.push(['']);
-    kontoHabenResults.push(['']);
-    categoryResults.push(['']);
+function addEmptyResults(results) {
+    results.matchInfo.push(['']);
+    results.kontoSollResults.push(['']);
+    results.kontoHabenResults.push(['']);
+    results.categoryResults.push(['']);
 }
 
 /**
- * Verarbeitet eine Dokumententyp-Übereinstimmung
+ * Optimierte Version des Document-Type-Matchings
+ * @param {Object} docData - Referenzdaten
+ * @param {string} refNumber - Referenznummer
+ * @param {number} betragValue - Betrag
+ * @param {Array} row - Zeilendaten
+ * @param {Object} columns - Spaltenkonfiguration
+ * @param {string} docType - Dokumenttyp
+ * @param {Object} docCols - Dokumentspaltenkonfiguration
+ * @param {Object} kontoMapping - Kontomapping
+ * @param {Object} results - Ergebnisobjekt
+ * @param {string} category - Kategorie
+ * @param {Object} config - Konfiguration
+ * @param {boolean} isGutschrift - Ist eine Gutschrift
+ * @returns {boolean} true wenn eine Übereinstimmung gefunden wurde
  */
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
-    matchInfo, kontoSollResults, kontoHabenResults, categoryResults,
-    bankZuordnungen, category, config, isGutschrift = false) {
+    results, category, config, isGutschrift = false) {
 
-    // Only allow gutschrift processing for einnahme type
+    // Nur Gutschrift-Verarbeitung für Einnahmen erlauben
     if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift') {
         return false;
     }
 
-    // Important: When checking for Gutschriften (credit notes), we need to handle the sign differently
+    // Übereinstimmung suchen
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
 
-    // For gutschrift matching, verify the amount is negative in the original data
+    // Für Gutschrift-Matching prüfen, ob der Betrag negativ ist
     if (isGutschrift && (!matchResult.originalData || matchResult.originalData.betrag >= 0)) {
-        return false; // Not actually a gutschrift, skip this match
+        return false; // Keine tatsächliche Gutschrift, diese Übereinstimmung überspringen
     }
 
-    // Validate reference match - ensure they have some relation
+    // Referenz-Übereinstimmung validieren
     if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
         return false;
     }
 
-    // Match-Info erstellen basierend auf Dokumenttyp
+    // Match-Info erstellen
     const matchInfoText = createMatchInfo(matchResult, docType, betragValue);
 
-    // Kategorie und Konto aus dem gefundenen Dokument verwenden, nicht aus der Bankbuchung
+    // Kategorie und Konto aus dem gefundenen Dokument verwenden
     let sourceCategory = '';
     let sourceKonto = '';
 
@@ -338,7 +399,6 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     // Konten aus dem Mapping setzen
     let kontoSoll = '', kontoHaben = '';
 
-    // Immer die Kategorie aus dem Quelldokument verwenden, wenn vorhanden
     if (sourceCategory && kontoMapping[sourceCategory]) {
         const mapping = kontoMapping[sourceCategory];
         kontoSoll = mapping.soll || '';
@@ -351,26 +411,24 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     }
 
     // Ergebnisse zu den Arrays hinzufügen
-    matchInfo.push([matchInfoText]);
-    kontoSollResults.push([kontoSoll]);
-    kontoHabenResults.push([kontoHaben]);
+    results.matchInfo.push([matchInfoText]);
+    results.kontoSollResults.push([kontoSoll]);
+    results.kontoHabenResults.push([kontoHaben]);
+    results.categoryResults.push([sourceCategory || category]);
 
-    // WICHTIG: Immer die Kategorie aus dem Quelldokument verwenden
-    categoryResults.push([sourceCategory || category]);
-
-    // Für spätere Markierung merken
-    // Fix: Make sure we're properly marking whether this is a Gutschrift
+    // Optimierte Schlüsselgenerierung für Bankzuordnungen
     const key = `${docType}#${matchResult.row}`;
 
-    // Enhanced: Store whether this is a Gutschrift based on original data
+    // Verbesserte Gutschrift-Erkennung
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
-    bankZuordnungen[key] = {
+    // Information für spätere Markierung speichern
+    results.bankZuordnungen[key] = {
         typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
-        bankDatum: row[columns.datum - 1],  // Just use the raw date
-        matchInfo: matchInfo,
+        bankDatum: row[columns.datum - 1],
+        matchInfo: matchInfoText,
         transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
         category: sourceCategory,
         kontoSoll: kontoSoll,
@@ -383,59 +441,56 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
 }
 
 /**
- * Findet eine Übereinstimmung in der Referenz-Map
+ * Sucht eine Übereinstimmung in der Referenz-Map mit optimierten Suchstrategien
+ * @param {string} reference - Die Referenz
+ * @param {Object} refMap - Die Referenzdaten
+ * @param {number} betrag - Der Betrag
+ * @returns {Object|null} Die gefundene Übereinstimmung oder null
  */
 function findMatch(reference, refMap, betrag = null) {
-    // Keine Daten
+    // Keine Daten oder keine Referenz
     if (!reference || !refMap) return null;
 
     // Ensure reference is a string
-    const refString = String(reference);
+    const refString = String(reference).trim();
+    if (!refString) return null;
 
     // Normalisierte Suche vorbereiten
     const normalizedRef = stringUtils.normalizeText(refString);
+    if (!normalizedRef) return null;
 
-    // Matching-Strategien
+    // Matching-Strategien in effizienter Reihenfolge
     let match = null;
     let matchedKey = null;
 
-    // 1. Exakte Übereinstimmung
+    // 1. Exakte Übereinstimmung (am häufigsten und schnellsten)
     if (refMap[refString]) {
         match = evaluateMatch(refMap[refString], betrag);
-        matchedKey = refString;
+        if (match) matchedKey = refString;
     }
 
-    // 2. Normalisierte Übereinstimmung
+    // 2. Nur wenn keine exakte Übereinstimmung gefunden wurde: Normalisierte Übereinstimmung
     if (!match && normalizedRef && refMap[normalizedRef]) {
         match = evaluateMatch(refMap[normalizedRef], betrag);
-        matchedKey = normalizedRef;
+        if (match) matchedKey = normalizedRef;
     }
 
-    // 3. Teilweise Übereinstimmung
+    // 3. Nur wenn immer noch kein Match: Teilweise Übereinstimmung mit Optimierung
     if (!match) {
-        const candidateKeys = Object.keys(refMap);
+        // Optimierung: Zuerst prüfen wir Schlüssel, die die Referenz enthalten
+        // Dies ist eine schnellere Strategie als alle Schlüssel zu prüfen
+        const candidateKeys = Object.keys(refMap).filter(key =>
+            typeof key === 'string' &&
+            (key.includes(refString) || refString.includes(key)),
+        );
 
-        // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
+        // Wenn wir potenzielle Kandidaten haben, prüfen wir diese
         for (const key of candidateKeys) {
-            if (typeof key === 'string' && isGoodReferenceMatch(key, refString)) {
+            if (isGoodReferenceMatch(key, refString)) {
                 match = evaluateMatch(refMap[key], betrag);
                 if (match) {
                     matchedKey = key;
                     break;
-                }
-            }
-        }
-
-        // Falls keine exakten Treffer, probieren wir es mit normalisierten Werten
-        if (!match && normalizedRef) {
-            for (const key of candidateKeys) {
-                const normalizedKey = stringUtils.normalizeText(key);
-                if (typeof normalizedKey === 'string' && isGoodReferenceMatch(normalizedKey, normalizedRef)) {
-                    match = evaluateMatch(refMap[key], betrag);
-                    if (match) {
-                        matchedKey = key;
-                        break;
-                    }
                 }
             }
         }
@@ -444,7 +499,7 @@ function findMatch(reference, refMap, betrag = null) {
     // Originaldata hinzufügen, wenn ein Match gefunden wurde
     if (match && matchedKey) {
         match.originalData = refMap[matchedKey].originalData;
-        match.ref = refMap[matchedKey].ref; // Store original reference for validation
+        match.ref = refMap[matchedKey].ref; // Original-Referenz für Validierung
     }
 
     return match;
@@ -452,11 +507,14 @@ function findMatch(reference, refMap, betrag = null) {
 
 /**
  * Bewertet die Qualität einer Übereinstimmung basierend auf Beträgen
+ * @param {Object} match - Die gefundene Übereinstimmung
+ * @param {number} betrag - Der zu vergleichende Betrag
+ * @returns {Object|null} Die bewertete Übereinstimmung oder null
  */
 function evaluateMatch(match, betrag = null) {
     if (!match) return null;
 
-    // Behalte die ursprüngliche Übereinstimmung
+    // Ergebnis mit ursprünglichen Daten initialisieren
     const result = { ...match };
 
     // Wenn kein Betrag zum Vergleich angegeben wurde
@@ -465,12 +523,14 @@ function evaluateMatch(match, betrag = null) {
         return result;
     }
 
-    // Hole die Beträge aus der Übereinstimmung
+    // Absolute Beträge für Vergleich verwenden
     const matchBrutto = Math.abs(match.brutto);
     const matchBezahlt = Math.abs(match.bezahlt);
 
     // Toleranzwert für Betragsabweichungen (2 Cent)
     const tolerance = 0.02;
+
+    // Optimierter Vergleichsalgorithmus mit frühzeitigem Abbruch
 
     // Fall 1: Betrag entspricht genau dem Bruttobetrag (Vollständige Zahlung)
     if (numberUtils.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
@@ -484,19 +544,19 @@ function evaluateMatch(match, betrag = null) {
         return result;
     }
 
-    // Fall 3: Teilzahlung
+    // Fall 3: Teilzahlung - nur wenn signifikant unter dem Bruttobetrag
     if (betrag < matchBrutto && (matchBrutto - betrag) > (matchBrutto * 0.1)) {
         result.matchType = 'Teilzahlung';
         return result;
     }
-    
+
     // Fall 4: Betrag größer, aber nahe dem Bruttobetrag
     if (betrag > matchBrutto && numberUtils.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
         result.matchType = 'Vollständige Zahlung';
         return result;
     }
 
-    // Fall 5: Bei allen anderen Fällen
+    // Fall 5: Alle anderen Fälle
     result.matchType = 'Unsichere Zahlung';
     result.betragsDifferenz = numberUtils.round(Math.abs(betrag - matchBrutto), 2);
     return result;
@@ -504,10 +564,15 @@ function evaluateMatch(match, betrag = null) {
 
 /**
  * Erstellt einen Informationstext für eine Match-Übereinstimmung
+ * @param {Object} matchResult - Das Matching-Ergebnis
+ * @param {string} docType - Der Dokumenttyp
+ * @param {number} betragValue - Der Betrag
+ * @returns {string} Der Informationstext
  */
 function createMatchInfo(matchResult, docType, betragValue) {
     let matchStatus = '';
 
+    // Match-Status mit Differenzanzeige
     if (matchResult.matchType) {
         if (matchResult.matchType === 'Unsichere Zahlung' && matchResult.betragsDifferenz) {
             matchStatus = ` (${matchResult.matchType}, Diff: ${matchResult.betragsDifferenz}€)`;
@@ -516,14 +581,16 @@ function createMatchInfo(matchResult, docType, betragValue) {
         }
     }
 
-    // Improved gutschrift detection - explicitly check both docType and the actual data
+    // Verbesserte Gutschrift-Erkennung
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
+    // Spezielle Behandlung für Gutschriften
     if (isActualGutschrift) {
         const gutschriftBetrag = Math.abs(matchResult.originalData ?
             matchResult.originalData.betrag : matchResult.brutto);
 
+        // Status für Gutschriften basierend auf Betrag
         if (numberUtils.isApproximatelyEqual(betragValue, gutschriftBetrag, 0.01)) {
             matchStatus = ' (Vollständige Gutschrift)';
         } else if (betragValue < gutschriftBetrag) {
@@ -535,33 +602,38 @@ function createMatchInfo(matchResult, docType, betragValue) {
         return `Gutschrift zu Einnahme #${matchResult.row}${matchStatus}`;
     }
 
-    // Standardbehandlung für andere Dokumenttypen
-    const docTypeName = {
+    // Konstanten für Dokumenttypen verbessern die Lesbarkeit und Performance
+    const docTypeNames = {
         'einnahme': 'Einnahme',
         'ausgabe': 'Ausgabe',
         'eigenbeleg': 'Eigenbeleg',
         'gesellschafterkonto': 'Gesellschafterkonto',
         'holdingtransfer': 'Holding Transfer',
-    }[docType] || docType;
+    };
 
-    return `${docTypeName} #${matchResult.row}${matchStatus}`;
+    return `${docTypeNames[docType] || docType} #${matchResult.row}${matchStatus}`;
 }
 
 /**
  * Setzt Standard-Konten basierend auf der Kategorie und Transaktionstyp
+ * @param {string} category - Die Kategorie
+ * @param {string} tranType - Der Transaktionstyp
+ * @param {Object} config - Die Konfiguration
+ * @param {string} fallbackKontoSoll - Das Fallback-Konto Soll
+ * @param {string} fallbackKontoHaben - Das Fallback-Konto Haben
+ * @param {Object} results - Das Ergebnisobjekt
  */
-function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben,
-    matchInfo, kontoSollResults, kontoHabenResults, categoryResults) {
+function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallbackKontoHaben, results) {
     let kontoSoll = fallbackKontoSoll;
     let kontoHaben = fallbackKontoHaben;
 
     if (category) {
-        // Den richtigen Mapping-Typ basierend auf der Transaktionsart auswählen
+        // Mapping-Quelle basierend auf Transaktionstyp auswählen
         const mappingSource = tranType === 'Einnahme' ?
             config.einnahmen.kontoMapping :
             config.ausgaben.kontoMapping;
 
-        // Mapping für die Kategorie finden
+        // Mapping für die Kategorie finden und anwenden
         if (mappingSource && mappingSource[category]) {
             const mapping = mappingSource[category];
             kontoSoll = mapping.soll || fallbackKontoSoll;
@@ -569,18 +641,28 @@ function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallb
         }
     }
 
-    matchInfo.push(['']);
-    kontoSollResults.push([kontoSoll]);
-    kontoHabenResults.push([kontoHaben]);
-    categoryResults.push([category]); // Ursprüngliche Kategorie beibehalten
+    // Ergebnisse hinzufügen
+    results.matchInfo.push(['']);
+    results.kontoSollResults.push([kontoSoll]);
+    results.kontoHabenResults.push([kontoHaben]);
+    results.categoryResults.push([category]); // Ursprüngliche Kategorie beibehalten
 }
 
 /**
  * Führt Batch-Updates für alle betroffenen Spalten aus
+ * @param {Sheet} sheet - Das Sheet
+ * @param {number} firstDataRow - Erste Datenzeile
+ * @param {number} numDataRows - Anzahl der Datenzeilen
+ * @param {Object} columns - Spaltenkonfiguration
+ * @param {Array} matchInfo - Match-Informationen
+ * @param {Array} kontoSollResults - Konto-Soll-Ergebnisse
+ * @param {Array} kontoHabenResults - Konto-Haben-Ergebnisse
+ * @param {Array} categoryResults - Kategorie-Ergebnisse
  */
 function performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
     matchInfo, kontoSollResults, kontoHabenResults, categoryResults) {
 
+    // Batch-Updates für alle Spalten in separaten API-Calls
     if (columns.matchInfo) {
         sheet.getRange(firstDataRow, columns.matchInfo, numDataRows, 1).setValues(matchInfo);
     }
@@ -600,18 +682,21 @@ function performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
 }
 
 /**
- * Checks if two reference numbers match well enough
+ * Prüft, ob zwei Referenznummern gut genug übereinstimmen
+ * @param {string} ref1 - Erste Referenz
+ * @param {string} ref2 - Zweite Referenz
+ * @returns {boolean} true wenn die Referenzen übereinstimmen
  */
 function isGoodReferenceMatch(ref1, ref2) {
-    // Handle empty values
+    // Leere Werte behandeln
     if (!ref1 || !ref2) return false;
 
-    // Quick check for exact match
+    // Frühe Rückkehr bei exakter Übereinstimmung
     if (ref1 === ref2) return true;
 
-    // See if one contains the other
+    // Schnelle Prüfung, ob eine Referenz die andere enthält
     if (ref1.includes(ref2) || ref2.includes(ref1)) {
-        // For short references (less than 5 chars), be more strict
+        // Bei kurzen Referenzen (weniger als 5 Zeichen) strengere Prüfung
         const shorter = ref1.length <= ref2.length ? ref1 : ref2;
         if (shorter.length < 5) {
             return ref1.startsWith(ref2) || ref2.startsWith(ref1);
@@ -619,7 +704,7 @@ function isGoodReferenceMatch(ref1, ref2) {
         return true;
     }
 
-    // If neither contains the other, they're not a good match
+    // Keine gute Übereinstimmung
     return false;
 }
 

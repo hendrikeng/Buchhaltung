@@ -4,12 +4,15 @@ import globalCache from '../../utils/cacheUtils.js';
 
 /**
  * Modul zum Einrichten und Initialisieren der Buchhaltungstabelle
+ * Optimierte Version mit besserer Fehlerbehandlung und Performance
  */
 const SetupModule = {
     /**
-     * Cache leeren
+     * Cache leeren mit gezielter Invalidierung
      */
     clearCache() {
+        console.log('Clearing setup module cache');
+        // Gezieltes Löschen aller relevanten Cache-Bereiche
         globalCache.clear();
     },
 
@@ -37,11 +40,32 @@ const SetupModule = {
             // Cache zurücksetzen
             this.clearCache();
 
-            // Alle notwendigen Sheets erstellen
-            sheetCreator.createAllSheets(ss, config);
+            // Fortschrittsanzeige starten
+            ui.alert(
+                'Einrichtung gestartet',
+                'Die Einrichtung wurde gestartet. Bitte warten Sie, bis der Vorgang abgeschlossen ist.',
+                ui.ButtonSet.OK,
+            );
 
-            // // Trigger einrichten (onOpen, onEdit)
-            // setupTrigger();
+            // Alle notwendigen Sheets erstellen
+            const setupSuccess = sheetCreator.createAllSheets(ss, config);
+
+            if (!setupSuccess) {
+                ui.alert(
+                    'Fehler bei der Einrichtung',
+                    'Bei der Einrichtung der Buchhaltungstabelle ist ein Fehler aufgetreten.',
+                    ui.ButtonSet.OK,
+                );
+                return false;
+            }
+
+            // Trigger einrichten (onOpen, onEdit)
+            try {
+                this.setupTriggers(ss);
+            } catch (triggerError) {
+                console.error('Fehler beim Einrichten der Trigger:', triggerError);
+                // Trotzdem fortfahren, da dies nicht kritisch ist
+            }
 
             ui.alert(
                 'Einrichtung abgeschlossen',
@@ -57,33 +81,40 @@ const SetupModule = {
         }
     },
 
+    /**
+     * Richtet die notwendigen Trigger für das Spreadsheet ein
+     * @param {Spreadsheet} ss - Das Spreadsheet
+     */
+    setupTriggers(ss) {
+        const triggers = ScriptApp.getProjectTriggers();
+
+        // Prüfe, ob der onOpen Trigger bereits existiert
+        if (!triggers.some(t =>
+            t.getHandlerFunction() === 'onOpen' &&
+            t.getTriggerSourceId() === ss.getId(),
+        )) {
+            ScriptApp.newTrigger('onOpen')
+                .forSpreadsheet(ss)
+                .onOpen()
+                .create();
+        }
+
+        // Prüfe, ob der onEdit Trigger bereits existiert
+        if (!triggers.some(t =>
+            t.getHandlerFunction() === 'onEdit' &&
+            t.getTriggerSourceId() === ss.getId(),
+        )) {
+            ScriptApp.newTrigger('onEdit')
+                .forSpreadsheet(ss)
+                .onEdit()
+                .create();
+        }
+    },
+
     // Methoden für Testzwecke und erweiterte Funktionalität
     _internal: {
         sheetCreator,
     },
 };
-
-/**
- * Richtet die notwendigen Trigger für das Spreadsheet ein
- */
-// function setupTrigger() {
-//     const triggers = ScriptApp.getProjectTriggers();
-//
-//     // Prüfe, ob der onOpen Trigger bereits existiert
-//     if (!triggers.some(t => t.getHandlerFunction() === 'onOpen')) {
-//         ScriptApp.newTrigger('onOpen')
-//             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
-//             .onOpen()
-//             .create();
-//     }
-//
-//     // Prüfe, ob der onEdit Trigger bereits existiert
-//     if (!triggers.some(t => t.getHandlerFunction() === 'onEdit')) {
-//         ScriptApp.newTrigger('onEdit')
-//             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
-//             .onEdit()
-//             .create();
-//     }
-// }
 
 export default SetupModule;

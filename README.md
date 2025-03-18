@@ -162,3 +162,6 @@ TODO:
    - Test balance sheet calculation
    - Test asset and liability aggregation
    - Test report formatting
+
+
+Noch nicht optimiert: validatorModule, ustvaModule, importModule, bwaModule, bilanzModule

@@ -3,6 +3,9 @@
  * Funktionen für die Verarbeitung und Formatierung von Zahlen und Währungen
  */
 
+// Cache for number operations
+const _numberCache = new Map();
+
 /**
  * Konvertiert einen String oder eine Zahl in einen numerischen Währungswert
  * @param {number|string} value - Der zu parsende Wert
@@ -12,23 +15,34 @@ function parseCurrency(value) {
     if (value === null || value === undefined || value === '') return 0;
     if (typeof value === 'number') return value;
 
-    // Entferne alle Zeichen außer Ziffern, Komma, Punkt und Minus
+    // Use cache for string values
+    const cacheKey = `currency_${value}`;
+    if (_numberCache.has(cacheKey)) {
+        return _numberCache.get(cacheKey);
+    }
+
+    // Simplified approach: normalize string and parse
     const str = value.toString()
         .replace(/[^\d,.-]/g, '')
-        .replace(/,/g, '.'); // Alle Kommas durch Punkte ersetzen
+        .replace(/,/g, '.'); // Replace all commas with dots
 
-    // Bei mehreren Punkten nur den letzten als Dezimaltrenner behandeln
-    const parts = str.split('.');
+    // Handle multiple decimal points (common in European formats)
     let result;
+    const parts = str.split('.');
 
     if (parts.length > 2) {
+        // Use the last dot as decimal separator
         const last = parts.pop();
         result = parseFloat(parts.join('') + '.' + last);
     } else {
         result = parseFloat(str);
     }
 
-    return isNaN(result) ? 0 : result;
+    result = isNaN(result) ? 0 : result;
+
+    // Cache the result
+    _numberCache.set(cacheKey, result);
+    return result;
 }
 
 /**
@@ -42,13 +56,19 @@ function parseMwstRate(value, defaultMwst = 19) {
         return defaultMwst;
     }
 
+    // Use cache for common values
+    const cacheKey = `mwst_${value}_${defaultMwst}`;
+    if (_numberCache.has(cacheKey)) {
+        return _numberCache.get(cacheKey);
+    }
+
     let result;
 
     if (typeof value === 'number') {
-        // Wenn der Wert < 1 ist, nehmen wir an, dass es sich um einen Dezimalwert handelt (z.B. 0.19)
+        // Numbers < 1 are assumed to be decimal (e.g. 0.19)
         result = value < 1 ? value * 100 : value;
     } else {
-        // String-Wert parsen und bereinigen
+        // Parse and clean the string value
         const rateStr = value.toString()
             .replace(/%/g, '')
             .replace(/,/g, '.')
@@ -56,15 +76,16 @@ function parseMwstRate(value, defaultMwst = 19) {
 
         const rate = parseFloat(rateStr);
 
-        // Wenn der geparste Wert ungültig ist, Standardwert zurückgeben
         if (isNaN(rate)) {
             result = defaultMwst;
         } else {
-            // Normalisieren: Werte < 1 werden als Dezimalwerte interpretiert (z.B. 0.19 -> 19)
+            // Normalize: values < 1 are interpreted as decimal (e.g. 0.19 -> 19)
             result = rate < 1 ? rate * 100 : rate;
         }
     }
 
+    // Cache the result
+    _numberCache.set(cacheKey, result);
     return result;
 }
 
@@ -76,10 +97,21 @@ function parseMwstRate(value, defaultMwst = 19) {
  */
 function formatCurrency(amount, currency = '€') {
     const value = parseCurrency(amount);
-    return value.toLocaleString('de-DE', {
+
+    // Use cache for formatted currencies
+    const cacheKey = `format_${value}_${currency}`;
+    if (_numberCache.has(cacheKey)) {
+        return _numberCache.get(cacheKey);
+    }
+
+    const formatted = value.toLocaleString('de-DE', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }) + ' ' + currency;
+
+    // Cache the result
+    _numberCache.set(cacheKey, formatted);
+    return formatted;
 }
 
 /**
@@ -90,6 +122,8 @@ function formatCurrency(amount, currency = '€') {
  * @returns {boolean} - true wenn Werte innerhalb der Toleranz gleich sind
  */
 function isApproximatelyEqual(a, b, tolerance = 0.01) {
+    // Pre-check for exact equality to avoid unnecessary calculations
+    if (a === b) return true;
     return Math.abs(a - b) <= tolerance;
 }
 
@@ -100,7 +134,7 @@ function isApproximatelyEqual(a, b, tolerance = 0.01) {
  * @returns {number} - Gerundeter Wert
  */
 function round(value, decimals = 2) {
-    const factor = Math.pow(10, decimals);
+    const factor = 10 ** decimals;
     return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 

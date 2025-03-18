@@ -1,6 +1,6 @@
 // src/modules/refreshModule/accountHandler.js
 /**
- * Updates booking accounts based on categories for any sheet type
+ * Updates booking accounts based on categories for any sheet type with optimized batch operations
  * @param {Sheet} sheet - The sheet to update
  * @param {string} sheetType - Type of sheet (einnahmen, ausgaben, bankbewegungen, etc.)
  * @param {Object} config - Configuration object
@@ -26,103 +26,78 @@ function updateBookingAccounts(sheet, sheetType, config, isBankSheet = false) {
         const lastRow = sheet.getLastRow();
         const numRows = lastRow - 1;
 
-        if (numRows <= 0) return true;
+        if (numRows <= 0) return true; // No data to update
 
         console.log(`Updating booking accounts for ${numRows} rows in ${sheetType}`);
 
-        // Get category data
-        const kategorieRange = sheet.getRange(2, columns.kategorie, numRows, 1);
-        const kategorieValues = kategorieRange.getValues();
+        // Optimization: Load all data in a single API call
+        const requiredColumns = [columns.kategorie];
 
-        // Get transaction type for bank sheets
-        let transTypeValues = [];
-        if (isBankSheet && columns.transaktionstyp) {
-            const transTypeRange = sheet.getRange(2, columns.transaktionstyp, numRows, 1);
-            transTypeValues = transTypeRange.getValues();
-        }
-
-        // For bank sheets, get kontoSoll and kontoHaben
-        let kontoSollValues = [];
-        let kontoHabenValues = [];
         if (isBankSheet) {
-            // Get current kontoSoll and kontoHaben values
-            kontoSollValues = sheet.getRange(2, columns.kontoSoll, numRows, 1).getValues();
-            kontoHabenValues = sheet.getRange(2, columns.kontoHaben, numRows, 1).getValues();
+            // For bank sheets, include transaction type, kontoSoll and kontoHaben
+            if (columns.transaktionstyp) requiredColumns.push(columns.transaktionstyp);
+            requiredColumns.push(columns.kontoSoll, columns.kontoHaben);
         } else {
-            // Get current buchungskonto values for data sheets
-            kontoSollValues = sheet.getRange(2, columns.buchungskonto, numRows, 1).getValues();
+            // For data sheets, just include buchungskonto
+            requiredColumns.push(columns.buchungskonto);
         }
 
-        // Create updated account values
-        const updatedSollValues = [];
-        const updatedHabenValues = isBankSheet ? [] : null;
+        const maxCol = Math.max(...requiredColumns);
+        const data = sheet.getRange(2, 1, numRows, maxCol).getValues();
 
-        // Process each row
-        for (let i = 0; i < numRows; i++) {
-            const kategorie = kategorieValues[i][0] ? kategorieValues[i][0].toString().trim() : '';
-            let sollKonto = kontoSollValues[i][0] ? kontoSollValues[i][0].toString() : '';
-            let habenKonto = isBankSheet ?
-                (kontoHabenValues[i][0] ? kontoHabenValues[i][0].toString() : '') :
-                null;
+        // Optimization: Build update arrays for batched writes
+        const updates = {
+            sollAccounts: [],
+            habenAccounts: [],
+            sollRows: [],
+            habenRows: [],
+        };
+
+        // Process each row for updates
+        data.forEach((row, i) => {
+            const rowIndex = i + 2; // 1-based + header
+            const kategorie = row[columns.kategorie - 1]?.toString().trim() || '';
 
             // Skip if no category
-            if (!kategorie) {
-                updatedSollValues.push([sollKonto]);
-                if (isBankSheet) updatedHabenValues.push([habenKonto]);
-                continue;
-            }
+            if (!kategorie) return;
 
-            // Get relevant kontoMapping based on sheet type
-            let kontoMapping;
+            // Get account mapping based on sheet type and transaction type
+            const mapping = getAccountMapping(kategorie, row, columns, sheetType, config, isBankSheet);
+            if (!mapping) return;
+
+            // For bank sheets, update both Soll and Haben
             if (isBankSheet) {
-                // For bank sheets, determine mapping based on transaction type
-                const transType = transTypeValues[i][0] ? transTypeValues[i][0].toString().trim() : '';
+                const currentSoll = row[columns.kontoSoll - 1]?.toString() || '';
+                const currentHaben = row[columns.kontoHaben - 1]?.toString() || '';
 
-                if (transType === 'Einnahme') {
-                    kontoMapping = config.einnahmen.kontoMapping[kategorie];
-                } else if (transType === 'Ausgabe') {
-                    // Try multiple mappings in order
-                    kontoMapping = config.ausgaben.kontoMapping[kategorie] ||
-                        config.eigenbelege.kontoMapping[kategorie] ||
-                        config.gesellschafterkonto.kontoMapping[kategorie] ||
-                        config.holdingTransfers.kontoMapping[kategorie];
+                // Only update if accounts are different from current values
+                if (mapping.soll && mapping.soll !== currentSoll) {
+                    updates.sollAccounts.push(mapping.soll);
+                    updates.sollRows.push(rowIndex);
                 }
-            } else {
-                // For data sheets, use the sheet's own mapping
-                kontoMapping = config[sheetType].kontoMapping[kategorie];
-            }
 
-            // Update accounts if mapping exists
-            if (kontoMapping) {
-                if (isBankSheet) {
-                    sollKonto = kontoMapping.soll || sollKonto;
-                    habenKonto = kontoMapping.gegen || habenKonto;
-                } else {
-                    // For data sheets, set the appropriate buchungskonto
-                    if (sheetType === 'einnahmen') {
-                        // For revenue, we use the gegen account
-                        sollKonto = kontoMapping.gegen || sollKonto;
-                    } else {
-                        // For expenses, we use the soll account
-                        sollKonto = kontoMapping.soll || sollKonto;
-                    }
+                if (mapping.gegen && mapping.gegen !== currentHaben) {
+                    updates.habenAccounts.push(mapping.gegen);
+                    updates.habenRows.push(rowIndex);
                 }
             }
+            // For data sheets, update buchungskonto
+            else {
+                const currentAccount = row[columns.buchungskonto - 1]?.toString() || '';
+                const accountToUse = sheetType === 'einnahmen' ?
+                    (mapping.gegen || '') : (mapping.soll || '');
 
-            // Add to update arrays
-            updatedSollValues.push([sollKonto]);
-            if (isBankSheet) updatedHabenValues.push([habenKonto]);
-        }
+                if (accountToUse && accountToUse !== currentAccount) {
+                    updates.sollAccounts.push(accountToUse);
+                    updates.sollRows.push(rowIndex);
+                }
+            }
+        });
 
-        // Update the sheet with the new values
-        if (isBankSheet) {
-            sheet.getRange(2, columns.kontoSoll, numRows, 1).setValues(updatedSollValues);
-            sheet.getRange(2, columns.kontoHaben, numRows, 1).setValues(updatedHabenValues);
-        } else {
-            sheet.getRange(2, columns.buchungskonto, numRows, 1).setValues(updatedSollValues);
-        }
+        // Apply updates in optimized batches
+        applyAccountUpdates(sheet, updates, columns, isBankSheet);
 
-        console.log(`Updated ${updatedSollValues.length} booking accounts in ${sheetType}`);
+        console.log(`Updated accounts in ${sheetType}: ${updates.sollRows.length + updates.habenRows.length} changes`);
         return true;
     } catch (e) {
         console.error(`Error updating booking accounts for ${sheetType}:`, e);
@@ -131,25 +106,127 @@ function updateBookingAccounts(sheet, sheetType, config, isBankSheet = false) {
 }
 
 /**
- * Checks if the Soll and Haben accounts are compatible with the category
- * and updates them if they don't match
- * @param {Object} row - Row data
- * @param {Object} category - Category information
- * @param {Object} mapping - Account mapping
- * @returns {Object} Updated accounts
+ * Gets account mapping based on category and sheet type
+ * @param {string} kategorie - The category
+ * @param {Array} row - The row data
+ * @param {Object} columns - Column configuration
+ * @param {string} sheetType - Sheet type
+ * @param {Object} config - Configuration
+ * @param {boolean} isBankSheet - Whether this is a bank sheet
+ * @returns {Object|null} Account mapping or null
  */
-function validateAccountsForCategory(kategorie, sollKonto, habenKonto, mapping) {
-    if (!mapping) return { sollKonto, habenKonto };
+function getAccountMapping(kategorie, row, columns, sheetType, config, isBankSheet) {
+    if (isBankSheet) {
+        // For bank sheets, determine mapping based on transaction type
+        const transType = columns.transaktionstyp ?
+            (row[columns.transaktionstyp - 1]?.toString().trim() || '') : '';
 
-    // Check if accounts match the expected accounts for the category
-    const expectedSoll = mapping.soll || '';
-    const expectedHaben = mapping.gegen || '';
+        if (transType === 'Einnahme') {
+            return config.einnahmen.kontoMapping[kategorie];
+        } else if (transType === 'Ausgabe') {
+            // Try multiple mappings in order of probability
+            return config.ausgaben.kontoMapping[kategorie] ||
+                config.eigenbelege.kontoMapping[kategorie] ||
+                config.gesellschafterkonto.kontoMapping[kategorie] ||
+                config.holdingTransfers.kontoMapping[kategorie];
+        }
+    } else {
+        // For data sheets, use the sheet's own mapping
+        return config[sheetType].kontoMapping[kategorie];
+    }
 
-    // Return updated accounts if they don't match
-    return {
-        sollKonto: expectedSoll || sollKonto,
-        habenKonto: expectedHaben || habenKonto,
+    return null;
+}
+
+/**
+ * Applies account updates in optimized batches
+ * @param {Sheet} sheet - The sheet
+ * @param {Object} updates - The updates
+ * @param {Object} columns - Column configuration
+ * @param {boolean} isBankSheet - Whether this is a bank sheet
+ */
+function applyAccountUpdates(sheet, updates, columns, isBankSheet) {
+    // Group rows by account for more efficient updates
+    const applyUpdatesToColumn = (rows, accounts, column) => {
+        if (rows.length === 0) return;
+
+        // Group by account for batch updates
+        const accountGroups = {};
+        rows.forEach((row, i) => {
+            const account = accounts[i];
+            if (!accountGroups[account]) {
+                accountGroups[account] = [];
+            }
+            accountGroups[account].push(row);
+        });
+
+        // Apply updates by account group
+        Object.entries(accountGroups).forEach(([account, groupRows]) => {
+            try {
+                // Find consecutive ranges to minimize API calls
+                const ranges = findConsecutiveRanges(groupRows);
+
+                ranges.forEach(range => {
+                    const [startRow, endRow] = range;
+                    const numRows = endRow - startRow + 1;
+                    const values = Array(numRows).fill([account]);
+
+                    sheet.getRange(startRow, column, numRows, 1).setValues(values);
+                });
+            } catch (e) {
+                console.error(`Error updating account ${account} in column ${column}:`, e);
+
+                // Fallback: Update rows individually
+                groupRows.forEach(row => {
+                    try {
+                        sheet.getRange(row, column).setValue(account);
+                    } catch (rowError) {
+                        console.error(`Error updating row ${row}:`, rowError);
+                    }
+                });
+            }
+        });
     };
+
+    // Apply Soll account updates
+    if (isBankSheet) {
+        applyUpdatesToColumn(updates.sollRows, updates.sollAccounts, columns.kontoSoll);
+        applyUpdatesToColumn(updates.habenRows, updates.habenAccounts, columns.kontoHaben);
+    } else {
+        applyUpdatesToColumn(updates.sollRows, updates.sollAccounts, columns.buchungskonto);
+    }
+}
+
+/**
+ * Finds consecutive ranges in an array of row indices
+ * @param {Array} rows - Row indices
+ * @returns {Array} Array of [startRow, endRow] pairs
+ */
+function findConsecutiveRanges(rows) {
+    if (!rows || rows.length === 0) return [];
+
+    // Sort rows for range detection
+    rows.sort((a, b) => a - b);
+
+    const ranges = [];
+    let currentStart = rows[0];
+    let currentEnd = rows[0];
+
+    for (let i = 1; i < rows.length; i++) {
+        if (rows[i] === currentEnd + 1) {
+            // Extend current range
+            currentEnd = rows[i];
+        } else {
+            // Store current range and start a new one
+            ranges.push([currentStart, currentEnd]);
+            currentStart = currentEnd = rows[i];
+        }
+    }
+
+    // Add the last range
+    ranges.push([currentStart, currentEnd]);
+
+    return ranges;
 }
 
 export default {
