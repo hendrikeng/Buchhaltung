@@ -1,7 +1,6 @@
 // src/modules/refreshModule/dataSheetHandler.js
 import stringUtils from '../../utils/stringUtils.js';
 import formattingHandler from './formattingHandler.js';
-import cellValidator from '../validatorModule/cellValidator.js';
 import accountHandler from './accountHandler.js';
 
 /**
