@@ -94,13 +94,15 @@ function parseDate(value) {
     const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
     if (germanFormat.test(dateStr)) {
         const [, day, month, year] = dateStr.match(germanFormat);
-        return new Date(year, month - 1, day);
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
     }
 
     // ISO Format (YYYY-MM-DD)
     const isoFormat = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     if (isoFormat.test(dateStr)) {
-        return new Date(dateStr);
+        const [, year, month, day] = dateStr.match(isoFormat);
+        // Important: Create date with specific hour to avoid timezone issues
+        return new Date(year, month - 1, day, 12, 0, 0);
     }
 
     // Fallback

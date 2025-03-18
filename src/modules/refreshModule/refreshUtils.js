@@ -35,16 +35,19 @@ function isGoodReferenceMatch(ref1, ref2) {
  */
 function formatDate(date) {
     try {
+        // Convert string dates to Date objects
         const dateObj = typeof date === 'string' ?
             dateUtils.parseDate(date) :
-            new Date(date);
+            date instanceof Date ? date : new Date(date);
 
+        // Important: Use the date directly without timezone conversion
         return Utilities.formatDate(
             dateObj,
             Session.getScriptTimeZone(),
             'dd.MM.yyyy',
         );
     } catch (e) {
+        console.error('Error formatting date:', e);
         return String(date);
     }
 }

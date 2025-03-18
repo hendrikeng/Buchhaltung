@@ -126,13 +126,10 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 
             // And set payment date for gutschrift if we have bank info
             if (columns.zahlungsdatum && hatBankzuordnung && bankzuordnung.bankDatum) {
-                // Only set date if currently empty
-                if (!data[i][columns.zahlungsdatum - 1] || data[i][columns.zahlungsdatum - 1] === '') {
-                    zahlungsdatumUpdates.push({
-                        row,
-                        value: refreshUtils.formatDate(bankzuordnung.bankDatum),
-                    });
-                }
+                zahlungsdatumUpdates.push({
+                    row,
+                    value: refreshUtils.formatDate(bankzuordnung.bankDatum),
+                });
             }
 
             // Set payment method for gutschrift
