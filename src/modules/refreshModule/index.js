@@ -1,11 +1,6 @@
-// src/modules/refreshModule/index.js
+// Updated src/modules/refreshModule/index.js
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
-import matchingHandler from './matchingHandler.js';
-import accountHandler from './accountHandler.js';
-import syncHandler from './syncHandler.js';
-import formattingHandler from './formattingHandler.js';
-import refreshUtils from './refreshUtils.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
@@ -96,21 +91,6 @@ const RefreshModule = {
             throw e; // Fehlermeldung weiterleiten, damit sie in der Hauptfunktion angezeigt wird
         }
     },
-
-    // Expose only what's needed externally
-    accountHandler: { updateBookingAccounts: accountHandler.updateBookingAccounts },
-    matchingHandler: { performBankReferenceMatching: matchingHandler.performBankReferenceMatching },
-    dataSheetHandler: { refreshDataSheet: dataSheetHandler.refreshDataSheet },
-    bankSheetHandler: { refreshBankSheet: bankSheetHandler.refreshBankSheet },
-    syncHandler: { markPaidInvoices: syncHandler.markPaidInvoices },
-    formattingHandler: {
-        setConditionalFormattingForStatusColumn: formattingHandler.setConditionalFormattingForStatusColumn,
-        setDropdownValidations: formattingHandler.setDropdownValidations,
-        applyBankSheetValidations: formattingHandler.applyBankSheetValidations,
-        formatMatchedRows: formattingHandler.formatMatchedRows,
-        setMatchColumnFormatting: formattingHandler.setMatchColumnFormatting,
-    },
-    utils: refreshUtils,
 };
 
 export default RefreshModule;

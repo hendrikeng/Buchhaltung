@@ -8,6 +8,8 @@ import BWAModule from './modules/bwaModule/index.js';
 import BilanzModule from './modules/bilanzModule/index.js';
 import ValidatorModule from './modules/validatorModule/index.js';
 import SetupModule from './modules/setupModule/index.js';
+import BankReconciliationModule from './modules/bankReconciliationModule/index.js';
+
 
 // =================== Globale Funktionen ===================
 /**
@@ -20,6 +22,8 @@ function onOpen() {
         .addSeparator()
         .addItem('📥 Dateien importieren', 'importDriveFiles')
         .addItem('🔄 Aktuelles Blatt aktualisieren', 'refreshSheet')
+        .addItem('🏦 Bankabgleich durchführen', 'bankReconciliation')
+        .addSeparator()
         .addItem('📊 UStVA berechnen', 'calculateUStVA')
         .addItem('📈 BWA berechnen', 'calculateBWA')
         .addItem('📝 Bilanz erstellen', 'calculateBilanz')
@@ -214,6 +218,19 @@ function importDriveFiles() {
     }
 }
 
+/**
+ * Führt den Bankabgleich durch
+ */
+function bankReconciliation() {
+    try {
+        BankReconciliationModule.reconcileBank(config);
+    } catch (error) {
+        SpreadsheetApp.getUi().alert('Fehler beim Bankabgleich: ' + error.message);
+        console.error('Bankabgleich-Fehler:', error);
+    }
+}
+
+
 // Exportiere alle relevanten Funktionen in den globalen Namensraum,
 // damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
 global.onOpen = onOpen;
@@ -225,3 +242,4 @@ global.calculateUStVA = calculateUStVA;
 global.calculateBWA = calculateBWA;
 global.calculateBilanz = calculateBilanz;
 global.importDriveFiles = importDriveFiles;
+global.bankReconciliation = bankReconciliation;
