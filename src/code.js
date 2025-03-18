@@ -7,6 +7,7 @@ import UStVAModule from './modules/ustvaModule/index.js';
 import BWAModule from './modules/bwaModule/index.js';
 import BilanzModule from './modules/bilanzModule/index.js';
 import ValidatorModule from './modules/validatorModule/index.js';
+import SetupModule from './modules/setupModule/index.js';
 
 // =================== Globale Funktionen ===================
 /**
@@ -14,12 +15,14 @@ import ValidatorModule from './modules/validatorModule/index.js';
  */
 function onOpen() {
     SpreadsheetApp.getUi()
-        .createMenu("📂 Buchhaltung")
-        .addItem("📥 Dateien importieren", "importDriveFiles")
-        .addItem("🔄 Aktuelles Blatt aktualisieren", "refreshSheet")
-        .addItem("📊 UStVA berechnen", "calculateUStVA")
-        .addItem("📈 BWA berechnen", "calculateBWA")
-        .addItem("📝 Bilanz erstellen", "calculateBilanz")
+        .createMenu('📂 Buchhaltung')
+        .addItem('🛠️ Buchhaltung einrichten', 'setupSpreadsheet')
+        .addSeparator()
+        .addItem('📥 Dateien importieren', 'importDriveFiles')
+        .addItem('🔄 Aktuelles Blatt aktualisieren', 'refreshSheet')
+        .addItem('📊 UStVA berechnen', 'calculateUStVA')
+        .addItem('📈 BWA berechnen', 'calculateBWA')
+        .addItem('📝 Bilanz erstellen', 'calculateBilanz')
         .addToUi();
 }
 
@@ -38,7 +41,7 @@ function onEdit(e) {
     if (range.getRow() <= 1) return;
 
     // Konvertieren in kleinbuchstaben und leerzeichen entfernen
-    let sheetKey = name.toLowerCase().replace(/\s+/g, '');
+    const sheetKey = name.toLowerCase().replace(/\s+/g, '');
 
     // Nach entsprechendem Schlüssel in config suchen (case-insensitive)
     let configKey = null;
@@ -77,7 +80,7 @@ function onEdit(e) {
 
         // Prüfen, ob die Zeile leer ist
         const rowValues = sheet.getRange(rowIndex, 1, 1, headerLen).getValues()[0];
-        if (rowValues.every(cell => cell === "")) continue;
+        if (rowValues.every(cell => cell === '')) continue;
 
         // Zeitstempel für diese Zeile hinzufügen
         timestampValues.push([now]);
@@ -96,20 +99,27 @@ function onEdit(e) {
 function setupTrigger() {
     const triggers = ScriptApp.getProjectTriggers();
     // Prüfe, ob der onOpen Trigger bereits existiert
-    if (!triggers.some(t => t.getHandlerFunction() === "onOpen")) {
-        ScriptApp.newTrigger("onOpen")
+    if (!triggers.some(t => t.getHandlerFunction() === 'onOpen')) {
+        ScriptApp.newTrigger('onOpen')
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onOpen()
             .create();
     }
 
     // Prüfe, ob der onEdit Trigger bereits existiert
-    if (!triggers.some(t => t.getHandlerFunction() === "onEdit")) {
-        ScriptApp.newTrigger("onEdit")
+    if (!triggers.some(t => t.getHandlerFunction() === 'onEdit')) {
+        ScriptApp.newTrigger('onEdit')
             .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
             .onEdit()
             .create();
     }
+}
+
+/**
+ * Richtet die grundlegende Struktur für die Buchhaltung ein
+ */
+function setupSpreadsheet() {
+    SetupModule.setupSpreadsheet(config);
 }
 
 /**
@@ -118,10 +128,10 @@ function setupTrigger() {
  */
 function validateSheets() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const revenueSheet = ss.getSheetByName("Einnahmen");
-    const expenseSheet = ss.getSheetByName("Ausgaben");
-    const bankSheet = ss.getSheetByName("Bankbewegungen");
-    const eigenSheet = ss.getSheetByName("Eigenbelege");
+    const revenueSheet = ss.getSheetByName('Einnahmen');
+    const expenseSheet = ss.getSheetByName('Ausgaben');
+    const bankSheet = ss.getSheetByName('Bankbewegungen');
+    const eigenSheet = ss.getSheetByName('Eigenbelege');
 
     return ValidatorModule.validateAllSheets(revenueSheet, expenseSheet, bankSheet, eigenSheet, config);
 }
@@ -164,7 +174,7 @@ function refreshSheet() {
 function calculateUStVA() {
     executeWithErrorHandling(
         () => UStVAModule.calculateUStVA(config),
-        "Fehler bei der UStVA-Berechnung"
+        'Fehler bei der UStVA-Berechnung',
     );
 }
 
@@ -174,7 +184,7 @@ function calculateUStVA() {
 function calculateBWA() {
     executeWithErrorHandling(
         () => BWAModule.calculateBWA(config),
-        "Fehler bei der BWA-Berechnung"
+        'Fehler bei der BWA-Berechnung',
     );
 }
 
@@ -184,7 +194,7 @@ function calculateBWA() {
 function calculateBilanz() {
     executeWithErrorHandling(
         () => BilanzModule.calculateBilanz(config),
-        "Fehler bei der Bilanzerstellung"
+        'Fehler bei der Bilanzerstellung',
     );
 }
 
@@ -199,8 +209,8 @@ function importDriveFiles() {
         // Optional: Nach dem Import auch eine Validierung durchführen
         // validateSheets();
     } catch (error) {
-        SpreadsheetApp.getUi().alert("Fehler beim Dateiimport: " + error.message);
-        console.error("Import-Fehler:", error);
+        SpreadsheetApp.getUi().alert('Fehler beim Dateiimport: ' + error.message);
+        console.error('Import-Fehler:', error);
     }
 }
 
@@ -209,6 +219,7 @@ function importDriveFiles() {
 global.onOpen = onOpen;
 global.onEdit = onEdit;
 global.setupTrigger = setupTrigger;
+global.setupSpreadsheet = setupSpreadsheet;
 global.refreshSheet = refreshSheet;
 global.calculateUStVA = calculateUStVA;
 global.calculateBWA = calculateBWA;
