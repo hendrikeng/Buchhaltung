@@ -2,6 +2,7 @@
 import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 import globalCache from '../../utils/cacheUtils.js';
+import dateUtils from '../../utils/dateUtils.js';
 
 /**
  * Führt das Matching von Bankbewegungen mit Rechnungen durch
@@ -365,17 +366,21 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
+    // Get the exact bank date - this will be used for payment date updates
+    const rawBankDate = row[columns.datum - 1];
+
+    // Store exact bank date string for perfect consistency
     bankZuordnungen[key] = {
         typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
-        bankDatum: row[columns.datum - 1],
+        bankDatum: rawBankDate,  // Use exact original bank date
         matchInfo: matchInfo,
         transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
         category: sourceCategory,
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
-        isGutschrift: isActualGutschrift, // Add explicit flag
-        originalRef: matchResult.ref, // Store the original reference for validation
+        isGutschrift: isActualGutschrift,
+        originalRef: matchResult.ref,
     };
 
     return true;
@@ -488,7 +493,7 @@ function evaluateMatch(match, betrag = null) {
         result.matchType = 'Teilzahlung';
         return result;
     }
-
+    
     // Fall 4: Betrag größer, aber nahe dem Bruttobetrag
     if (betrag > matchBrutto && numberUtils.isApproximatelyEqual(betrag, matchBrutto, tolerance)) {
         result.matchType = 'Vollständige Zahlung';

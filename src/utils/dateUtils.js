@@ -1,4 +1,4 @@
-// utils/dateUtils.js
+// src/utils/dateUtils.js
 /**
  * Funktionen für die Verarbeitung und Formatierung von Datumsangaben
  */
@@ -66,14 +66,42 @@ function extractDateFromFilename(filename) {
 
 /**
  * Extrahiert den Monat (1-12) aus einer Zeile
- * @param {Array} _row - Die Zeile mit Daten
- * @param {string} _sheetType - Der Typ des Sheets (einnahmen, ausgaben, eigenbelege)
- * @param {Object} _config - Die Konfiguration
+ * @param {Array} row - Die Zeile mit Daten
+ * @param {string} sheetType - Der Typ des Sheets (einnahmen, ausgaben, eigenbelege)
+ * @param {Object} config - Die Konfiguration
  * @returns {number|null} - Der Monat (1-12) oder null
  */
-function getMonthFromRow(_row, _sheetType, _config) {
-    // Vereinfachte Implementierung für Tests
-    return 1;
+function getMonthFromRow(row, sheetType, config) {
+    if (!row || !sheetType || !config) return null;
+
+    // Get the correct column configuration for this sheet type
+    const columns = config[sheetType]?.columns;
+    if (!columns) return null;
+
+    // First try to use the payment date, which is most relevant for tax calculations
+    let dateToUse = null;
+
+    if (columns.zahlungsdatum && row[columns.zahlungsdatum - 1]) {
+        dateToUse = parseDate(row[columns.zahlungsdatum - 1]);
+    }
+
+    // If no payment date, fall back to invoice/document date
+    if (!dateToUse && columns.datum && row[columns.datum - 1]) {
+        dateToUse = parseDate(row[columns.datum - 1]);
+    }
+
+    // If we have a valid date, extract month (1-12)
+    if (dateToUse && !isNaN(dateToUse.getTime())) {
+        // Check if the year matches the configured year
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+
+        if (dateToUse.getFullYear() === targetYear) {
+            return dateToUse.getMonth() + 1; // JavaScript months are 0-based
+        }
+    }
+
+    // Could not determine a valid month
+    return null;
 }
 
 /**
@@ -84,8 +112,13 @@ function getMonthFromRow(_row, _sheetType, _config) {
 function parseDate(value) {
     if (!value) return null;
 
-    // Wenn bereits ein Date-Objekt übergeben wurde
-    if (value instanceof Date) return value;
+    // If already a Date object, normalize it
+    if (value instanceof Date) {
+        const normalizedDate = new Date(value);
+        // Set to noon to avoid timezone issues
+        normalizedDate.setHours(12, 0, 0, 0);
+        return normalizedDate;
+    }
 
     // String-Wert parsen
     const dateStr = value.toString().trim();
@@ -94,6 +127,7 @@ function parseDate(value) {
     const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
     if (germanFormat.test(dateStr)) {
         const [, day, month, year] = dateStr.match(germanFormat);
+        // Important: Create date with specific hour to avoid timezone issues
         return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
     }
 
@@ -101,17 +135,65 @@ function parseDate(value) {
     const isoFormat = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     if (isoFormat.test(dateStr)) {
         const [, year, month, day] = dateStr.match(isoFormat);
-        // Important: Create date with specific hour to avoid timezone issues
-        return new Date(year, month - 1, day, 12, 0, 0);
+        // Explicitly set noon to avoid timezone issues
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
     }
 
-    // Fallback
+    // Fallback with normalized time
     const parsedDate = new Date(dateStr);
-    return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    if (isNaN(parsedDate.getTime())) return null;
+
+    // Normalize to noon
+    parsedDate.setHours(12, 0, 0, 0);
+    return parsedDate;
+}
+
+/**
+ * Formats a date consistently in DD.MM.YYYY format
+ * @param {Date|string} date - The date to format
+ * @returns {string} - Formatted date string
+ */
+function formatDate(date) {
+    try {
+        // Handle the date parsing
+        let dateObj;
+        if (typeof date === 'string') {
+            // For string, try parsing using our custom parser first
+            dateObj = parseDate(date);
+
+            // If that fails, try direct Date constructor
+            if (!dateObj || isNaN(dateObj.getTime())) {
+                dateObj = new Date(date);
+            }
+        } else if (date instanceof Date) {
+            dateObj = new Date(date);
+        } else {
+            return String(date);
+        }
+
+        // Check if date is valid
+        if (dateObj && !isNaN(dateObj.getTime())) {
+            // Set time to noon to avoid timezone issues
+            dateObj.setHours(12, 0, 0, 0);
+
+            // Format consistently using direct string formatting to avoid timezone issues
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const year = dateObj.getFullYear();
+
+            // Manually format as DD.MM.YYYY to avoid any timezone issues
+            return `${day}.${month}.${year}`;
+        }
+        return String(date);
+    } catch (e) {
+        console.error('Error formatting date:', e);
+        return String(date);
+    }
 }
 
 export default {
     extractDateFromFilename,
     getMonthFromRow,
     parseDate,
+    formatDate,
 };

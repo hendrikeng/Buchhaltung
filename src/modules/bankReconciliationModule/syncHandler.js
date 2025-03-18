@@ -130,15 +130,12 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
                 });
             }
 
-            // And set payment date for gutschrift if we have bank info
+            // For Gutschrift, always update the payment date to match bank date
             if (columns.zahlungsdatum && hatBankzuordnung && bankzuordnung.bankDatum) {
-                // Only set date if currently empty
-                if (!data[i][columns.zahlungsdatum - 1] || data[i][columns.zahlungsdatum - 1] === '') {
-                    zahlungsdatumUpdates.push({
-                        row,
-                        value: formatDate(bankzuordnung.bankDatum),
-                    });
-                }
+                zahlungsdatumUpdates.push({
+                    row,
+                    value: dateUtils.formatDate(bankzuordnung.bankDatum),
+                });
             }
 
             // Set payment method for gutschrift
@@ -169,16 +166,12 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             });
         }
 
-        // Update payment date if needed
+        // Update payment date if needed - ALWAYS use bank date when available
         if (rowData.bankDatum && columns.zahlungsdatum) {
-            const existingDate = data[i][columns.zahlungsdatum - 1];
-
-            if (!existingDate || existingDate === '') {
-                zahlungsdatumUpdates.push({
-                    row,
-                    value: formatDate(rowData.bankDatum),
-                });
-            }
+            zahlungsdatumUpdates.push({
+                row,
+                value: dateUtils.formatDate(rowData.bankDatum),
+            });
         }
 
         // Zahlungsart auf "Überweisung" setzen, wenn eine Bankbuchung gefunden wurde
@@ -234,6 +227,16 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     const bezahltBetrag = columns.bezahlt ? numberUtils.parseCurrency(rowData[columns.bezahlt - 1]) : 0;
     const zahlungsDatum = columns.zahlungsdatum ? rowData[columns.zahlungsdatum - 1] : null;
 
+    // Validate payment date
+    let isValidPaymentDate = false;
+    if (zahlungsDatum) {
+        const paymentDate = dateUtils.parseDate(zahlungsDatum);
+        if (paymentDate) {
+            // Check if payment date is valid (not in future)
+            isValidPaymentDate = paymentDate <= new Date();
+        }
+    }
+
     // Enhanced Gutschrift detection - ONLY for Einnahmen
     const isGutschrift = sheetType === 'einnahmen' && nettobetrag < 0;
 
@@ -258,12 +261,12 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     const mwst = columns.mwstSatz ?
         numberUtils.parseMwstRate(rowData[columns.mwstSatz - 1], config.tax.defaultMwst) / 100 : 0;
     const bruttoBetrag = nettoAbs * (1 + mwst);
-    const isPaid = Math.abs(bezahltBetrag) >= bruttoBetrag * 0.999; // 99.9% bezahlt wegen Rundungsfehlern
+    const isPaid = Math.abs(bezahltBetrag) >= bruttoBetrag * 0.999 && isValidPaymentDate; // 99.9% bezahlt wegen Rundungsfehlern
     const isPartialPaid = !isPaid && bezahltBetrag > 0;
 
     // Bankabgleich-Info und Datum aus der Zuordnung
     const bankInfo = hatBankzuordnung ? getZuordnungsInfo(bankzuordnung) : undefined;
-    const bankDatum = hatBankzuordnung ? bankzuordnung.bankDatum : undefined;
+    const bankDatum = hatBankzuordnung ? bankzuordnung.bankDatum : undefined; // Use exact bank date
 
     // Bezahlt-Betrag berechnen
     let newBezahltBetrag = null;
@@ -423,12 +426,8 @@ function getZuordnungsInfo(zuordnung) {
     try {
         const date = zuordnung.bankDatum;
         if (date) {
-            // Format as DD.MM.YYYY
-            const formattedDate = Utilities.formatDate(
-                new Date(date),
-                Session.getScriptTimeZone(),
-                'dd.MM.yyyy',
-            );
+            // Use dateUtils to ensure consistent formatting
+            const formattedDate = dateUtils.formatDate(date);
             infoText += formattedDate;
         } else {
             infoText += 'Datum unbekannt';
@@ -443,27 +442,6 @@ function getZuordnungsInfo(zuordnung) {
     }
 
     return infoText;
-}
-
-/**
- * Helper function to format dates consistently
- * @param {Date|string} date - The date to format
- * @returns {string} - Formatted date
- */
-function formatDate(date) {
-    try {
-        const dateObj = typeof date === 'string' ?
-            dateUtils.parseDate(date) :
-            new Date(date);
-
-        return Utilities.formatDate(
-            dateObj,
-            Session.getScriptTimeZone(),
-            'dd.MM.yyyy',
-        );
-    } catch (e) {
-        return String(date);
-    }
 }
 
 /**
@@ -498,5 +476,4 @@ export default {
     isGoodReferenceMatch,
     getDocumentTypePrefix,
     getZuordnungsInfo,
-    formatDate,
 };
