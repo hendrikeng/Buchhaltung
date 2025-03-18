@@ -1,5 +1,4 @@
 // src/modules/refreshModule/accountHandler.js
-import stringUtils from '../../utils/stringUtils.js';
 
 /**
  * Updates booking accounts based on categories for any sheet type
@@ -156,5 +155,4 @@ function validateAccountsForCategory(kategorie, sollKonto, habenKonto, mapping) 
 
 export default {
     updateBookingAccounts,
-    validateAccountsForCategory,
 };

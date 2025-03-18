@@ -2,7 +2,6 @@
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
 import matchingHandler from './matchingHandler.js';
-import formattingHandler from './formattingHandler.js';
 import accountHandler from './accountHandler.js';
 import syncHandler from './syncHandler.js';
 import globalCache from '../../utils/cacheUtils.js';

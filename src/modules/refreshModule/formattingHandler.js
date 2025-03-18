@@ -256,6 +256,5 @@ export default {
     setDropdownValidations,
     applyBankSheetValidations,
     formatMatchedRows,
-    applyFormatBatches,
     setMatchColumnFormatting,
 };

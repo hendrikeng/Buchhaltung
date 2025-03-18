@@ -1,5 +1,4 @@
 // src/modules/refreshModule/syncHandler.js
-import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 import dateUtils from '../../utils/dateUtils.js';
 
@@ -528,6 +527,4 @@ function getZuordnungsInfo(zuordnung) {
 
 export default {
     markPaidInvoices,
-    markPaidRows,
-    getZuordnungsInfo,
 };

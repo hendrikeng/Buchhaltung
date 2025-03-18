@@ -92,20 +92,16 @@ function refreshBankSheet(sheet, config) {
 function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
     // Endsaldo-Zeile überprüfen
     const lastRowText = sheet.getRange(lastRow, columns.buchungstext).getDisplayValue().toString().trim().toLowerCase();
-    const formattedDate = Utilities.formatDate(
-        new Date(),
-        Session.getScriptTimeZone(),
-        'dd.MM.yyyy',
-    );
+    const endSaldoDate = sheet.getRange(lastRow -1, columns.datum).getDisplayValue();
 
     if (lastRowText === 'endsaldo') {
         // Endsaldo-Zeile aktualisieren
-        sheet.getRange(lastRow, columns.datum).setValue(formattedDate);
+        sheet.getRange(lastRow, columns.datum).setValue(endSaldoDate);
         sheet.getRange(lastRow, columns.saldo).setFormula(`=${columnLetters.saldo}${lastRow - 1}`);
     } else {
         // Neue Endsaldo-Zeile erstellen
         const newRow = Array(sheet.getLastColumn()).fill('');
-        newRow[columns.datum - 1] = formattedDate;
+        newRow[columns.datum - 1] = endSaldoDate;
         newRow[columns.buchungstext - 1] = 'Endsaldo';
         newRow[columns.saldo - 1] = sheet.getRange(lastRow, columns.saldo).getValue();
 
@@ -115,5 +111,4 @@ function updateEndSaldoRow(sheet, lastRow, columns, columnLetters) {
 
 export default {
     refreshBankSheet,
-    updateEndSaldoRow,
 };

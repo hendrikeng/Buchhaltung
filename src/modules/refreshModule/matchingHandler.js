@@ -625,7 +625,4 @@ function performBatchUpdates(sheet, firstDataRow, numDataRows, columns,
 
 export default {
     performBankReferenceMatching,
-    findMatch,
-    evaluateMatch,
-    isGoodReferenceMatch,
 };
