@@ -1,4 +1,4 @@
-// Updated src/modules/refreshModule/bankSheetHandler.js
+// src/modules/refreshModule/bankSheetHandler.js
 import formattingHandler from './formattingHandler.js';
 import accountHandler from './accountHandler.js';
 import stringUtils from '../../utils/stringUtils.js';

@@ -4,12 +4,12 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // Mock the historyTracker module functions
 const historyTracker = {
     getOrCreateHistorySheet: jest.fn(),
-    collectExistingFiles: jest.fn()
+    collectExistingFiles: jest.fn(), 
 };
 
 // Mock dependencies
 const sheetUtils = {
-    getOrCreateSheet: jest.fn()
+    getOrCreateSheet: jest.fn(),
 };
 
 describe('historyTracker', () => {
@@ -21,7 +21,7 @@ describe('historyTracker', () => {
         it('should get existing history sheet', () => {
             // Setup
             const mockSheet = {
-                getLastRow: jest.fn(() => 5)
+                getLastRow: jest.fn(() => 5),
             };
 
             sheetUtils.getOrCreateSheet.mockReturnValue(mockSheet);
@@ -29,7 +29,7 @@ describe('historyTracker', () => {
 
             const mockSpreadsheet = {};
             const mockConfig = {
-                aenderungshistorie: { columns: {} }
+                aenderungshistorie: { columns: {} },
             };
 
             // Execute
@@ -51,9 +51,9 @@ describe('historyTracker', () => {
                     getValues: jest.fn(() => [
                         ['Datum', 'Typ', 'Dateiname', 'Link'],
                         ['2023-01-01', 'Einnahme', 'file1.pdf', 'url1'],
-                        ['2023-01-02', 'Ausgabe', 'file2.pdf', 'url2']
-                    ])
-                }))
+                        ['2023-01-02', 'Ausgabe', 'file2.pdf', 'url2'],
+                    ]),
+                })),
             };
 
             // Execute

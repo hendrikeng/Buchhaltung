@@ -1,4 +1,4 @@
-// Updated src/modules/refreshModule/index.js
+// src/modules/refreshModule/index.js
 import dataSheetHandler from './dataSheetHandler.js';
 import bankSheetHandler from './bankSheetHandler.js';
 import globalCache from '../../utils/cacheUtils.js';
