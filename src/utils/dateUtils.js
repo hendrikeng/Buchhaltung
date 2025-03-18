@@ -104,6 +104,9 @@ function getMonthFromRow(row, sheetType, config) {
     return null;
 }
 
+// src/utils/dateUtils.js
+// We only need standard date parsing/formatting without timezone complexity
+
 /**
  * Parst ein Datum aus verschiedenen Formaten
  * @param {string|Date} value - Das zu parsende Datum
@@ -112,12 +115,9 @@ function getMonthFromRow(row, sheetType, config) {
 function parseDate(value) {
     if (!value) return null;
 
-    // If already a Date object, normalize it
+    // If already a Date object, return it
     if (value instanceof Date) {
-        const normalizedDate = new Date(value);
-        // Set to noon to avoid timezone issues
-        normalizedDate.setHours(12, 0, 0, 0);
-        return normalizedDate;
+        return value;
     }
 
     // String-Wert parsen
@@ -127,68 +127,51 @@ function parseDate(value) {
     const germanFormat = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
     if (germanFormat.test(dateStr)) {
         const [, day, month, year] = dateStr.match(germanFormat);
-        // Important: Create date with specific hour to avoid timezone issues
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     }
 
     // ISO Format (YYYY-MM-DD)
     const isoFormat = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     if (isoFormat.test(dateStr)) {
         const [, year, month, day] = dateStr.match(isoFormat);
-        // Explicitly set noon to avoid timezone issues
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     }
 
-    // Fallback with normalized time
+    // Fallback
     const parsedDate = new Date(dateStr);
-    if (isNaN(parsedDate.getTime())) return null;
-
-    // Normalize to noon
-    parsedDate.setHours(12, 0, 0, 0);
-    return parsedDate;
+    return isNaN(parsedDate.getTime()) ? null : parsedDate;
 }
 
 /**
- * Formats a date consistently in DD.MM.YYYY format
+ * Formats a date in DD.MM.YYYY format
  * @param {Date|string} date - The date to format
  * @returns {string} - Formatted date string
  */
 function formatDate(date) {
-    try {
-        // Handle the date parsing
-        let dateObj;
-        if (typeof date === 'string') {
-            // For string, try parsing using our custom parser first
-            dateObj = parseDate(date);
+    if (!date) return '';
 
-            // If that fails, try direct Date constructor
-            if (!dateObj || isNaN(dateObj.getTime())) {
-                dateObj = new Date(date);
-            }
-        } else if (date instanceof Date) {
-            dateObj = new Date(date);
-        } else {
-            return String(date);
+    let dateObj;
+    if (typeof date === 'string') {
+        // If already in DD.MM.YYYY format, return it
+        if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(date)) {
+            return date;
         }
-
-        // Check if date is valid
-        if (dateObj && !isNaN(dateObj.getTime())) {
-            // Set time to noon to avoid timezone issues
-            dateObj.setHours(12, 0, 0, 0);
-
-            // Format consistently using direct string formatting to avoid timezone issues
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const year = dateObj.getFullYear();
-
-            // Manually format as DD.MM.YYYY to avoid any timezone issues
-            return `${day}.${month}.${year}`;
-        }
-        return String(date);
-    } catch (e) {
-        console.error('Error formatting date:', e);
+        dateObj = parseDate(date);
+    } else if (date instanceof Date) {
+        dateObj = date;
+    } else {
         return String(date);
     }
+
+    if (!dateObj || isNaN(dateObj.getTime())) {
+        return String(date);
+    }
+
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+
+    return `${day}.${month}.${year}`;
 }
 
 export default {

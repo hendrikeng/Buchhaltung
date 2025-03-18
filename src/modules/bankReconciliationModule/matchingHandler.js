@@ -366,14 +366,10 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
-    // Get the exact bank date - this will be used for payment date updates
-    const rawBankDate = row[columns.datum - 1];
-
-    // Store exact bank date string for perfect consistency
     bankZuordnungen[key] = {
         typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
-        bankDatum: rawBankDate,  // Use exact original bank date
+        bankDatum: row[columns.datum - 1],  // Just use the raw date
         matchInfo: matchInfo,
         transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
         category: sourceCategory,

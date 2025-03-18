@@ -134,7 +134,9 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             if (columns.zahlungsdatum && hatBankzuordnung && bankzuordnung.bankDatum) {
                 zahlungsdatumUpdates.push({
                     row,
-                    value: dateUtils.formatDate(bankzuordnung.bankDatum),
+                    value: bankzuordnung.bankDatum instanceof Date ?
+                        Utilities.formatDate(bankzuordnung.bankDatum, Session.getScriptTimeZone(), 'dd.MM.yyyy') :
+                        bankzuordnung.bankDatum,
                 });
             }
 
@@ -170,7 +172,9 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         if (rowData.bankDatum && columns.zahlungsdatum) {
             zahlungsdatumUpdates.push({
                 row,
-                value: dateUtils.formatDate(rowData.bankDatum),
+                value: bankzuordnung.bankDatum instanceof Date ?
+                    Utilities.formatDate(bankzuordnung.bankDatum, Session.getScriptTimeZone(), 'dd.MM.yyyy') :
+                    bankzuordnung.bankDatum,
             });
         }
 
@@ -422,21 +426,21 @@ function getZuordnungsInfo(zuordnung) {
 
     let infoText = '✓ Bank: ';
 
-    // Format the date to Berlin timezone
-    try {
-        const date = zuordnung.bankDatum;
-        if (date) {
-            // Use dateUtils to ensure consistent formatting
-            const formattedDate = dateUtils.formatDate(date);
-            infoText += formattedDate;
+    // Format bank date using Utilities.formatDate with the script's timezone
+    if (zuordnung.bankDatum) {
+        if (zuordnung.bankDatum instanceof Date) {
+            infoText += Utilities.formatDate(
+                zuordnung.bankDatum,
+                Session.getScriptTimeZone(),
+                'dd.MM.yyyy',
+            );
         } else {
-            infoText += 'Datum unbekannt';
+            infoText += zuordnung.bankDatum;
         }
-    } catch (e) {
-        infoText += String(zuordnung.bankDatum);
+    } else {
+        infoText += 'Datum unbekannt';
     }
 
-    // Additional info if available
     if (zuordnung.additional && zuordnung.additional.length > 0) {
         infoText += ' + ' + zuordnung.additional.length + ' weitere';
     }
