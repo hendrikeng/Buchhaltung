@@ -1,5 +1,4 @@
 // src/modules/refreshModule/accountHandler.js
-
 /**
  * Updates booking accounts based on categories for any sheet type
  * @param {Sheet} sheet - The sheet to update

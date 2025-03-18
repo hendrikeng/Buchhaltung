@@ -1,6 +1,7 @@
 // src/modules/refreshModule/syncHandler.js
 import numberUtils from '../../utils/numberUtils.js';
 import dateUtils from '../../utils/dateUtils.js';
+import refreshUtils from './refreshUtils.js';
 
 /**
  * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
@@ -37,15 +38,15 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 
     // Bestimme die maximale Anzahl an Spalten, die benötigt werden
     const maxCol = Math.max(
-        sheet.getLastColumn(),  // Use the full sheet to ensure we get all data
+        sheet.getLastColumn(),
         columns.zahlungsdatum || 0,
         columns.bankabgleich || 0,
         columns.zahlungsart || 0,
         columns.bezahlt || 0,
         columns.bruttoBetrag || 0,
         columns.zahlungsstatus || 0,
-        columns.nettobetrag || 0,  // Important for gutschrift detection based on negative amount
-        columns.rechnungsnummer || 0, // Add this for reference validation
+        columns.nettobetrag || 0,
+        columns.rechnungsnummer || 0,
     );
 
     if (maxCol === 0) return; // Keine relevanten Spalten verfügbar
@@ -73,7 +74,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         const row = i + 2; // Aktuelle Zeile im Sheet
 
         // Get the sheet or doctype prefix
-        const prefix = getDocumentTypePrefix(sheetType);
+        const prefix = refreshUtils.getDocumentTypePrefix(sheetType);
 
         // For Einnahmen, check both regular and gutschrift matches
         // For other sheets, ONLY use regular matches (no gutschrift)
@@ -98,7 +99,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
         // Skip processing if this is a false match by comparing reference numbers
         if (hatBankzuordnung && docReference &&
             bankzuordnung.originalRef &&
-            !isGoodReferenceMatch(docReference, bankzuordnung.originalRef)) {
+            !refreshUtils.isGoodReferenceMatch(docReference, bankzuordnung.originalRef)) {
             // This is likely a false match - skip this row
             continue;
         }
@@ -119,7 +120,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             if (columns.bankabgleich && hatBankzuordnung) {
                 bankabgleichUpdates.push({
                     row,
-                    value: getZuordnungsInfo(bankzuordnung),
+                    value: refreshUtils.getZuordnungsInfo(bankzuordnung),
                 });
             }
 
@@ -129,7 +130,7 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
                 if (!data[i][columns.zahlungsdatum - 1] || data[i][columns.zahlungsdatum - 1] === '') {
                     zahlungsdatumUpdates.push({
                         row,
-                        value: formatDate(bankzuordnung.bankDatum),
+                        value: refreshUtils.formatDate(bankzuordnung.bankDatum),
                     });
                 }
             }
@@ -173,14 +174,9 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 
                         // Only mark as corrected if dates are actually different
                         dateCorrection = existingNormalized !== bankNormalized;
-                    } else {
-                        // If either date couldn't be parsed, don't mark as correction
-                        dateCorrection = false;
                     }
                 } catch (e) {
-                    // If date parsing fails, don't mark as correction
                     console.error('Error comparing dates:', e);
-                    dateCorrection = false;
                 }
             }
         }
@@ -198,23 +194,14 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
             });
         }
 
-        // Update payment date if:
-        // 1. It's empty OR
-        // 2. It's different from the bank date (date correction needed)
+        // Update payment date if needed
         if (rowData.bankDatum && columns.zahlungsdatum) {
             const existingDate = data[i][columns.zahlungsdatum - 1];
 
-            if (!existingDate || existingDate === '') {
-                // If date is empty, set it from bank date
+            if (!existingDate || existingDate === '' || dateCorrection) {
                 zahlungsdatumUpdates.push({
                     row,
-                    value: formatDate(rowData.bankDatum),
-                });
-            } else if (dateCorrection) {
-                // If date is different, update it with bank date
-                zahlungsdatumUpdates.push({
-                    row,
-                    value: formatDate(rowData.bankDatum),
+                    value: refreshUtils.formatDate(rowData.bankDatum),
                 });
             }
         }
@@ -265,52 +252,6 @@ function markPaidRows(sheet, sheetType, bankZuordnungen, config) {
 }
 
 /**
- * Helper function to determine if two reference numbers match well enough
- * @param {string} ref1 - First reference
- * @param {string} ref2 - Second reference
- * @returns {boolean} - Whether they're a good match
- */
-function isGoodReferenceMatch(ref1, ref2) {
-    // Handle empty values
-    if (!ref1 || !ref2) return false;
-
-    // Quick check for exact match
-    if (ref1 === ref2) return true;
-
-    // See if one contains the other
-    if (ref1.includes(ref2) || ref2.includes(ref1)) {
-        // For short references (less than 5 chars), be more strict
-        const shorter = ref1.length <= ref2.length ? ref1 : ref2;
-        if (shorter.length < 5) {
-            return ref1.startsWith(ref2) || ref2.startsWith(ref1);
-        }
-        return true;
-    }
-
-    // If neither contains the other, they're not a good match
-    return false;
-}
-
-/**
- * Helper function to format dates consistently
- */
-function formatDate(date) {
-    try {
-        const dateObj = typeof date === 'string' ?
-            dateUtils.parseDate(date) :
-            new Date(date);
-
-        return Utilities.formatDate(
-            dateObj,
-            Session.getScriptTimeZone(),
-            'dd.MM.yyyy',
-        );
-    } catch (e) {
-        return String(date);
-    }
-}
-
-/**
  * Kategorisiert eine Zeile basierend auf ihren Daten
  */
 function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, config) {
@@ -322,7 +263,7 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     const isGutschrift = sheetType === 'einnahmen' && nettobetrag < 0;
 
     // Check if this row has banking matches
-    const prefix = getDocumentTypePrefix(sheetType);
+    const prefix = refreshUtils.getDocumentTypePrefix(sheetType);
     const zuordnungsKey = `${prefix}#${rowIndex}`;
 
     // For Einnahmen, check both regular and gutschrift matches
@@ -346,7 +287,7 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
     const isPartialPaid = !isPaid && bezahltBetrag > 0;
 
     // Bankabgleich-Info und Datum aus der Zuordnung
-    const bankInfo = hatBankzuordnung ? getZuordnungsInfo(bankzuordnung) : undefined;
+    const bankInfo = hatBankzuordnung ? refreshUtils.getZuordnungsInfo(bankzuordnung) : undefined;
     const bankDatum = hatBankzuordnung ? bankzuordnung.bankDatum : undefined;
 
     // Bezahlt-Betrag berechnen
@@ -389,21 +330,6 @@ function categorizeRow(rowData, rowIndex, columns, sheetType, bankZuordnungen, c
         bezahltBetrag: newBezahltBetrag,
         isGutschrift: isGutschrift,
     };
-}
-
-/**
- * Ermittelt das Präfix für einen Dokumenttyp
- */
-function getDocumentTypePrefix(sheetType) {
-    const prefixMap = {
-        'einnahmen': 'einnahme',
-        'ausgaben': 'ausgabe',
-        'eigenbelege': 'eigenbeleg',
-        'gesellschafterkonto': 'gesellschafterkonto',
-        'holdingTransfers': 'holdingtransfer',
-        'gutschrift': 'gutschrift',  // Add explicit mapping for gutschrift
-    };
-    return prefixMap[sheetType] || sheetType;
 }
 
 /**
@@ -489,40 +415,6 @@ function applyUpdates(sheet, updates, columnIndex) {
             }
         }
     });
-}
-
-/**
- * Erstellt einen Informationstext für eine Bank-Zuordnung
- */
-function getZuordnungsInfo(zuordnung) {
-    if (!zuordnung) return '';
-
-    let infoText = '✓ Bank: ';
-
-    // Format the date to Berlin timezone
-    try {
-        const date = zuordnung.bankDatum;
-        if (date) {
-            // Format as DD.MM.YYYY
-            const formattedDate = Utilities.formatDate(
-                new Date(date),
-                Session.getScriptTimeZone(),
-                'dd.MM.yyyy',
-            );
-            infoText += formattedDate;
-        } else {
-            infoText += 'Datum unbekannt';
-        }
-    } catch (e) {
-        infoText += String(zuordnung.bankDatum);
-    }
-
-    // Additional info if available
-    if (zuordnung.additional && zuordnung.additional.length > 0) {
-        infoText += ' + ' + zuordnung.additional.length + ' weitere';
-    }
-
-    return infoText;
 }
 
 export default {

@@ -143,7 +143,7 @@ function refreshDataSheet(sheet, sheetName, config) {
             }
         }
 
-        // Buchungskonto basierend auf Kategorie aktualisieren (jetzt mit shared accountHandler)
+        // Buchungskonto basierend auf Kategorie aktualisieren
         accountHandler.updateBookingAccounts(sheet, configKey, config, false);
 
         // Spaltenbreiten automatisch anpassen

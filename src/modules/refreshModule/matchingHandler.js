@@ -4,6 +4,7 @@ import numberUtils from '../../utils/numberUtils.js';
 import globalCache from '../../utils/cacheUtils.js';
 import formattingHandler from './formattingHandler.js';
 import syncHandler from './syncHandler.js';
+import refreshUtils from './refreshUtils.js';
 
 /**
  * Führt das Matching von Bankbewegungen mit Rechnungen durch
@@ -234,7 +235,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
 
         // Matching-Logik basierend auf Transaktionstyp
         if (!stringUtils.isEmpty(refNumber)) {
-            // IMPORTANT FIX: For negative amounts (Ausgabe in bank but potentially Gutschrift),
+            // For negative amounts (Ausgabe in bank but potentially Gutschrift),
             // first try to find a matching gutschrift in Einnahmen
             if (tranType === 'Ausgabe' && betragOriginal < 0) {
                 // First try to match as gutschrift in Einnahmen
@@ -324,7 +325,7 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     }
 
     // Validate reference match - ensure they have some relation
-    if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
+    if (matchResult.ref && !refreshUtils.isGoodReferenceMatch(refNumber, matchResult.ref)) {
         return false;
     }
 
@@ -388,33 +389,6 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
 }
 
 /**
- * Helper function to determine if two reference numbers match well enough
- * @param {string} ref1 - First reference
- * @param {string} ref2 - Second reference
- * @returns {boolean} - Whether they're a good match
- */
-function isGoodReferenceMatch(ref1, ref2) {
-    // Handle empty values
-    if (!ref1 || !ref2) return false;
-
-    // Quick check for exact match
-    if (ref1 === ref2) return true;
-
-    // See if one contains the other
-    if (ref1.includes(ref2) || ref2.includes(ref1)) {
-        // For short references (less than 5 chars), be more strict
-        const shorter = ref1.length <= ref2.length ? ref1 : ref2;
-        if (shorter.length < 5) {
-            return ref1.startsWith(ref2) || ref2.startsWith(ref1);
-        }
-        return true;
-    }
-
-    // If neither contains the other, they're not a good match
-    return false;
-}
-
-/**
  * Findet eine Übereinstimmung in der Referenz-Map
  */
 function findMatch(reference, refMap, betrag = null) {
@@ -449,7 +423,7 @@ function findMatch(reference, refMap, betrag = null) {
 
         // Zuerst prüfen wir, ob die Referenz in einem Schlüssel enthalten ist
         for (const key of candidateKeys) {
-            if (typeof key === 'string' && isGoodReferenceMatch(key, refString)) {
+            if (typeof key === 'string' && refreshUtils.isGoodReferenceMatch(key, refString)) {
                 match = evaluateMatch(refMap[key], betrag);
                 if (match) {
                     matchedKey = key;
@@ -462,7 +436,7 @@ function findMatch(reference, refMap, betrag = null) {
         if (!match && normalizedRef) {
             for (const key of candidateKeys) {
                 const normalizedKey = stringUtils.normalizeText(key);
-                if (typeof normalizedKey === 'string' && isGoodReferenceMatch(normalizedKey, normalizedRef)) {
+                if (typeof normalizedKey === 'string' && refreshUtils.isGoodReferenceMatch(normalizedKey, normalizedRef)) {
                     match = evaluateMatch(refMap[key], betrag);
                     if (match) {
                         matchedKey = key;

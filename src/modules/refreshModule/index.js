@@ -4,6 +4,8 @@ import bankSheetHandler from './bankSheetHandler.js';
 import matchingHandler from './matchingHandler.js';
 import accountHandler from './accountHandler.js';
 import syncHandler from './syncHandler.js';
+import formattingHandler from './formattingHandler.js';
+import refreshUtils from './refreshUtils.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
@@ -95,12 +97,20 @@ const RefreshModule = {
         }
     },
 
-    // Expose internal modules for external use
-    accountHandler,
-    matchingHandler,
-    dataSheetHandler,
-    bankSheetHandler,
-    syncHandler,
+    // Expose only what's needed externally
+    accountHandler: { updateBookingAccounts: accountHandler.updateBookingAccounts },
+    matchingHandler: { performBankReferenceMatching: matchingHandler.performBankReferenceMatching },
+    dataSheetHandler: { refreshDataSheet: dataSheetHandler.refreshDataSheet },
+    bankSheetHandler: { refreshBankSheet: bankSheetHandler.refreshBankSheet },
+    syncHandler: { markPaidInvoices: syncHandler.markPaidInvoices },
+    formattingHandler: {
+        setConditionalFormattingForStatusColumn: formattingHandler.setConditionalFormattingForStatusColumn,
+        setDropdownValidations: formattingHandler.setDropdownValidations,
+        applyBankSheetValidations: formattingHandler.applyBankSheetValidations,
+        formatMatchedRows: formattingHandler.formatMatchedRows,
+        setMatchColumnFormatting: formattingHandler.setMatchColumnFormatting,
+    },
+    utils: refreshUtils,
 };
 
 export default RefreshModule;
