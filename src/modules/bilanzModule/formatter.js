@@ -2,6 +2,7 @@
 import numberUtils from '../../utils/numberUtils.js';
 import sheetUtils from '../../utils/sheetUtils.js';
 
+
 /**
  * Konvertiert einen Zahlenwert in eine Zellenformel oder direkte Zahl
  * Optimiert für einheitliche Rückgabe
