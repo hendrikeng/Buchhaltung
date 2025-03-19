@@ -5,10 +5,10 @@ import dateUtils from '../../utils/dateUtils.js';
 import bankValidator from './bankValidator.js';
 
 /**
- * Validiert eine Zeile aus einem Dokument (Einnahmen, Ausgaben oder Eigenbelege)
+ * Validiert eine Zeile aus einem Dokument (Einnahmen, Ausgaben, Eigenbelege, Gesellschafterkonto oder Holding Transfers)
  * @param {Array} row - Die zu validierende Zeile
  * @param {number} rowIndex - Der Index der Zeile (für Fehlermeldungen)
- * @param {string} sheetType - Der Typ des Sheets ("einnahmen", "ausgaben" oder "eigenbelege")
+ * @param {string} sheetType - Der Typ des Sheets ("einnahmen", "ausgaben", "eigenbelege", "gesellschafterkonto" oder "holdingTransfers")
  * @param {Object} config - Die Konfiguration
  * @returns {Array<string>} - Array mit Warnungen
  */
@@ -55,6 +55,18 @@ function validateDocumentRow(row, rowIndex, sheetType = 'einnahmen', config) {
         sheetSpecificRules.push(
             {check: r => stringUtils.isEmpty(r[columns.ausgelegtVon - 1]), message: 'Ausgelegt von fehlt.'},
             {check: r => stringUtils.isEmpty(r[columns.beschreibung - 1]), message: 'Beschreibung fehlt.'},
+        );
+    } else if (sheetType === 'gesellschafterkonto') {
+        sheetSpecificRules.push(
+            {check: r => stringUtils.isEmpty(r[columns.gesellschafter - 1]), message: 'Gesellschafter fehlt.'},
+            {check: r => stringUtils.isEmpty(r[columns.referenz - 1]), message: 'Referenz fehlt.'},
+            {check: r => numberUtils.isInvalidNumber(r[columns.betrag - 1]), message: 'Betrag fehlt oder ungültig.'},
+        );
+    } else if (sheetType === 'holdingTransfers') {
+        sheetSpecificRules.push(
+            {check: r => stringUtils.isEmpty(r[columns.ziel - 1]), message: 'Zielgesellschaft fehlt.'},
+            {check: r => stringUtils.isEmpty(r[columns.referenz - 1]), message: 'Referenz fehlt.'},
+            {check: r => numberUtils.isInvalidNumber(r[columns.betrag - 1]), message: 'Betrag fehlt oder ungültig.'},
         );
     }
 
@@ -142,9 +154,11 @@ function validateSheet(data, sheetType, config) {
  * @param {Sheet|null} bankSheet - Das Bankbewegungen-Sheet (optional)
  * @param {Sheet|null} eigenSheet - Das Eigenbelege-Sheet (optional)
  * @param {Object} config - Die Konfiguration
+ * @param {Sheet|null} gesellschafterSheet - Das Gesellschafterkonto-Sheet (optional)
+ * @param {Sheet|null} holdingSheet - Das Holding Transfers-Sheet (optional)
  * @returns {boolean} - True, wenn keine Fehler gefunden wurden
  */
-function validateAllSheets(revenueSheet, expenseSheet, bankSheet = null, eigenSheet = null, config) {
+function validateAllSheets(revenueSheet, expenseSheet, bankSheet = null, eigenSheet = null, config, gesellschafterSheet = null, holdingSheet = null) {
     if (!revenueSheet || !expenseSheet) {
         SpreadsheetApp.getUi().alert('Fehler: Benötigte Sheets nicht gefunden!');
         return false;
@@ -157,6 +171,8 @@ function validateAllSheets(revenueSheet, expenseSheet, bankSheet = null, eigenSh
             'Ausgaben': [],
             'Eigenbelege': [],
             'Bankbewegungen': [],
+            'Gesellschafterkonto': [],
+            'Holding Transfers': [],
         };
 
         // Optimierung: Daten für alle Sheets in einem Durchgang laden
@@ -183,6 +199,18 @@ function validateAllSheets(revenueSheet, expenseSheet, bankSheet = null, eigenSh
         // Bankbewegungen validieren
         if (bankSheet) {
             allWarnings['Bankbewegungen'] = bankValidator.validateBanking(bankSheet, config);
+        }
+
+        // Gesellschafterkonto validieren
+        if (gesellschafterSheet && gesellschafterSheet.getLastRow() > 1) {
+            sheetsData.gesellschafterkonto = gesellschafterSheet.getDataRange().getValues().slice(1);
+            allWarnings['Gesellschafterkonto'] = validateSheet(sheetsData.gesellschafterkonto, 'gesellschafterkonto', config);
+        }
+
+        // Holding Transfers validieren
+        if (holdingSheet && holdingSheet.getLastRow() > 1) {
+            sheetsData.holdingTransfers = holdingSheet.getDataRange().getValues().slice(1);
+            allWarnings['Holding Transfers'] = validateSheet(sheetsData.holdingTransfers, 'holdingTransfers', config);
         }
 
         // Fehlerberichtswarnungen zusammenstellen

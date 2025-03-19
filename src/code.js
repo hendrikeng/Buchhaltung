@@ -23,6 +23,7 @@ function onOpen() {
             .addSeparator()
             .addItem('📥 Dateien importieren', 'importDriveFiles')
             .addItem('🔄 Aktuelles Blatt aktualisieren', 'refreshSheet')
+            .addItem('🔍 Aktuelles Blatt validieren', 'validateActiveSheet')
             .addItem('🏦 Bankabgleich durchführen', 'bankReconciliation')
             .addSeparator()
             .addItem('📊 UStVA berechnen', 'calculateUStVA')
@@ -202,24 +203,82 @@ function setupSpreadsheet() {
 }
 
 /**
- * Validiert alle relevanten Sheets
+ * Validiert alle relevanten Sheets oder ein spezifisches Sheet, falls angegeben
+ * @param {Sheet} [specificSheet] - Optional: Nur dieses Sheet validieren
  * @returns {boolean} - True wenn alle Sheets valide sind, False sonst
  */
-function validateSheets() {
+function validateSheets(specificSheet) {
     try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const ui = SpreadsheetApp.getUi();
 
-        // Alle benötigten Sheets in einem Batch laden
+        // Wenn ein spezifisches Sheet validiert werden soll
+        if (specificSheet) {
+            const sheetName = specificSheet.getName();
+            const sheetTypeMap = {
+                'Einnahmen': 'einnahmen',
+                'Ausgaben': 'ausgaben',
+                'Eigenbelege': 'eigenbelege',
+                'Bankbewegungen': 'bank',
+                'Gesellschafterkonto': 'gesellschafterkonto',
+                'Holding Transfers': 'holdingTransfers',
+            };
+
+            const sheetType = sheetTypeMap[sheetName];
+            if (!sheetType) {
+                ui.alert(`Für das Sheet "${sheetName}" ist keine Validierung verfügbar.`);
+                return true; // Wir behandeln nicht validierbare Sheets als gültig
+            }
+
+            // Fehler-Sammlung für das spezifische Sheet
+            const warnings = [];
+
+            if (sheetType === 'bank') {
+                // Bank-Sheet validieren
+                if (specificSheet.getLastRow() > 1) {
+                    const bankWarnings = ValidatorModule.validateBanking(specificSheet, config);
+                    warnings.push(...bankWarnings);
+                }
+            } else {
+                // Daten-Sheet validieren
+                if (specificSheet.getLastRow() > 1) {
+                    const data = specificSheet.getDataRange().getValues().slice(1); // Header überspringen
+                    const sheetWarnings = ValidatorModule.validateSheet(data, sheetType, config);
+                    warnings.push(...sheetWarnings);
+                }
+            }
+
+            // Fehler anzeigen, falls vorhanden
+            if (warnings.length > 0) {
+                const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
+                let alertMsg = `Fehler in '${sheetName}':\n${warnings.join('\n')}`;
+
+                if (alertMsg.length > maxMsgLength) {
+                    alertMsg = alertMsg.substring(0, maxMsgLength) +
+                        '\n\n... und weitere Fehler. Bitte beheben Sie die angezeigten Fehler zuerst.';
+                }
+
+                ui.alert('Validierungsfehler gefunden', alertMsg, ui.ButtonSet.OK);
+                return false;
+            }
+
+            ui.alert(`Das Sheet "${sheetName}" ist gültig.`);
+            return true;
+        }
+
+        // Originaler Code für Validierung aller Sheets
         const sheets = {
             revenueSheet: ss.getSheetByName('Einnahmen'),
             expenseSheet: ss.getSheetByName('Ausgaben'),
             bankSheet: ss.getSheetByName('Bankbewegungen'),
             eigenSheet: ss.getSheetByName('Eigenbelege'),
+            gesellschafterSheet: ss.getSheetByName('Gesellschafterkonto'),
+            holdingSheet: ss.getSheetByName('Holding Transfers'),
         };
 
         // Fehler-Check für kritische Sheets
         if (!sheets.revenueSheet || !sheets.expenseSheet) {
-            SpreadsheetApp.getUi().alert('Kritische Sheets (Einnahmen oder Ausgaben) fehlen!');
+            ui.alert('Kritische Sheets (Einnahmen oder Ausgaben) fehlen!');
             return false;
         }
 
@@ -232,6 +291,21 @@ function validateSheets() {
         );
     } catch (e) {
         console.error('Fehler bei der Sheet-Validierung:', e);
+        SpreadsheetApp.getUi().alert('Fehler bei der Validierung: ' + e.toString());
+        return false;
+    }
+}
+
+/**
+ * Validiert das aktive Tabellenblatt mit der bestehenden validateSheets-Funktion
+ * @returns {boolean} - True wenn das Sheet valide ist, False sonst
+ */
+function validateActiveSheet() {
+    try {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+        return validateSheets(sheet);
+    } catch (e) {
+        console.error('Fehler bei der Validierung des aktiven Sheets:', e);
         SpreadsheetApp.getUi().alert('Fehler bei der Validierung: ' + e.toString());
         return false;
     }
@@ -393,7 +467,6 @@ function bankReconciliation() {
     }
 }
 
-
 // Exportiere alle relevanten Funktionen in den globalen Namensraum,
 // damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
 global.onOpen = onOpen;
@@ -401,6 +474,7 @@ global.onEdit = onEdit;
 global.setupTrigger = setupTrigger;
 global.setupSpreadsheet = setupSpreadsheet;
 global.refreshSheet = refreshSheet;
+global.validateActiveSheet = validateActiveSheet;
 global.calculateUStVA = calculateUStVA;
 global.calculateBWA = calculateBWA;
 global.calculateBilanz = calculateBilanz;
