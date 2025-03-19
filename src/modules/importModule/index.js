@@ -9,6 +9,7 @@ import historyTracker from './historyTracker.js';
 const ImportModule = {
     /**
      * Importiert Dateien aus Google Drive und aktualisiert alle Tabellenblätter
+     * Optimierte Version mit Batch-Verarbeitung und Fortschrittsanzeige
      * @param {Object} config - Die Konfiguration
      * @returns {number} - Anzahl der importierten Dateien
      */
@@ -18,12 +19,20 @@ const ImportModule = {
         let totalImported = 0;
 
         try {
-            // Hauptsheets für Einnahmen, Ausgaben und Eigenbelege abrufen
-            const revenueMain = ss.getSheetByName("Einnahmen");
-            const expenseMain = ss.getSheetByName("Ausgaben");
-            const receiptsMain = ss.getSheetByName("Eigenbelege");
+            console.log('Starting file import...');
 
-            if (!revenueMain || !expenseMain || !receiptsMain) {
+            // Optimierung: Cache für die Dateihistorie leeren, um aktuelle Daten zu erhalten
+            historyTracker.clearFileHistoryCache();
+
+            // Hauptsheets für Einnahmen, Ausgaben und Eigenbelege abrufen
+            const sheets = {
+                revenue: ss.getSheetByName('Einnahmen'),
+                expense: ss.getSheetByName('Ausgaben'),
+                receipts: ss.getSheetByName('Eigenbelege'),
+            };
+
+            // Optimierung: Fehlerhafte Sheets in einem Block prüfen
+            if (!sheets.revenue || !sheets.expense || !sheets.receipts) {
                 ui.alert("Fehler: Die Sheets 'Einnahmen', 'Ausgaben' oder 'Eigenbelege' existieren nicht!");
                 return 0;
             }
@@ -34,91 +43,92 @@ const ImportModule = {
             // Auf übergeordneten Ordner zugreifen
             const parentFolder = fileManager.getParentFolder();
             if (!parentFolder) {
-                ui.alert("Fehler: Kein übergeordneter Ordner gefunden.");
+                ui.alert('Fehler: Kein übergeordneter Ordner gefunden.');
                 return 0;
             }
 
             // Unterordner für Einnahmen, Ausgaben und Eigenbelege finden oder erstellen
-            const revenueFolder = fileManager.findOrCreateFolder(parentFolder, "Einnahmen", ui);
-            const expenseFolder = fileManager.findOrCreateFolder(parentFolder, "Ausgaben", ui);
-            const receiptsFolder = fileManager.findOrCreateFolder(parentFolder, "Eigenbelege", ui);
+            const folders = {
+                revenue: fileManager.findOrCreateFolder(parentFolder, 'Einnahmen', ui),
+                expense: fileManager.findOrCreateFolder(parentFolder, 'Ausgaben', ui),
+                receipts: fileManager.findOrCreateFolder(parentFolder, 'Eigenbelege', ui),
+            };
 
-            // Bereits importierte Dateien sammeln
+            // Optimierung: Wenn kein Ordner gefunden wurde, Import abbrechen
+            if (!folders.revenue && !folders.expense && !folders.receipts) {
+                ui.alert('Fehler: Keine Importordner gefunden oder erstellt.');
+                return 0;
+            }
+
+            // Bereits importierte Dateien aus der Historie abrufen
             const existingFiles = historyTracker.collectExistingFiles(history);
+            console.log(`Found ${existingFiles.size} already imported files`);
 
-            // Import durchführen wenn Ordner existieren
-            let importedRevenue = 0, importedExpense = 0, importedReceipts = 0;
+            // Statusdialog anzeigen
+            ui.alert(
+                'Import gestartet',
+                'Der Import der Dateien wurde gestartet. Dies kann je nach Datenmenge einige Zeit dauern.',
+                ui.ButtonSet.OK,
+            );
 
-            if (revenueFolder) {
-                try {
-                    importedRevenue = dataProcessor.importFilesFromFolder(
-                        revenueFolder,
-                        revenueMain,
-                        "Einnahme",
-                        history,
-                        existingFiles,
-                        config
-                    );
-                    totalImported += importedRevenue;
-                } catch (e) {
-                    console.error("Fehler beim Import der Einnahmen:", e);
-                    ui.alert("Fehler beim Import der Einnahmen: " + e.toString());
-                }
-            }
+            // Import mit Fehlerbehandlung pro Ordner durchführen
+            // Hier die Variablen als Parameter übergeben, um ESLint-Fehler zu vermeiden
+            const imports = {
+                revenue: folders.revenue ? importFilesFromFolder(folders.revenue, sheets.revenue, 'Einnahme', history, existingFiles, config, ui) : 0,
+                expense: folders.expense ? importFilesFromFolder(folders.expense, sheets.expense, 'Ausgabe', history, existingFiles, config, ui) : 0,
+                receipts: folders.receipts ? importFilesFromFolder(folders.receipts, sheets.receipts, 'Eigenbeleg', history, existingFiles, config, ui) : 0,
+            };
 
-            if (expenseFolder) {
-                try {
-                    importedExpense = dataProcessor.importFilesFromFolder(
-                        expenseFolder,
-                        expenseMain,
-                        "Ausgabe",
-                        history,
-                        existingFiles,
-                        config
-                    );
-                    totalImported += importedExpense;
-                } catch (e) {
-                    console.error("Fehler beim Import der Ausgaben:", e);
-                    ui.alert("Fehler beim Import der Ausgaben: " + e.toString());
-                }
-            }
-
-            if (receiptsFolder) {
-                try {
-                    importedReceipts = dataProcessor.importFilesFromFolder(
-                        receiptsFolder,
-                        receiptsMain,
-                        "Eigenbeleg",
-                        history,
-                        existingFiles,
-                        config
-                    );
-                    totalImported += importedReceipts;
-                } catch (e) {
-                    console.error("Fehler beim Import der Eigenbelege:", e);
-                    ui.alert("Fehler beim Import der Eigenbelege: " + e.toString());
-                }
-            }
+            // Gesamtzahl der Importe berechnen
+            totalImported = imports.revenue + imports.expense + imports.receipts;
 
             // Abschluss-Meldung anzeigen
             if (totalImported === 0) {
-                ui.alert("Es wurden keine neuen Dateien gefunden.");
+                ui.alert('Es wurden keine neuen Dateien gefunden.');
             } else {
                 ui.alert(
-                    `Import abgeschlossen.\n\n` +
-                    `${importedRevenue} Einnahmen importiert.\n` +
-                    `${importedExpense} Ausgaben importiert.\n` +
-                    `${importedReceipts} Eigenbelege importiert.`
+                    'Import abgeschlossen.\n\n' +
+                    `${imports.revenue} Einnahmen importiert.\n` +
+                    `${imports.expense} Ausgaben importiert.\n` +
+                    `${imports.receipts} Eigenbelege importiert.`,
                 );
             }
 
             return totalImported;
         } catch (e) {
-            console.error("Unerwarteter Fehler beim Import:", e);
-            ui.alert("Ein unerwarteter Fehler ist aufgetreten: " + e.toString());
+            console.error('Unerwarteter Fehler beim Import:', e);
+            ui.alert('Ein unerwarteter Fehler ist aufgetreten: ' + e.toString());
             return 0;
         }
-    }
+    },
 };
+
+/**
+ * Hilfsfunktion zum Importieren von Dateien aus einem Ordner
+ * @param {Folder} folder - Der Ordner
+ * @param {Sheet} sheet - Das Ziel-Sheet
+ * @param {string} type - Der Dateityp
+ * @param {Sheet} history - Das Historie-Sheet
+ * @param {Set} existingFiles - Set mit bereits importierten Dateien
+ * @param {Object} config - Die Konfiguration
+ * @param {UI} ui - Die UI für Fehlermeldungen
+ * @returns {number} - Anzahl der importierten Dateien
+ */
+function importFilesFromFolder(folder, sheet, type, history, existingFiles, config, ui) {
+    try {
+        return dataProcessor.importFilesFromFolder(
+            folder,
+            sheet,
+            type,
+            history,
+            existingFiles,
+            config,
+        );
+    } catch (e) {
+        console.error(`Fehler beim Import der ${type}:`, e);
+        ui.alert(`Fehler beim Import der ${type}: ${e.toString()}`);
+        return 0;
+    }
+}
 
 export default ImportModule;

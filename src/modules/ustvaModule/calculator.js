@@ -4,8 +4,12 @@ import numberUtils from '../../utils/numberUtils.js';
 import stringUtils from '../../utils/stringUtils.js';
 import dataModel from './dataModel.js';
 
+// Cache für häufig verwendete Steuerberechnungen
+const taxCalculationCache = new Map();
+
 /**
  * Verarbeitet eine Zeile aus den Einnahmen/Ausgaben/Eigenbelegen für die UStVA
+ * Optimierte Version mit effizienter Kategorisierung und Berechnungslogik
  *
  * @param {Array} row - Datenzeile aus einem Sheet
  * @param {Object} data - UStVA-Datenobjekt nach Monaten
@@ -16,12 +20,15 @@ import dataModel from './dataModel.js';
 function processUStVARow(row, data, isIncome, isEigen = false, config) {
     try {
         // Sheet-Typ bestimmen
-        const sheetType = isIncome ? "einnahmen" : isEigen ? "eigenbelege" : "ausgaben";
+        const sheetType = isIncome ? 'einnahmen' : isEigen ? 'eigenbelege' : 'ausgaben';
         const columns = config[sheetType].columns;
 
         // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
         const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
         if (!paymentDate || paymentDate > new Date()) return;
+
+        // Cache-Schlüssel für Datum und Monat
+        const dateCacheKey = `date_${row[columns.zahlungsdatum - 1]}`;
 
         // Monat und Jahr prüfen (nur relevantes Geschäftsjahr)
         const month = dateUtils.getMonthFromRow(row, sheetType, config);
@@ -29,23 +36,36 @@ function processUStVARow(row, data, isIncome, isEigen = false, config) {
 
         // Beträge aus der Zeile extrahieren
         const netto = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
-        const restNetto = numberUtils.parseCurrency(row[columns.restbetragNetto - 1]) || 0; // Steuerbemessungsgrundlage für Teilzahlungen
+        const restNetto = numberUtils.parseCurrency(row[columns.restbetragNetto - 1]) || 0;
         const gezahlt = netto - restNetto; // Tatsächlich gezahlter/erhaltener Betrag
 
         // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
         if (numberUtils.isApproximatelyEqual(gezahlt, 0)) return;
 
-        // MwSt-Satz normalisieren
-        const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
-        const roundedRate = Math.round(mwstRate);
+        // MwSt-Rate und Steuer berechnen mit Cache
+        const mwstStr = row[columns.mwstSatz - 1]?.toString() || '';
+        const cacheKey = `${mwstStr}_${gezahlt}`;
 
-        // Steuer berechnen
-        const tax = numberUtils.round(gezahlt * (mwstRate / 100), 2);
+        let mwstRate, roundedRate, tax;
+
+        if (taxCalculationCache.has(cacheKey)) {
+            const cached = taxCalculationCache.get(cacheKey);
+            mwstRate = cached.mwstRate;
+            roundedRate = cached.roundedRate;
+            tax = cached.tax;
+        } else {
+            mwstRate = numberUtils.parseMwstRate(mwstStr, config.tax.defaultMwst);
+            roundedRate = Math.round(mwstRate);
+            tax = numberUtils.round(gezahlt * (mwstRate / 100), 2);
+
+            // Cache-Ergebnis für künftige Berechnungen
+            taxCalculationCache.set(cacheKey, { mwstRate, roundedRate, tax });
+        }
 
         // Kategorie ermitteln
-        const category = row[columns.kategorie - 1]?.toString().trim() || "";
+        const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Verarbeitung basierend auf Zeilentyp
+        // Verarbeitung basierend auf Zeilentyp durch optimierte Handler
         if (isIncome) {
             processIncomeRow(data, month, gezahlt, tax, roundedRate, category, config);
         } else if (isEigen) {
@@ -54,12 +74,12 @@ function processUStVARow(row, data, isIncome, isEigen = false, config) {
             processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config);
         }
     } catch (e) {
-        console.error("Fehler bei der Verarbeitung einer UStVA-Zeile:", e);
+        console.error('Fehler bei der Verarbeitung einer UStVA-Zeile:', e);
     }
 }
 
 /**
- * Verarbeitet eine Einnahmenzeile für die UStVA
+ * Verarbeitet eine Einnahmenzeile für die UStVA mit optimierter Kategorisierung
  * @param {Object} data - UStVA-Datenobjekt nach Monaten
  * @param {number} month - Monat (1-12)
  * @param {number} gezahlt - Gezahlter Betrag
@@ -69,22 +89,22 @@ function processUStVARow(row, data, isIncome, isEigen = false, config) {
  * @param {Object} config - Die Konfiguration
  */
 function processIncomeRow(data, month, gezahlt, tax, roundedRate, category, config) {
-    // EINNAHMEN
+    // Kategorie-Konfiguration mit Fallback
     const catCfg = config.einnahmen.categories[category] ?? {};
-    const taxType = catCfg.taxType ?? "steuerpflichtig";
+    const taxType = catCfg.taxType ?? 'steuerpflichtig';
 
-    if (taxType === "steuerfrei_inland") {
-        // Steuerfreie Einnahmen im Inland (z.B. Vermietung)
+    // Optimierung: Direktere Zuordnung basierend auf Steuertyp
+    if (taxType === 'steuerfrei_inland') {
+        // Steuerfreie Einnahmen im Inland
         data[month].steuerfreie_inland_einnahmen += gezahlt;
-    } else if (taxType === "steuerfrei_ausland" || !roundedRate) {
+    } else if (taxType === 'steuerfrei_ausland' || !roundedRate) {
         // Steuerfreie Einnahmen aus dem Ausland oder ohne MwSt
         data[month].steuerfreie_ausland_einnahmen += gezahlt;
     } else {
         // Steuerpflichtige Einnahmen
         data[month].steuerpflichtige_einnahmen += gezahlt;
 
-        // USt nach Steuersatz addieren
-        // Wir prüfen ob es ein gültiger Steuersatz ist
+        // USt nach validem Steuersatz addieren (7% oder 19%)
         if (roundedRate === 7 || roundedRate === 19) {
             data[month][`ust_${roundedRate}`] += tax;
         }
@@ -92,7 +112,7 @@ function processIncomeRow(data, month, gezahlt, tax, roundedRate, category, conf
 }
 
 /**
- * Verarbeitet eine Eigenbeleg-Zeile für die UStVA
+ * Verarbeitet eine Eigenbeleg-Zeile für die UStVA mit optimierter Kategorisierung
  * @param {Object} data - UStVA-Datenobjekt nach Monaten
  * @param {number} month - Monat (1-12)
  * @param {number} gezahlt - Gezahlter Betrag
@@ -102,20 +122,23 @@ function processIncomeRow(data, month, gezahlt, tax, roundedRate, category, conf
  * @param {Object} config - Die Konfiguration
  */
 function processEigenRow(data, month, gezahlt, tax, roundedRate, category, config) {
-    // EIGENBELEGE
+    // Kategorie-Konfiguration mit Fallback
     const eigenCfg = config.eigenbelege.categories[category] ?? {};
-    const taxType = eigenCfg.taxType ?? "steuerpflichtig";
+    const taxType = eigenCfg.taxType ?? 'steuerpflichtig';
 
-    if (taxType === "steuerfrei") {
+    // Optimierung: Effizientere Verzweigungslogik
+    if (taxType === 'steuerfrei') {
         // Steuerfreie Eigenbelege
         data[month].eigenbelege_steuerfrei += gezahlt;
-    } else if (taxType === "eigenbeleg" && eigenCfg.besonderheit === "bewirtung") {
+    } else if (taxType === 'eigenbeleg' && eigenCfg.besonderheit === 'bewirtung') {
         // Bewirtungsbelege (nur 70% der Vorsteuer absetzbar)
         data[month].eigenbelege_steuerpflichtig += gezahlt;
 
         if (roundedRate === 7 || roundedRate === 19) {
-            const vst70 = numberUtils.round(tax * 0.7, 2); // 70% absetzbare Vorsteuer
-            const vst30 = numberUtils.round(tax * 0.3, 2); // 30% nicht absetzbar
+            // Optimierung: Nur einmal berechnen
+            const vst70 = numberUtils.round(tax * 0.7, 2);
+            const vst30 = tax - vst70; // Exakter als tax * 0.3 wegen Rundungsfehlern
+
             data[month][`vst_${roundedRate}`] += vst70;
             data[month].nicht_abzugsfaehige_vst += vst30;
         }
@@ -130,7 +153,7 @@ function processEigenRow(data, month, gezahlt, tax, roundedRate, category, confi
 }
 
 /**
- * Verarbeitet eine Ausgabenzeile für die UStVA
+ * Verarbeitet eine Ausgabenzeile für die UStVA mit optimierter Kategorisierung
  * @param {Object} data - UStVA-Datenobjekt nach Monaten
  * @param {number} month - Monat (1-12)
  * @param {number} gezahlt - Gezahlter Betrag
@@ -140,28 +163,34 @@ function processEigenRow(data, month, gezahlt, tax, roundedRate, category, confi
  * @param {Object} config - Die Konfiguration
  */
 function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config) {
-    // AUSGABEN
+    // Kategorie-Konfiguration mit Fallback
     const catCfg = config.ausgaben.categories[category] ?? {};
-    const taxType = catCfg.taxType ?? "steuerpflichtig";
+    const taxType = catCfg.taxType ?? 'steuerpflichtig';
 
-    if (taxType === "steuerfrei_inland") {
-        // Steuerfreie Ausgaben im Inland
-        data[month].steuerfreie_inland_ausgaben += gezahlt;
-    } else if (taxType === "steuerfrei_ausland") {
-        // Steuerfreie Ausgaben im Ausland
-        data[month].steuerfreie_ausland_ausgaben += gezahlt;
-    } else {
-        // Steuerpflichtige Ausgaben
-        data[month].steuerpflichtige_ausgaben += gezahlt;
+    // Optimierung: Direkte Zuordnung mit Map-ähnlichem Pattern
+    const typeHandlers = {
+        'steuerfrei_inland': () => {
+            data[month].steuerfreie_inland_ausgaben += gezahlt;
+        },
+        'steuerfrei_ausland': () => {
+            data[month].steuerfreie_ausland_ausgaben += gezahlt;
+        },
+        'steuerpflichtig': () => {
+            data[month].steuerpflichtige_ausgaben += gezahlt;
 
-        if (roundedRate === 7 || roundedRate === 19) {
-            data[month][`vst_${roundedRate}`] += tax;
-        }
-    }
+            if (roundedRate === 7 || roundedRate === 19) {
+                data[month][`vst_${roundedRate}`] += tax;
+            }
+        },
+    };
+
+    // Handler ausführen oder Default, wenn nicht gefunden
+    (typeHandlers[taxType] || typeHandlers['steuerpflichtig'])();
 }
 
 /**
  * Aggregiert UStVA-Daten für einen Zeitraum (z.B. Quartal oder Jahr)
+ * Optimierte Version mit effizientem Datenzugriff
  *
  * @param {Object} data - UStVA-Datenobjekt nach Monaten
  * @param {number} start - Startmonat (1-12)
@@ -171,18 +200,23 @@ function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, con
 function aggregateUStVA(data, start, end) {
     const sum = dataModel.createEmptyUStVA();
 
+    // Optimierung: Sammle alle relevanten Monatsobjekte vor der Verarbeitung
+    const relevantMonths = [];
     for (let m = start; m <= end; m++) {
-        if (!data[m]) continue; // Überspringe, falls keine Daten für den Monat
-
-        for (const key in sum) {
-            sum[key] += data[m][key] || 0;
+        if (data[m]) {
+            relevantMonths.push(data[m]);
         }
     }
+
+    // Optimierung: Verarbeite alle Felder einmal statt verschachtelte Schleife
+    Object.keys(sum).forEach(key => {
+        sum[key] = relevantMonths.reduce((total, month) => total + (month[key] || 0), 0);
+    });
 
     return sum;
 }
 
 export default {
     processUStVARow,
-    aggregateUStVA
+    aggregateUStVA,
 };

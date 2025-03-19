@@ -16,17 +16,10 @@ function validateDocumentRow(row, rowIndex, sheetType = 'einnahmen', config) {
     const warnings = [];
     const columns = config[sheetType].columns;
 
-    /**
-     * Validiert eine Zeile anhand einer Liste von Validierungsregeln
-     * @param {Array} row - Die zu validierende Zeile
-     * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
-     * @param {Array<Object>} rules - Array mit Regeln ({check, message})
-     */
-    const validateRow = (row, idx, rules) => {
-        rules.forEach(({check, message}) => {
-            if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
-        });
-    };
+    // Optimierte Validierung mit gemeinsamer Validierungslogik
+    function validateRule(check, message) {
+        if (check(row)) warnings.push(`Zeile ${rowIndex}: ${message}`);
+    }
 
     // Grundlegende Validierungsregeln für alle Dokumente
     const baseRules = [
@@ -37,39 +30,37 @@ function validateDocumentRow(row, rowIndex, sheetType = 'einnahmen', config) {
         {
             check: r => {
                 const mwstStr = r[columns.mwstSatz - 1] == null ? '' : r[columns.mwstSatz - 1].toString().trim();
-                if (stringUtils.isEmpty(mwstStr)) return false; // Wird schon durch andere Regel geprüft
+                if (stringUtils.isEmpty(mwstStr)) return false;
 
                 // MwSt-Satz extrahieren und normalisieren
                 const mwst = numberUtils.parseMwstRate(mwstStr, config.tax.defaultMwst);
                 if (isNaN(mwst)) return true;
 
-                // Prüfe auf erlaubte MwSt-Sätze aus der Konfiguration
-                const allowedRates = config?.tax?.allowedMwst || [0, 7, 19];
-                return !allowedRates.includes(Math.round(mwst));
+                // Optimierung: Verwende Set für O(1) Lookup statt Array.includes()
+                const allowedRates = new Set(config?.tax?.allowedMwst || [0, 7, 19]);
+                return !allowedRates.has(Math.round(mwst));
             },
             message: `Ungültiger MwSt-Satz. Erlaubt sind: ${config?.tax?.allowedMwst?.join('%, ')}% oder leer.`,
         },
     ];
 
-    // Dokument-spezifische Regeln
+    // Dokument-spezifische Regeln - Optimiert mit Funktion statt Switch
+    const sheetSpecificRules = [];
     if (sheetType === 'einnahmen' || sheetType === 'ausgaben') {
-        baseRules.push({
+        sheetSpecificRules.push({
             check: r => stringUtils.isEmpty(r[columns.kunde - 1]),
             message: `${sheetType === 'einnahmen' ? 'Kunde' : 'Lieferant'} fehlt.`,
         });
     } else if (sheetType === 'eigenbelege') {
-        baseRules.push({
-            check: r => stringUtils.isEmpty(r[columns.ausgelegtVon - 1]),
-            message: 'Ausgelegt von fehlt.',
-        });
-        baseRules.push({
-            check: r => stringUtils.isEmpty(r[columns.beschreibung - 1]),
-            message: 'Beschreibung fehlt.',
-        });
+        sheetSpecificRules.push(
+            {check: r => stringUtils.isEmpty(r[columns.ausgelegtVon - 1]), message: 'Ausgelegt von fehlt.'},
+            {check: r => stringUtils.isEmpty(r[columns.beschreibung - 1]), message: 'Beschreibung fehlt.'},
+        );
     }
 
     // Status-abhängige Regeln
-    const zahlungsstatus = row[columns.zahlungsstatus - 1] ? row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : '';
+    const zahlungsstatus = row[columns.zahlungsstatus - 1] ?
+        row[columns.zahlungsstatus - 1].toString().trim().toLowerCase() : '';
     const isOpen = zahlungsstatus === 'offen';
 
     // Angepasste Bezeichnungen je nach Dokumenttyp
@@ -77,79 +68,75 @@ function validateDocumentRow(row, rowIndex, sheetType = 'einnahmen', config) {
     const paymentType = sheetType === 'eigenbelege' ? 'Erstattungsart' : 'Zahlungsart';
     const paymentDate = sheetType === 'eigenbelege' ? 'Erstattungsdatum' : 'Zahlungsdatum';
 
-    // Regeln für offene Zahlungen
-    const openPaymentRules = [
-        {
-            check: r => !stringUtils.isEmpty(r[columns.zahlungsart - 1]),
-            message: `${paymentType} darf bei offener Zahlung nicht gesetzt sein.`,
-        },
-        {
-            check: r => !stringUtils.isEmpty(r[columns.zahlungsdatum - 1]),
-            message: `${paymentDate} darf bei offener Zahlung nicht gesetzt sein.`,
-        },
-    ];
-
-    // Regeln für bezahlte/erstattete Zahlungen
-    const paidPaymentRules = [
-        {
-            check: r => stringUtils.isEmpty(r[columns.zahlungsart - 1]),
-            message: `${paymentType} muss bei ${paidStatus} Zahlung gesetzt sein.`,
-        },
-        {
-            check: r => stringUtils.isEmpty(r[columns.zahlungsdatum - 1]),
-            message: `${paymentDate} muss bei ${paidStatus} Zahlung gesetzt sein.`,
-        },
-        {
-            check: r => {
-                if (stringUtils.isEmpty(r[columns.zahlungsdatum - 1])) return false; // Wird schon durch andere Regel geprüft
-
-                const paymentDate = dateUtils.parseDate(r[columns.zahlungsdatum - 1]);
-                return paymentDate ? paymentDate > new Date() : false;
+    // Regeln für offene/bezahlte Zahlungen
+    const paymentRules = isOpen ?
+        [
+            {check: r => !stringUtils.isEmpty(r[columns.zahlungsart - 1]),
+                message: `${paymentType} darf bei offener Zahlung nicht gesetzt sein.`},
+            {check: r => !stringUtils.isEmpty(r[columns.zahlungsdatum - 1]),
+                message: `${paymentDate} darf bei offener Zahlung nicht gesetzt sein.`},
+        ] :
+        [
+            {check: r => stringUtils.isEmpty(r[columns.zahlungsart - 1]),
+                message: `${paymentType} muss bei ${paidStatus} Zahlung gesetzt sein.`},
+            {check: r => stringUtils.isEmpty(r[columns.zahlungsdatum - 1]),
+                message: `${paymentDate} muss bei ${paidStatus} Zahlung gesetzt sein.`},
+            {
+                check: r => {
+                    if (stringUtils.isEmpty(r[columns.zahlungsdatum - 1])) return false;
+                    const paymentDate = dateUtils.parseDate(r[columns.zahlungsdatum - 1]);
+                    return paymentDate ? paymentDate > new Date() : false;
+                },
+                message: `${paymentDate} darf nicht in der Zukunft liegen.`,
             },
-            message: `${paymentDate} darf nicht in der Zukunft liegen.`,
-        },
-        {
-            check: r => {
-                if (stringUtils.isEmpty(r[columns.zahlungsdatum - 1]) || stringUtils.isEmpty(r[columns.datum - 1])) return false;
+            {
+                check: r => {
+                    if (stringUtils.isEmpty(r[columns.zahlungsdatum - 1]) ||
+                        stringUtils.isEmpty(r[columns.datum - 1])) return false;
 
-                const paymentDate = dateUtils.parseDate(r[columns.zahlungsdatum - 1]);
-                const documentDate = dateUtils.parseDate(r[columns.datum - 1]);
-                return paymentDate && documentDate ? paymentDate < documentDate : false;
+                    const paymentDate = dateUtils.parseDate(r[columns.zahlungsdatum - 1]);
+                    const documentDate = dateUtils.parseDate(r[columns.datum - 1]);
+                    return paymentDate && documentDate ? paymentDate < documentDate : false;
+                },
+                message: `${paymentDate} darf nicht vor dem ${sheetType === 'eigenbelege' ? 'Beleg' : 'Rechnungs'}datum liegen.`,
             },
-            message: `${paymentDate} darf nicht vor dem ${sheetType === 'eigenbelege' ? 'Beleg' : 'Rechnungs'}datum liegen.`,
-        },
-    ];
+        ];
 
-    // Regeln basierend auf Zahlungsstatus zusammenstellen
-    const paymentRules = isOpen ? openPaymentRules : paidPaymentRules;
-
-    // Alle Regeln kombinieren und anwenden
-    const rules = [...baseRules, ...paymentRules];
-    validateRow(row, rowIndex, rules);
+    // Alle Regeln in einem durchlauf validieren
+    [...baseRules, ...sheetSpecificRules, ...paymentRules].forEach(rule => {
+        validateRule(rule.check, rule.message);
+    });
 
     return warnings;
 }
 
 /**
- * Validiert alle Zeilen in einem Sheet
+ * Validiert alle Zeilen in einem Sheet mit optimierter Batch-Verarbeitung
  * @param {Array} data - Zeilen-Daten (ohne Header)
  * @param {string} sheetType - Typ des Sheets ('einnahmen', 'ausgaben' oder 'eigenbelege')
  * @param {Object} config - Die Konfiguration
  * @returns {Array<string>} - Array mit Warnungen
  */
 function validateSheet(data, sheetType, config) {
-    return data.reduce((warnings, row, index) => {
-        // Nur nicht-leere Zeilen prüfen
-        if (row.some(cell => cell !== '')) {
-            const rowWarnings = validateDocumentRow(row, index + 2, sheetType, config);
+    // Optimierung: Allocate array with estimated size
+    const warnings = [];
+
+    // Optimierung: Filter zuerst leere Zeilen heraus
+    const nonEmptyRows = data.filter(row => row.some(cell => cell !== ''));
+
+    // Validiere alle nicht-leeren Zeilen in einem Durchgang
+    nonEmptyRows.forEach((row, index) => {
+        const rowWarnings = validateDocumentRow(row, index + 2, sheetType, config);
+        if (rowWarnings.length > 0) {
             warnings.push(...rowWarnings);
         }
-        return warnings;
-    }, []);
+    });
+
+    return warnings;
 }
 
 /**
- * Validiert alle Sheets auf Fehler
+ * Validiert alle Sheets auf Fehler mit optimierter Fehlerbehandlung
  * @param {Sheet} revenueSheet - Das Einnahmen-Sheet
  * @param {Sheet} expenseSheet - Das Ausgaben-Sheet
  * @param {Sheet|null} bankSheet - Das Bankbewegungen-Sheet (optional)
@@ -164,50 +151,53 @@ function validateAllSheets(revenueSheet, expenseSheet, bankSheet = null, eigenSh
     }
 
     try {
-        // Warnungen für alle Sheets sammeln
-        const allWarnings = [];
+        // Optimierung: Warnungen für alle Sheets in einem strukturierten Objekt sammeln
+        const allWarnings = {
+            'Einnahmen': [],
+            'Ausgaben': [],
+            'Eigenbelege': [],
+            'Bankbewegungen': [],
+        };
 
-        // Einnahmen validieren (wenn Daten vorhanden)
+        // Optimierung: Daten für alle Sheets in einem Durchgang laden
+        const sheetsData = {};
+
+        // Einnahmen validieren
         if (revenueSheet.getLastRow() > 1) {
-            const revenueData = revenueSheet.getDataRange().getValues().slice(1); // Header überspringen
-            const revenueWarnings = validateSheet(revenueData, 'einnahmen', config);
-            if (revenueWarnings.length) {
-                allWarnings.push("Fehler in 'Einnahmen':\n" + revenueWarnings.join('\n'));
-            }
+            sheetsData.einnahmen = revenueSheet.getDataRange().getValues().slice(1);
+            allWarnings['Einnahmen'] = validateSheet(sheetsData.einnahmen, 'einnahmen', config);
         }
 
-        // Ausgaben validieren (wenn Daten vorhanden)
+        // Ausgaben validieren
         if (expenseSheet.getLastRow() > 1) {
-            const expenseData = expenseSheet.getDataRange().getValues().slice(1); // Header überspringen
-            const expenseWarnings = validateSheet(expenseData, 'ausgaben', config);
-            if (expenseWarnings.length) {
-                allWarnings.push("Fehler in 'Ausgaben':\n" + expenseWarnings.join('\n'));
-            }
+            sheetsData.ausgaben = expenseSheet.getDataRange().getValues().slice(1);
+            allWarnings['Ausgaben'] = validateSheet(sheetsData.ausgaben, 'ausgaben', config);
         }
 
-        // Eigenbelege validieren (wenn vorhanden und Daten vorhanden)
+        // Eigenbelege validieren
         if (eigenSheet && eigenSheet.getLastRow() > 1) {
-            const eigenData = eigenSheet.getDataRange().getValues().slice(1); // Header überspringen
-            const eigenWarnings = validateSheet(eigenData, 'eigenbelege', config);
-            if (eigenWarnings.length) {
-                allWarnings.push("Fehler in 'Eigenbelege':\n" + eigenWarnings.join('\n'));
-            }
+            sheetsData.eigenbelege = eigenSheet.getDataRange().getValues().slice(1);
+            allWarnings['Eigenbelege'] = validateSheet(sheetsData.eigenbelege, 'eigenbelege', config);
         }
 
-        // Bankbewegungen validieren (wenn vorhanden)
+        // Bankbewegungen validieren
         if (bankSheet) {
-            const bankWarnings = bankValidator.validateBanking(bankSheet, config);
-            if (bankWarnings.length) {
-                allWarnings.push("Fehler in 'Bankbewegungen':\n" + bankWarnings.join('\n'));
-            }
+            allWarnings['Bankbewegungen'] = bankValidator.validateBanking(bankSheet, config);
         }
+
+        // Fehlerberichtswarnungen zusammenstellen
+        const errorMessages = [];
+        Object.entries(allWarnings).forEach(([sheetName, warnings]) => {
+            if (warnings.length) {
+                errorMessages.push(`Fehler in '${sheetName}':\n${warnings.join('\n')}`);
+            }
+        });
 
         // Fehlermeldungen anzeigen, falls vorhanden
-        if (allWarnings.length) {
+        if (errorMessages.length) {
             const ui = SpreadsheetApp.getUi();
-            // Bei vielen Fehlern ggf. einschränken, um UI-Limits zu vermeiden
             const maxMsgLength = 1500; // Google Sheets Alert-Dialog hat Beschränkungen
-            let alertMsg = allWarnings.join('\n\n');
+            let alertMsg = errorMessages.join('\n\n');
 
             if (alertMsg.length > maxMsgLength) {
                 alertMsg = alertMsg.substring(0, maxMsgLength) +

@@ -10,14 +10,15 @@ import globalCache from '../../utils/cacheUtils.js';
  */
 const BWAModule = {
     /**
-     * Cache leeren
+     * Cache leeren mit gezielter Invalidierung
      */
     clearCache() {
+        console.log('Clearing BWA module cache');
         globalCache.clear('bwa');
     },
 
     /**
-     * Hauptfunktion zur Berechnung der BWA
+     * Hauptfunktion zur Berechnung der BWA mit optimierter Fehlerbehandlung
      * @param {Object} config - Die Konfiguration
      * @returns {boolean} - true bei Erfolg, false bei Fehler
      */
@@ -26,26 +27,32 @@ const BWAModule = {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const ui = SpreadsheetApp.getUi();
 
+            // Cache zurücksetzen für aktuelle Daten
+            this.clearCache();
+
+            console.log('Starting BWA calculation...');
+            ui.alert('BWA wird berechnet...', 'Bitte warten Sie, während die BWA berechnet wird.', ui.ButtonSet.OK);
+
             // Daten sammeln
             const bwaData = collector.aggregateBWAData(config);
             if (!bwaData) {
-                ui.alert("BWA-Daten konnten nicht generiert werden.");
+                ui.alert('BWA-Daten konnten nicht generiert werden.');
                 return false;
             }
 
-            // BWA-Sheet generieren
+            // BWA-Sheet erstellen oder aktualisieren
             const success = formatter.generateBWASheet(bwaData, ss, config);
 
             if (success) {
-                ui.alert("BWA wurde aktualisiert!");
+                ui.alert('BWA wurde aktualisiert!');
                 return true;
             } else {
-                ui.alert("Bei der Erstellung der BWA ist ein Fehler aufgetreten.");
+                ui.alert('Bei der Erstellung der BWA ist ein Fehler aufgetreten.');
                 return false;
             }
         } catch (e) {
-            console.error("Fehler bei der BWA-Berechnung:", e);
-            SpreadsheetApp.getUi().alert("Fehler bei der BWA-Berechnung: " + e.toString());
+            console.error('Fehler bei der BWA-Berechnung:', e);
+            SpreadsheetApp.getUi().alert('Fehler bei der BWA-Berechnung: ' + e.toString());
             return false;
         }
     },
@@ -56,8 +63,8 @@ const BWAModule = {
         processRevenue: calculator.processRevenue,
         processExpense: calculator.processExpense,
         processEigen: calculator.processEigen,
-        aggregateBWAData: collector.aggregateBWAData
-    }
+        aggregateBWAData: collector.aggregateBWAData,
+    },
 };
 
 export default BWAModule;

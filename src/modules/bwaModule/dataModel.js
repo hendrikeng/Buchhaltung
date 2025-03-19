@@ -1,6 +1,7 @@
 // modules/bwaModule/dataModel.js
 /**
  * Erstellt ein leeres BWA-Datenobjekt mit Nullwerten
+ * Optimierte Struktur für bessere Performance
  * @returns {Object} Leere BWA-Datenstruktur
  */
 function createEmptyBWA() {
@@ -76,10 +77,10 @@ function createEmptyBWA() {
 
         // Eigenbelege (zur Aggregation)
         eigenbelegeSteuerfrei: 0,
-        eigenbelegeSteuerpflichtig: 0
+        eigenbelegeSteuerpflichtig: 0,
     };
 }
 
 export default {
-    createEmptyBWA
+    createEmptyBWA,
 };

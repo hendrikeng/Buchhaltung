@@ -3,68 +3,74 @@ import stringUtils from '../../utils/stringUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 
 /**
- * Validiert das Bankbewegungen-Sheet
+ * Validiert das Bankbewegungen-Sheet mit optimierter Batch-Verarbeitung
  * @param {Sheet} bankSheet - Das zu validierende Sheet
  * @param {Object} config - Die Konfiguration
  * @returns {Array<string>} - Array mit Warnungen
  */
 function validateBanking(bankSheet, config) {
-    if (!bankSheet) return ["Bankbewegungen-Sheet nicht gefunden"];
+    if (!bankSheet) return ['Bankbewegungen-Sheet nicht gefunden'];
 
+    // Optimierung: Alle Daten in einem Batch laden
     const data = bankSheet.getDataRange().getValues();
     const warnings = [];
     const columns = config.bankbewegungen.columns;
 
-    // Regeln für Header- und Footer-Zeilen
-    const headerFooterRules = [
-        {check: r => stringUtils.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-        {
-            check: r => !stringUtils.isEmpty(r[columns.betrag - 1]) && !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
-            message: "Betrag darf nicht gesetzt sein."
-        },
-        {check: r => stringUtils.isEmpty(r[columns.saldo - 1]) || numberUtils.isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-        {check: r => !stringUtils.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ darf nicht gesetzt sein."},
-        {check: r => !stringUtils.isEmpty(r[columns.kategorie - 1]), message: "Kategorie darf nicht gesetzt sein."},
-        {check: r => !stringUtils.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) darf nicht gesetzt sein."},
-        {check: r => !stringUtils.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) darf nicht gesetzt sein."}
-    ];
+    // Optimierte Regelstruktur mit Maps für schnelleren Zugriff
+    const headerFooterRuleMap = new Map([
+        ['datum', r => stringUtils.isEmpty(r[columns.datum - 1]), 'Buchungsdatum fehlt.'],
+        ['buchungstext', r => stringUtils.isEmpty(r[columns.buchungstext - 1]), 'Buchungstext fehlt.'],
+        ['betrag', r => !stringUtils.isEmpty(r[columns.betrag - 1]) &&
+            !isNaN(parseFloat(r[columns.betrag - 1].toString().trim())),
+        'Betrag darf nicht gesetzt sein.'],
+        ['saldo', r => stringUtils.isEmpty(r[columns.saldo - 1]) ||
+            numberUtils.isInvalidNumber(r[columns.saldo - 1]), 'Saldo fehlt oder ungültig.'],
+        ['transaktionstyp', r => !stringUtils.isEmpty(r[columns.transaktionstyp - 1]), 'Typ darf nicht gesetzt sein.'],
+        ['kategorie', r => !stringUtils.isEmpty(r[columns.kategorie - 1]), 'Kategorie darf nicht gesetzt sein.'],
+        ['kontoSoll', r => !stringUtils.isEmpty(r[columns.kontoSoll - 1]), 'Konto (Soll) darf nicht gesetzt sein.'],
+        ['kontoHaben', r => !stringUtils.isEmpty(r[columns.kontoHaben - 1]), 'Gegenkonto (Haben) darf nicht gesetzt sein.'],
+    ]);
 
-    // Regeln für Datenzeilen
-    const dataRowRules = [
-        {check: r => stringUtils.isEmpty(r[columns.datum - 1]), message: "Buchungsdatum fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.buchungstext - 1]), message: "Buchungstext fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.betrag - 1]) || numberUtils.isInvalidNumber(r[columns.betrag - 1]), message: "Betrag fehlt oder ungültig."},
-        {check: r => stringUtils.isEmpty(r[columns.saldo - 1]) || numberUtils.isInvalidNumber(r[columns.saldo - 1]), message: "Saldo fehlt oder ungültig."},
-        {check: r => stringUtils.isEmpty(r[columns.transaktionstyp - 1]), message: "Typ fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.kategorie - 1]), message: "Kategorie fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.kontoSoll - 1]), message: "Konto (Soll) fehlt."},
-        {check: r => stringUtils.isEmpty(r[columns.kontoHaben - 1]), message: "Gegenkonto (Haben) fehlt."}
-    ];
+    const dataRowRuleMap = new Map([
+        ['datum', r => stringUtils.isEmpty(r[columns.datum - 1]), 'Buchungsdatum fehlt.'],
+        ['buchungstext', r => stringUtils.isEmpty(r[columns.buchungstext - 1]), 'Buchungstext fehlt.'],
+        ['betrag', r => stringUtils.isEmpty(r[columns.betrag - 1]) ||
+            numberUtils.isInvalidNumber(r[columns.betrag - 1]), 'Betrag fehlt oder ungültig.'],
+        ['saldo', r => stringUtils.isEmpty(r[columns.saldo - 1]) ||
+            numberUtils.isInvalidNumber(r[columns.saldo - 1]), 'Saldo fehlt oder ungültig.'],
+        ['transaktionstyp', r => stringUtils.isEmpty(r[columns.transaktionstyp - 1]), 'Typ fehlt.'],
+        ['kategorie', r => stringUtils.isEmpty(r[columns.kategorie - 1]), 'Kategorie fehlt.'],
+        ['kontoSoll', r => stringUtils.isEmpty(r[columns.kontoSoll - 1]), 'Konto (Soll) fehlt.'],
+        ['kontoHaben', r => stringUtils.isEmpty(r[columns.kontoHaben - 1]), 'Gegenkonto (Haben) fehlt.'],
+    ]);
 
     /**
      * Validiert eine Zeile anhand von Regeln
      * @param {Array} row - Die zu validierende Zeile
      * @param {number} idx - Der Index der Zeile (für Fehlermeldungen)
-     * @param {Array<Object>} rules - Array mit Regeln ({check, message})
+     * @param {Map} rules - Map mit Regeln (key, checkFn, message)
      */
     const validateRow = (row, idx, rules) => {
-        rules.forEach(({check, message}) => {
-            if (check(row)) warnings.push(`Zeile ${idx}: ${message}`);
+        rules.forEach((message, checkFn, key) => {
+            if (checkFn(row)) warnings.push(`Zeile ${idx}: ${message}`);
         });
     };
 
-    // Zeilen validieren
+    // Alle Zeilen in einem Durchgang validieren
     data.forEach((row, i) => {
         const idx = i + 1;
 
         // Header oder Footer
         if (i === 0 || i === data.length - 1) {
-            validateRow(row, idx, headerFooterRules);
+            headerFooterRuleMap.forEach((message, checkFn, key) => {
+                if (checkFn(row)) warnings.push(`Zeile ${idx}: ${message}`);
+            });
         }
         // Datenzeilen
         else if (i > 0 && i < data.length - 1) {
-            validateRow(row, idx, dataRowRules);
+            dataRowRuleMap.forEach((message, checkFn, key) => {
+                if (checkFn(row)) warnings.push(`Zeile ${idx}: ${message}`);
+            });
         }
     });
 
@@ -72,5 +78,5 @@ function validateBanking(bankSheet, config) {
 }
 
 export default {
-    validateBanking
+    validateBanking,
 };

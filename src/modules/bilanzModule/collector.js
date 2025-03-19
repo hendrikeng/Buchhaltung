@@ -5,7 +5,7 @@ import calculator from './calculator.js';
 import numberUtils from '../../utils/numberUtils.js';
 
 /**
- * Sammelt Daten aus verschiedenen Sheets für die Bilanz
+ * Sammelt Daten aus verschiedenen Sheets für die Bilanz mit optimierter Batch-Verarbeitung
  * @param {Object} config - Die Konfiguration
  * @returns {Object} Bilanz-Datenstruktur mit befüllten Werten
  */
@@ -13,9 +13,11 @@ function aggregateBilanzData(config) {
     try {
         // Prüfen ob Cache gültig ist
         if (globalCache.has('computed', 'bilanz')) {
+            console.log('Using cached bilanz data');
             return globalCache.get('computed', 'bilanz');
         }
 
+        console.log('Aggregating bilanz data...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const bilanzData = dataModel.createEmptyBilanz();
 
@@ -24,31 +26,45 @@ function aggregateBilanzData(config) {
         const ausgabenCols = config.ausgaben.columns;
         const gesellschafterCols = config.gesellschafterkonto.columns;
 
-        // 1. Banksaldo aus "Bankbewegungen" (Endsaldo)
-        const bankSheet = ss.getSheetByName("Bankbewegungen");
+        // 1. Banksaldo aus "Bankbewegungen" (Endsaldo) - optimiert mit gezielter Datenabfrage
+        const bankSheet = ss.getSheetByName('Bankbewegungen');
         if (bankSheet) {
             const lastRow = bankSheet.getLastRow();
             if (lastRow >= 1) {
-                const label = bankSheet.getRange(lastRow, bankCols.buchungstext).getValue().toString().toLowerCase();
-                if (label === "endsaldo") {
+                // Optimierung: Nur die benötigten Zellen direkt abfragen
+                const lastRowData = bankSheet.getRange(lastRow, 1, 1, bankCols.buchungstext).getValues()[0];
+                const label = lastRowData[bankCols.buchungstext - 1]?.toString().toLowerCase() || '';
+
+                if (label === 'endsaldo') {
                     bilanzData.aktiva.bankguthaben = numberUtils.parseCurrency(
-                        bankSheet.getRange(lastRow, bankCols.saldo).getValue()
+                        bankSheet.getRange(lastRow, bankCols.saldo).getValue(),
                     );
                 }
             }
         }
 
-        // 2. Jahresüberschuss aus "BWA" (Letzte Zeile, sofern dort "Jahresüberschuss" vorkommt)
-        const bwaSheet = ss.getSheetByName("BWA");
+        // 2. Jahresüberschuss aus "BWA" - optimiert mit gezielter Suche
+        const bwaSheet = ss.getSheetByName('BWA');
         if (bwaSheet) {
-            const data = bwaSheet.getDataRange().getValues();
-            for (let i = data.length - 1; i >= 0; i--) {
-                const row = data[i];
-                if (row[0].toString().toLowerCase().includes("jahresüberschuss")) {
-                    // Letzte Spalte enthält den Jahreswert
-                    bilanzData.passiva.jahresueberschuss = numberUtils.parseCurrency(row[row.length - 1]);
+            const lastCol = bwaSheet.getLastColumn();
+            // Optimierung: Nur in der letzten Spalte suchen, wo das Jahresergebnis steht
+            const yearColIndex = lastCol;
+
+            // Finde die Jahresüberschusszeile
+            const searchRange = bwaSheet.getRange(1, 1, bwaSheet.getLastRow(), 1).getValues();
+            let jahresueberschussRow = -1;
+
+            for (let i = searchRange.length - 1; i >= 0; i--) {
+                if (searchRange[i][0].toString().toLowerCase().includes('jahresüberschuss')) {
+                    jahresueberschussRow = i + 1; // 1-basierter Index
                     break;
                 }
+            }
+
+            if (jahresueberschussRow > 0) {
+                bilanzData.passiva.jahresueberschuss = numberUtils.parseCurrency(
+                    bwaSheet.getRange(jahresueberschussRow, yearColIndex).getValue(),
+                );
             }
         }
 
@@ -66,14 +82,15 @@ function aggregateBilanzData(config) {
 
         // Daten im Cache speichern
         globalCache.set('computed', 'bilanz', bilanzData);
+        console.log('Bilanz data aggregation complete');
 
         return bilanzData;
     } catch (e) {
-        console.error("Fehler bei der Sammlung der Bilanzdaten:", e);
+        console.error('Fehler bei der Sammlung der Bilanzdaten:', e);
         return null;
     }
 }
 
 export default {
-    aggregateBilanzData
+    aggregateBilanzData,
 };

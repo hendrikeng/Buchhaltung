@@ -11,9 +11,10 @@ import globalCache from '../../utils/cacheUtils.js';
  */
 const UStVAModule = {
     /**
-     * Cache leeren
+     * Cache leeren mit gezielter Invalidierung
      */
     clearCache() {
+        console.log('Clearing UStVA module cache');
         globalCache.clear('ustva');
     },
 
@@ -28,10 +29,16 @@ const UStVAModule = {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const ui = SpreadsheetApp.getUi();
 
+            // Cache zurücksetzen für aktuelle Daten
+            this.clearCache();
+
+            console.log('Starting UStVA calculation...');
+            ui.alert('UStVA wird berechnet...', 'Bitte warten Sie, während die UStVA berechnet wird.', ui.ButtonSet.OK);
+
             // Daten sammeln
             const ustvaData = collector.collectUStVAData(config);
             if (!ustvaData) {
-                ui.alert("Die UStVA konnte nicht berechnet werden. Bitte prüfen Sie die Fehleranzeige.");
+                ui.alert('Die UStVA konnte nicht berechnet werden. Bitte prüfen Sie die Fehleranzeige.');
                 return false;
             }
 
@@ -39,15 +46,15 @@ const UStVAModule = {
             const success = formatter.generateUStVASheet(ustvaData, ss, config);
 
             if (success) {
-                ui.alert("UStVA wurde erfolgreich aktualisiert!");
+                ui.alert('UStVA wurde erfolgreich aktualisiert!');
                 return true;
             } else {
-                ui.alert("Bei der Erstellung der UStVA ist ein Fehler aufgetreten.");
+                ui.alert('Bei der Erstellung der UStVA ist ein Fehler aufgetreten.');
                 return false;
             }
         } catch (e) {
-            console.error("Fehler bei der UStVA-Berechnung:", e);
-            SpreadsheetApp.getUi().alert("Fehler bei der UStVA-Berechnung: " + e.toString());
+            console.error('Fehler bei der UStVA-Berechnung:', e);
+            SpreadsheetApp.getUi().alert('Fehler bei der UStVA-Berechnung: ' + e.toString());
             return false;
         }
     },
@@ -58,8 +65,8 @@ const UStVAModule = {
         processUStVARow: calculator.processUStVARow,
         formatUStVARow: formatter.formatUStVARow,
         aggregateUStVA: calculator.aggregateUStVA,
-        collectUStVAData: collector.collectUStVAData
-    }
+        collectUStVAData: collector.collectUStVAData,
+    },
 };
 
 export default UStVAModule;

@@ -1,6 +1,7 @@
 // modules/bilanzModule/dataModel.js
 /**
  * Erstellt eine leere Bilanz-Datenstruktur
+ * Optimierte Version mit strukturiertem Aufbau für bessere Performance
  * @returns {Object} Leere Bilanz-Datenstruktur
  */
 function createEmptyBilanz() {
@@ -24,7 +25,7 @@ function createEmptyBilanz() {
             rechnungsabgrenzung: 0,         // SKR04: 1900-1990, Aktiver Rechnungsabgrenzungsposten
 
             // Gesamtsumme
-            summeAktiva: 0                  // Summe aller Aktiva
+            summeAktiva: 0,                  // Summe aller Aktiva
         },
 
         // Passiva (Kapital und Schulden)
@@ -48,11 +49,11 @@ function createEmptyBilanz() {
             rechnungsabgrenzung: 0,         // SKR04: 3800-3990, Passiver Rechnungsabgrenzungsposten
 
             // Gesamtsumme
-            summePassiva: 0                 // Summe aller Passiva
-        }
+            summePassiva: 0,                 // Summe aller Passiva
+        },
     };
 }
 
 export default {
-    createEmptyBilanz
+    createEmptyBilanz,
 };

@@ -1,4 +1,4 @@
-// src/modules/bwaModule/collector.js
+// modules/bwaModule/collector.js
 import globalCache from '../../utils/cacheUtils.js';
 import dataModel from './dataModel.js';
 import calculator from './calculator.js';
@@ -19,48 +19,24 @@ function aggregateBWAData(config) {
         console.log('Aggregating BWA data...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-        // Definiere alle Sheet-Typen und ihre Verarbeitungsfunktionen
+        // Optimierte Struktur für Sheets und ihre Prozessoren
         const sheetProcessors = [
-            {
-                name: 'Einnahmen',
-                type: 'einnahmen',
-                processor: calculator.processRevenue,
-                required: true,
-            },
-            {
-                name: 'Ausgaben',
-                type: 'ausgaben',
-                processor: calculator.processExpense,
-                required: true,
-            },
-            {
-                name: 'Eigenbelege',
-                type: 'eigenbelege',
-                processor: calculator.processEigen,
-                required: false,
-            },
-            {
-                name: 'Gesellschafterkonto',
-                type: 'gesellschafterkonto',
-                processor: calculator.processGesellschafter,
-                required: false,
-            },
-            {
-                name: 'Holding Transfers',
-                type: 'holdingTransfers',
-                processor: calculator.processHolding,
-                required: false,
-            },
+            { name: 'Einnahmen', type: 'einnahmen', processor: calculator.processRevenue, required: true },
+            { name: 'Ausgaben', type: 'ausgaben', processor: calculator.processExpense, required: true },
+            { name: 'Eigenbelege', type: 'eigenbelege', processor: calculator.processEigen, required: false },
+            { name: 'Gesellschafterkonto', type: 'gesellschafterkonto', processor: calculator.processGesellschafter, required: false },
+            { name: 'Holding Transfers', type: 'holdingTransfers', processor: calculator.processHolding, required: false },
         ];
 
-        // Zuerst prüfen, ob alle erforderlichen Sheets existieren
+        // Prüfe zuerst, ob alle erforderlichen Sheets existieren
+        const sheets = {};
+
         for (const processor of sheetProcessors) {
-            if (processor.required) {
-                const sheet = ss.getSheetByName(processor.name);
-                if (!sheet) {
-                    console.error(`Fehlendes Blatt: '${processor.name}'`);
-                    return null;
-                }
+            sheets[processor.type] = ss.getSheetByName(processor.name);
+
+            if (processor.required && !sheets[processor.type]) {
+                console.error(`Fehlendes Blatt: '${processor.name}'`);
+                return null;
             }
         }
 
@@ -69,10 +45,9 @@ function aggregateBWAData(config) {
             Array.from({length: 12}, (_, i) => [i + 1, dataModel.createEmptyBWA()]),
         );
 
-        // Optimierung: Alle Sheets in einem einzigen Durchlauf verarbeiten
-        // mit Batch-Verarbeitung pro Sheet
+        // Optimierung: Alle Sheets in einem Durchgang verarbeiten
         for (const processor of sheetProcessors) {
-            const sheet = ss.getSheetByName(processor.name);
+            const sheet = sheets[processor.type];
             if (!sheet) continue;
 
             const lastRow = sheet.getLastRow();
@@ -80,7 +55,7 @@ function aggregateBWAData(config) {
 
             console.log(`Processing ${processor.name} sheet for BWA...`);
 
-            // Daten in einem Batch laden für weniger API-Calls
+            // Optimierung: Daten in einem Batch laden für weniger API-Calls
             const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
             // Daten verarbeiten mit der passenden Prozessorfunktion

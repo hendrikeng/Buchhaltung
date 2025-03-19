@@ -1,6 +1,7 @@
 // utils/cacheUtils.js
 /**
  * Funktionen für Caching zur Verbesserung der Performance
+ * Optimierte Version mit effizienteren Strukturen und verbesserter Verwaltung
  */
 
 /**
@@ -9,11 +10,23 @@
 const globalCache = {
     // Verschiedene Cache-Maps für unterschiedliche Datentypen
     _store: {
+        // Datums- und Zeit-Operationen
         dates: new Map(),
+
+        // Währungs- und Zahlenoperationen
         currency: new Map(),
         mwstRates: new Map(),
+
+        // Formatierungs-Caches
         columnLetters: new Map(),
+
+        // Sheet-Daten
         sheets: new Map(),
+
+        // Import- und Validierungsdaten
+        validation: new Map(),
+
+        // Referenzdaten für Module (BWA, Bilanz, UStVA)
         references: {
             einnahmen: null,
             ausgaben: null,
@@ -21,16 +34,19 @@ const globalCache = {
             gesellschafterkonto: null,
             holdingTransfers: null,
         },
+
+        // Berechnete Daten für Module
         computed: new Map(),
     },
 
     /**
      * Löscht den gesamten Cache oder einen bestimmten Teilbereich
+     * Optimierte Version mit effizienterem Löschen
      * @param {string} type - Optional: Der zu löschende Cache-Bereich
      */
     clear(type = null) {
         if (type === null) {
-            // Optimized: Dynamically clear all maps
+            // Optimiert: Dynamisches Löschen aller Maps
             Object.entries(this._store).forEach(([key, value]) => {
                 if (value instanceof Map) {
                     value.clear();
@@ -40,20 +56,24 @@ const globalCache = {
                     });
                 }
             });
+
+            console.info('Entire cache cleared');
         } else if (type === 'references') {
             Object.keys(this._store.references).forEach(refKey => {
                 this._store.references[refKey] = null;
             });
+            console.info('References cache cleared');
         } else if (this._store[type]) {
             if (this._store[type] instanceof Map) {
                 this._store[type].clear();
+                console.info(`Cache for ${type} cleared`);
             }
         }
     },
 
     /**
      * Speichert einen Wert im Cache
-     * @param {string} type - Cache-Typ (dates, currency, mwstRates, columnLetters, computed)
+     * @param {string} type - Cache-Typ (dates, currency, mwstRates, columnLetters, computed, etc.)
      * @param {string} key - Schlüssel für den gecacheten Wert
      * @param {*} value - Zu cachender Wert
      */
@@ -116,6 +136,38 @@ const globalCache = {
             console.error(`Error computing cache value for ${type}.${key}:`, error);
             return undefined;
         }
+    },
+
+    /**
+     * Gibt die Größe eines Cache-Typs zurück
+     * @param {string} type - Cache-Typ
+     * @returns {number} - Anzahl der Elemente im Cache oder -1 wenn nicht verfügbar
+     */
+    size(type) {
+        if (this._store[type] instanceof Map) {
+            return this._store[type].size;
+        } else if (type === 'references') {
+            return Object.values(this._store.references).filter(v => v !== null).length;
+        }
+        return -1;
+    },
+
+    /**
+     * Gibt einen Statusbericht über den Cache zurück
+     * @returns {Object} - Statusbericht
+     */
+    status() {
+        const status = {};
+
+        Object.entries(this._store).forEach(([type, store]) => {
+            if (store instanceof Map) {
+                status[type] = store.size;
+            } else if (type === 'references') {
+                status[type] = Object.values(store).filter(v => v !== null).length;
+            }
+        });
+
+        return status;
     },
 };
 
