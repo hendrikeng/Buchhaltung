@@ -2,6 +2,7 @@
 import matchingHandler from './matchingHandler.js';
 import formattingHandler from './formattingHandler.js';
 import syncHandler from './syncHandler.js';
+import approvalHandler from './approvalHandler.js';
 import globalCache from '../../utils/cacheUtils.js';
 import stringUtils from '../../utils/stringUtils.js';
 
@@ -76,20 +77,31 @@ const BankReconciliationModule = {
 
                 console.log(`Found ${Object.keys(matchResults.bankZuordnungen).length} matches`);
 
-                // 6. Formatierung der Bankbewegungen basierend auf den Match-Ergebnissen
+                // 6. Interaktive Genehmigung der Zuordnungen
+                const approvalResults = approvalHandler.processApprovals(
+                    ss, matchResults.bankZuordnungen, config);
+
+                if (Object.keys(approvalResults.approvedMatches).length === 0) {
+                    ui.alert('Bankabgleich abgebrochen', 'Es wurden keine Zuordnungen genehmigt.', ui.ButtonSet.OK);
+                    return false;
+                }
+
+                // 7. Formatierung der Bankbewegungen basierend auf den genehmigten Match-Ergebnissen
                 formattingHandler.formatMatchedRows(
                     bankSheet, firstDataRow, matchResults.matchInfo, columns);
 
-                // 7. Match-Spalte formatieren
+                // 8. Match-Spalte formatieren
                 if (columns.matchInfo) {
                     formattingHandler.setMatchColumnFormatting(
                         bankSheet, columnLetters.matchInfo);
                 }
 
-                // 8. Aktualisierung der Zahlungsstatus in den Dokument-Sheets
-                syncHandler.markPaidInvoices(ss, matchResults.bankZuordnungen, config);
+                // 9. Aktualisierung der Zahlungsstatus in den Dokument-Sheets (nur genehmigte)
+                syncHandler.markPaidInvoices(ss, approvalResults.approvedMatches, config);
 
-                ui.alert('Bankabgleich erfolgreich durchgeführt!');
+                ui.alert('Bankabgleich erfolgreich durchgeführt!',
+                    `Es wurden ${Object.keys(approvalResults.approvedMatches).length} Zuordnungen verarbeitet.`,
+                    ui.ButtonSet.OK);
                 return true;
             } catch (reconciliationError) {
                 console.error('Fehler beim Bankabgleich-Prozess:', reconciliationError);

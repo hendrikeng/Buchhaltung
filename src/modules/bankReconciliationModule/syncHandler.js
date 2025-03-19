@@ -6,7 +6,7 @@ import dateUtils from '../../utils/dateUtils.js';
  * Markiert bezahlte Einnahmen, Ausgaben und Eigenbelege farblich
  * und aktualisiert den Zahlungsstatus mit optimierter Batch-Verarbeitung
  * @param {Spreadsheet} ss - Das Spreadsheet
- * @param {Object} bankZuordnungen - Zuordnungen aus dem Bank-Matching
+ * @param {Object} bankZuordnungen - Zuordnungen aus dem Bank-Matching (bereits genehmigt)
  * @param {Object} config - Die Konfiguration
  */
 function markPaidInvoices(ss, bankZuordnungen, config) {
@@ -319,8 +319,6 @@ function applyColumnUpdatesInBatches(sheet, updates, columnIndex) {
         });
     });
 }
-
-// src/modules/bankReconciliationModule/syncHandler.js - continued
 
 /**
  * Identifiziert zusammenhängende Bereiche aus einer sortierten Liste von Zeilen
