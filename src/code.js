@@ -9,6 +9,7 @@ import BilanzModule from './modules/bilanzModule/index.js';
 import ValidatorModule from './modules/validatorModule/index.js';
 import SetupModule from './modules/setupModule/index.js';
 import BankReconciliationModule from './modules/bankReconciliationModule/index.js';
+import TaxModule from './modules/taxModule/index.js';
 
 // =================== Globale Funktionen ===================
 /**
@@ -29,6 +30,7 @@ function onOpen() {
             .addItem('📊 UStVA berechnen', 'calculateUStVA')
             .addItem('📈 BWA berechnen', 'calculateBWA')
             .addItem('📝 Bilanz erstellen', 'calculateBilanz')
+            .addItem('💰 Steuerberechnung', 'calculateTaxes')
             .addToUi();
     } catch (e) {
         console.error('Fehler beim Erstellen des Menüs:', e);
@@ -467,6 +469,35 @@ function bankReconciliation() {
     }
 }
 
+/**
+ * Berechnet Steuern (Gewerbesteuer, Körperschaftsteuer, etc.) und erstellt ein Steuerberichts-Sheet
+ * @returns {boolean} - Erfolg der Berechnung
+ */
+function calculateTaxes() {
+    return executeWithErrorHandling(
+        () => {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+            // Bilanzdaten abrufen
+            const bilanzData = BilanzModule._internal.aggregateBilanzData(config);
+            if (!bilanzData) {
+                throw new Error('Fehler beim Abrufen der Bilanzdaten.');
+            }
+
+            // Steuern berechnen
+            const taxData = TaxModule.calculateAllTaxes(bilanzData, config);
+
+            // Steuerbericht erstellen
+            const success = TaxModule.generateTaxReport(ss, taxData, bilanzData, config);
+
+            return success;
+        },
+        'Fehler bei der Steuerberechnung',
+        'Die Steuerberechnung wurde erfolgreich durchgeführt!',
+    );
+}
+
+
 // Exportiere alle relevanten Funktionen in den globalen Namensraum,
 // damit sie von Google Apps Script als Trigger und Menüpunkte aufgerufen werden können.
 global.onOpen = onOpen;
@@ -480,3 +511,4 @@ global.calculateBWA = calculateBWA;
 global.calculateBilanz = calculateBilanz;
 global.importDriveFiles = importDriveFiles;
 global.bankReconciliation = bankReconciliation;
+global.calculateTaxes = calculateTaxes;
