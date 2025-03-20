@@ -458,7 +458,30 @@ const approvalHandler = {
                 ui.ButtonSet.YES_NO,
             );
 
-            return result === ui.Button.YES;
+            if (result === ui.Button.YES) {
+                // Bei Genehmigung: Speichere genehmigte Änderungen in match-Objekt
+                realChanges.forEach(change => {
+                    if (change.type === 'category' && change.direction === 'document_to_bank') {
+                        // Speichere die genehmigte Dokumentenkategorie für die Bank
+                        match.approvedDocCategory = change.bankValue; // Aus der Änderung
+
+                        // Wenn wir die Bankzeile aus dem Match wissen
+                        if (match.bankRow) {
+                            // Verwenden die existierende Bankzeile
+                        } else {
+                            // Versuche Bankzeile zu bestimmen (falls in den Match-Daten vorhanden)
+                            const bankDataKey = `bankbewegungen_bank_${match.originalRef}`;
+                            const bankData = sheetData.rowData[bankDataKey];
+                            if (bankData) {
+                                // Wenn wir die Bankzeile aus den Daten bestimmen können
+                                match.bankRow = bankData.rowIndex;
+                            }
+                        }
+                    }
+                });
+                return true;
+            }
+            return false;
         } catch (e) {
             console.error('Fehler bei der Verarbeitung einer Zuordnung:', e);
             // Bei Fehler sicherheitshalber nicht genehmigen
@@ -551,12 +574,12 @@ const approvalHandler = {
             }
         }
 
-        // 2. Prüfe Kategorie
+        // 2. Prüfe Kategorie - GEÄNDERTE LOGIK
         if (match.category && sheetConfig.kategorie) {
             const sheetCategory = rowData[sheetConfig.kategorie - 1];
 
             if (stringUtils.isEmpty(sheetCategory)) {
-                // Kategorie fehlt im Sheet
+                // Kategorie fehlt im Sheet - keine Änderung zur bisherigen Logik
                 changes.push({
                     type: 'category',
                     field: 'kategorie',
@@ -565,12 +588,15 @@ const approvalHandler = {
                     sheetValue: null,
                 });
             } else if (sheetCategory !== match.category) {
+                // Geänderte Logik: Wenn die Kategorien unterschiedlich sind,
+                // dann Vorschlag, die Kategorie aus dem Dokument für die Bank zu übernehmen
                 changes.push({
                     type: 'category',
                     field: 'kategorie',
-                    description: `Kategorie aktualisieren: "${sheetCategory}" → "${match.category}"`,
-                    bankValue: match.category,
-                    sheetValue: sheetCategory,
+                    description: `Kategorie in Bankbewegung aktualisieren: "${match.category}" → "${sheetCategory}"`,
+                    bankValue: sheetCategory, // Wichtig: Hier wird die Kategorie aus dem Dokument verwendet
+                    sheetValue: match.category,
+                    direction: 'document_to_bank', // Richtung der Änderung angeben
                 });
             }
         }

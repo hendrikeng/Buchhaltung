@@ -235,7 +235,7 @@ function collectAccountInfo(config) {
 }
 
 /**
- * Verarbeitet alle Bankeinträge und sucht nach Übereinstimmungen
+ * Verarbeitet Bankeinträge und sucht nach Übereinstimmungen
  * @param {Array} bankData - Die Bankdaten
  * @param {number} firstDataRow - Erste Datenzeile
  * @param {number} lastRow - Letzte Zeile
@@ -279,7 +279,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                 matchFound = processDocumentTypeMatching(
                     sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    results, category, config, true);
+                    results, category, config, firstDataRow, true);
 
                 // Bei Gutschrift-Treffer den nächsten Eintrag verarbeiten
                 if (matchFound) continue;
@@ -290,7 +290,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                 matchFound = processDocumentTypeMatching(
                     sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'einnahme', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    results, category, config);
+                    results, category, config, firstDataRow);
             }
 
             // Standard-Logik für Ausgaben - Optimiert mit Array von Dokumenttypen
@@ -307,7 +307,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                     processDocumentTypeMatching(
                         docType.data, refNumber, betragValue, row,
                         columns, docType.type, docType.cols, docType.mapping,
-                        results, category, config),
+                        results, category, config, firstDataRow),
                 );
             }
         }
@@ -359,11 +359,12 @@ function addEmptyResults(results) {
  * @param {Object} results - Ergebnisobjekt
  * @param {string} category - Kategorie
  * @param {Object} config - Konfiguration
+ * @param {number} firstDataRow - Erste Datenzeile
  * @param {boolean} isGutschrift - Ist eine Gutschrift
  * @returns {boolean} true wenn eine Übereinstimmung gefunden wurde
  */
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
-    results, category, config, isGutschrift = false) {
+    results, category, config, firstDataRow, isGutschrift = false) {
 
     // Nur Gutschrift-Verarbeitung für Einnahmen erlauben
     if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift') {
@@ -414,7 +415,8 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     results.matchInfo.push([matchInfoText]);
     results.kontoSollResults.push([kontoSoll]);
     results.kontoHabenResults.push([kontoHaben]);
-    results.categoryResults.push([sourceCategory || category]);
+    // Behalte die Bank-Kategorie, die Kategorie aus dem Dokument wird im Approval-Prozess vorgeschlagen
+    results.categoryResults.push([category]);
 
     // Optimierte Schlüsselgenerierung für Bankzuordnungen
     const key = `${docType}#${matchResult.row}`;
@@ -427,10 +429,12 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     results.bankZuordnungen[key] = {
         typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
+        bankRow: firstDataRow + results.matchInfo.length - 1, // Speichern der aktuellen Bankzeile
         bankDatum: row[columns.datum - 1],
         matchInfo: matchInfoText,
         transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
-        category: sourceCategory,
+        category: category,
+        sourceCategory: sourceCategory, // Add original document category separately
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
         isGutschrift: isActualGutschrift,

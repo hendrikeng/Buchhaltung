@@ -24,6 +24,29 @@ function markPaidInvoices(ss, bankZuordnungen, config) {
     // Optimierung: Alle Zuordnungen nach Dokumenttyp gruppieren
     const zuordnungenByType = groupZuordnungenByType(bankZuordnungen);
 
+    // Bankbewegungen-Sheet laden und vorbereiten für Kategorie-Updates
+    const bankSheet = ss.getSheetByName('Bankbewegungen');
+    const bankUpdates = [];
+
+    if (bankSheet) {
+        // Prüfen, ob wir genehmigte Kategorieänderungen haben, die ins Banksheet übertragen werden müssen
+        Object.values(bankZuordnungen).forEach(zuordnung => {
+            // Prüfen ob eine genehmigte Kategorieänderung vorliegt
+            // (approvedDocCategory wird in approvalHandler gesetzt)
+            if (zuordnung.approvedDocCategory && zuordnung.bankRow > 0) {
+                bankUpdates.push({
+                    row: zuordnung.bankRow,
+                    category: zuordnung.approvedDocCategory,
+                });
+            }
+        });
+
+        // Kategorien im Banksheet aktualisieren, falls Änderungen vorliegen
+        if (bankUpdates.length > 0) {
+            applyBankCategoryUpdates(bankSheet, bankUpdates, config.bankbewegungen.columns.kategorie);
+        }
+    }
+
     // Für jeden Dokumenttyp nur einmal das Sheet laden und verarbeiten
     Object.entries(zuordnungenByType).forEach(([sheetType, relevantZuordnungen]) => {
         if (!relevantZuordnungen || relevantZuordnungen.length === 0) return;
@@ -36,6 +59,53 @@ function markPaidInvoices(ss, bankZuordnungen, config) {
 
         // Verarbeite das Sheet mit den relevanten Zuordnungen
         markPaidRowsOptimized(sheet, sheetType, relevantZuordnungen, config);
+    });
+}
+
+/**
+ * Wendet Kategorie-Updates auf das Bankbewegungen-Sheet an
+ * @param {Sheet} bankSheet - Das Bankbewegungen-Sheet
+ * @param {Array} updates - Die anzuwendenden Updates
+ * @param {number} kategorieColumn - Die Spalte für die Kategorie
+ */
+function applyBankCategoryUpdates(bankSheet, updates, kategorieColumn) {
+    console.log(`Applying ${updates.length} approved category updates to bank sheet`);
+
+    // Gruppiere nach Kategorien für effizienteres Update
+    const categoriesByValue = {};
+
+    updates.forEach(update => {
+        if (!categoriesByValue[update.category]) {
+            categoriesByValue[update.category] = [];
+        }
+        categoriesByValue[update.category].push(update.row);
+    });
+
+    // Wende jede Kategorie auf alle betreffenden Zeilen an
+    Object.entries(categoriesByValue).forEach(([category, rows]) => {
+        // Gruppiere zusammenhängende Zeilen für Range-Updates
+        const ranges = getRangesFromRows(rows);
+
+        ranges.forEach(range => {
+            try {
+                const [startRow, endRow] = range;
+                const numRows = endRow - startRow + 1;
+                const values = Array(numRows).fill([category]);
+
+                bankSheet.getRange(startRow, kategorieColumn, numRows, 1).setValues(values);
+            } catch (e) {
+                console.error(`Error updating bank category for range ${range[0]}-${range[1]}:`, e);
+
+                // Fallback: Einzelne Zeilen aktualisieren
+                for (let row = range[0]; row <= range[1]; row++) {
+                    try {
+                        bankSheet.getRange(row, kategorieColumn).setValue(category);
+                    } catch (rowError) {
+                        console.error(`Error updating row ${row}:`, rowError);
+                    }
+                }
+            }
+        });
     });
 }
 
@@ -430,6 +500,9 @@ function categorizeRow(rowData, columns, sheetType, bankzuordnung) {
     const zahlungsDatum = columns.zahlungsdatum ? rowData[columns.zahlungsdatum - 1] : null;
     const hatBankzuordnung = !!bankzuordnung;
 
+    // Kategorie aus dem Dokument extrahieren
+    const docCategory = columns.kategorie ? rowData[columns.kategorie - 1] : '';
+
     // Zahlungsdatum validieren
     let isValidPaymentDate = false;
     if (zahlungsDatum) {
@@ -450,6 +523,10 @@ function categorizeRow(rowData, columns, sheetType, bankzuordnung) {
     // Informationen für Spalten-Updates
     const bankInfo = hatBankzuordnung ? getZuordnungsInfo(bankzuordnung) : undefined;
     const bankDatum = hatBankzuordnung ? bankzuordnung.bankDatum : undefined;
+
+    // Kategorie-Handling - wir verwenden die Kategorie aus dem Dokument
+    // nur wenn diese im Dialog explizit genehmigt wurde - dies wird nun
+    // über den approval-Prozess gesteuert
 
     // Bezahlt-Betrag berechnen wenn Bank-Zuordnung vorhanden
     let newBezahltBetrag = null;
@@ -573,6 +650,7 @@ function getDocumentTypePrefix(sheetType) {
 
 export default {
     markPaidInvoices,
+    applyBankCategoryUpdates,
     isGoodReferenceMatch,
     getDocumentTypePrefix,
     getZuordnungsInfo,
