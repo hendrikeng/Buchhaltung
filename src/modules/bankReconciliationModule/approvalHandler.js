@@ -22,8 +22,12 @@ const approvalHandler = {
             total: Object.keys(bankZuordnungen).length,
             approved: 0,
             rejected: 0,
+            autoApproved: 0,
             byType: {},
         };
+
+        // Track changes made to each document for summary reporting
+        const changeTracker = {};
 
         // Optimierung: Batch-Laden von Sheet-Daten
         console.log('Initializing approval process, loading data...');
@@ -33,55 +37,161 @@ const approvalHandler = {
         // Optimierung: Gruppiere Zuordnungen nach Typ und ähnlichen Änderungen
         const groupedMatches = this._groupMatchesByType(bankZuordnungen);
 
-        // Fortschrittsanzeige - Gesamtzahl der zu verarbeitenden Matches
-        ui.alert(
-            'Bankabgleich - Interaktive Genehmigung',
-            `Es wurden ${stats.total} potentielle Übereinstimmungen gefunden. Diese werden nun zur Bestätigung vorgelegt.`,
-            ui.ButtonSet.OK,
-        );
+        // Filter out already processed matches (those with only bank marking changes)
+        const autoApprovedMatches = [];
+        const matchesRequiringApproval = {};
+        let totalMatchesRequiringApproval = 0;
 
-        // Verarbeite Gruppen von Zuordnungen
-        Object.entries(groupedMatches).forEach(([type, matches]) => {
-            // Zeige nur an, welcher Dokumenttyp verarbeitet wird, nicht für jeden einzelnen
-            console.log(`Processing ${matches.length} ${this._getTypeName(type)} matches...`);
+        // First pass: identify auto-approvable matches (only bankMarking changes)
+        for (const [type, matches] of Object.entries(groupedMatches)) {
+            console.log(`Pre-processing ${matches.length} ${this._getTypeName(type)} matches...`);
 
-            // Weitere Optimierung: Gruppiere ähnliche Änderungen zusammen
-            const changeGroups = this._groupSimilarChanges(matches, sheetData, config);
+            const matchesWithChanges = [];
 
-            // Verarbeite jede Änderungsgruppe
-            Object.entries(changeGroups).forEach(([changeKey, groupMatches]) => {
-                // Bei sehr ähnlichen Änderungen können diese als Gruppe genehmigt werden
-                if (groupMatches.length > 3 && this._hasSimpleChanges(groupMatches, sheetData, config)) {
-                    const approved = this._processBatchMatches(groupMatches, sheetData, ui);
-                    if (approved) {
-                        groupMatches.forEach(match => {
-                            const key = `${match.typ}#${match.row}`;
-                            approvedMatches[key] = match;
-                            stats.approved++;
-                            stats.byType[type] = (stats.byType[type] || 0) + 1;
-                        });
-                    } else {
-                        stats.rejected += groupMatches.length;
-                    }
+            for (const match of matches) {
+                const sheetKey = this._getSheetKey(match.typ);
+                const configKey = this._getConfigKey(match.typ);
+                const sheetConfig = config[configKey]?.columns || {};
+
+                // Get row data for this match
+                const rowDataKey = `${sheetKey}_${match.row}`;
+                const rowData = sheetData.rowData[rowDataKey];
+
+                if (!rowData) continue;
+
+                // Detect changes needed for this match
+                const changes = this._detectChanges(match, rowData, sheetConfig);
+
+                // Check if there are any real changes (not just bankMarking)
+                const realChanges = changes.filter(change => change.type !== 'bankMarking');
+
+                if (realChanges.length === 0) {
+                    // No real changes needed, auto-approve this match
+                    const key = `${match.typ}#${match.row}`;
+                    approvedMatches[key] = match;
+                    autoApprovedMatches.push(match);
+                    stats.autoApproved++;
+                    stats.approved++;
+                    stats.byType[type] = (stats.byType[type] || 0) + 1;
+
+                    // Track changes for this document
+                    changeTracker[key] = {
+                        match,
+                        changes,
+                        rowData,
+                        sheetConfig,
+                        autoApproved: true,
+                    };
                 } else {
-                    // Einzelne Verarbeitung für komplexere Änderungen
-                    groupMatches.forEach(match => {
-                        const approved = this._processMatch(match, sheetData, config, ui);
-                        if (approved) {
-                            const key = `${match.typ}#${match.row}`;
-                            approvedMatches[key] = match;
-                            stats.approved++;
-                            stats.byType[type] = (stats.byType[type] || 0) + 1;
-                        } else {
-                            stats.rejected++;
-                        }
-                    });
+                    // This match requires approval
+                    matchesWithChanges.push(match);
                 }
+            }
+
+            if (matchesWithChanges.length > 0) {
+                matchesRequiringApproval[type] = matchesWithChanges;
+                totalMatchesRequiringApproval += matchesWithChanges.length;
+            }
+        }
+
+        // Only show the approval dialog if there are matches requiring approval
+        if (totalMatchesRequiringApproval > 0) {
+            // Fortschrittsanzeige - Gesamtzahl der zu verarbeitenden Matches
+            ui.alert(
+                'Bankabgleich - Interaktive Genehmigung',
+                `Es wurden ${totalMatchesRequiringApproval} potentielle Übereinstimmungen gefunden, die Ihre Genehmigung benötigen.\n` +
+                `Zusätzlich wurden ${stats.autoApproved} Übereinstimmungen automatisch genehmigt (nur Bankabgleich-Markierung).`,
+                ui.ButtonSet.OK,
+            );
+
+            // Verarbeite Gruppen von Zuordnungen, die Genehmigung erfordern
+            Object.entries(matchesRequiringApproval).forEach(([type, matches]) => {
+                // Zeige nur an, welcher Dokumenttyp verarbeitet wird, nicht für jeden einzelnen
+                console.log(`Processing ${matches.length} ${this._getTypeName(type)} matches requiring approval...`);
+
+                // Weitere Optimierung: Gruppiere ähnliche Änderungen zusammen
+                const changeGroups = this._groupSimilarChanges(matches, sheetData, config);
+
+                // Verarbeite jede Änderungsgruppe
+                Object.entries(changeGroups).forEach(([changeKey, groupMatches]) => {
+                    // Bei sehr ähnlichen Änderungen können diese als Gruppe genehmigt werden
+                    if (groupMatches.length > 3 && this._hasSimpleChanges(groupMatches, sheetData, config)) {
+                        const approved = this._processBatchMatches(groupMatches, sheetData, ui);
+                        if (approved) {
+                            groupMatches.forEach(match => {
+                                const key = `${match.typ}#${match.row}`;
+                                approvedMatches[key] = match;
+                                stats.approved++;
+                                stats.byType[type] = (stats.byType[type] || 0) + 1;
+
+                                // Get row data and track changes
+                                const sheetKey = this._getSheetKey(match.typ);
+                                const configKey = this._getConfigKey(match.typ);
+                                const sheetConfig = config[configKey]?.columns || {};
+                                const rowDataKey = `${sheetKey}_${match.row}`;
+                                const rowData = sheetData.rowData[rowDataKey];
+
+                                // Track changes for this document
+                                if (rowData) {
+                                    const changes = this._detectChanges(match, rowData, sheetConfig);
+                                    changeTracker[key] = {
+                                        match,
+                                        changes,
+                                        rowData,
+                                        sheetConfig,
+                                        autoApproved: false,
+                                    };
+                                }
+                            });
+                        } else {
+                            stats.rejected += groupMatches.length;
+                        }
+                    } else {
+                        // Einzelne Verarbeitung für komplexere Änderungen
+                        groupMatches.forEach(match => {
+                            const approved = this._processMatch(match, sheetData, config, ui);
+                            if (approved) {
+                                const key = `${match.typ}#${match.row}`;
+                                approvedMatches[key] = match;
+                                stats.approved++;
+                                stats.byType[type] = (stats.byType[type] || 0) + 1;
+
+                                // Get row data and track changes
+                                const sheetKey = this._getSheetKey(match.typ);
+                                const configKey = this._getConfigKey(match.typ);
+                                const sheetConfig = config[configKey]?.columns || {};
+                                const rowDataKey = `${sheetKey}_${match.row}`;
+                                const rowData = sheetData.rowData[rowDataKey];
+
+                                // Track changes for this document
+                                if (rowData) {
+                                    const changes = this._detectChanges(match, rowData, sheetConfig);
+                                    changeTracker[key] = {
+                                        match,
+                                        changes,
+                                        rowData,
+                                        sheetConfig,
+                                        autoApproved: false,
+                                    };
+                                }
+                            } else {
+                                stats.rejected++;
+                            }
+                        });
+                    }
+                });
             });
-        });
+        } else {
+            // No matches requiring approval, just show auto-approved message
+            ui.alert(
+                'Bankabgleich - Automatische Genehmigung',
+                `Es wurden ${stats.autoApproved} Übereinstimmungen automatisch genehmigt, da nur Bankabgleich-Markierungen notwendig waren.`,
+                ui.ButtonSet.OK,
+            );
+        }
 
         // Zeige Zusammenfassung der Genehmigungen
-        this._showSummary(stats, ui);
+        this._showSummary(stats, changeTracker, ui);
 
         return {
             approvedMatches,
@@ -217,18 +327,17 @@ const approvalHandler = {
             const changes = this._detectChanges(match, rowData, sheetConfig);
             const realChanges = changes.filter(change => change.type !== 'bankMarking');
 
+            // Skip matches with no real changes
+            if (realChanges.length === 0) return;
+
             // Erstelle einen Schlüssel basierend auf den Änderungstypen
             const changeTypes = realChanges.map(c => c.type).sort().join('_');
 
-            // Selbst wenn keine Änderungen erforderlich sind, müssen wir die Zuordnung verarbeiten
-            // für den Bankabgleich-Haken
-            const actualKey = changeTypes || 'no_changes';
-
-            if (!groups[actualKey]) {
-                groups[actualKey] = [];
+            if (!groups[changeTypes]) {
+                groups[changeTypes] = [];
             }
 
-            groups[actualKey].push(match);
+            groups[changeTypes].push(match);
         });
 
         return groups;
@@ -258,6 +367,10 @@ const approvalHandler = {
 
             const changes = this._detectChanges(match, rowData, sheetConfig);
             const realChanges = changes.filter(change => change.type !== 'bankMarking');
+
+            // Return false if no real changes (this shouldn't happen due to our filtering in groupSimilarChanges)
+            if (realChanges.length === 0) return false;
+
             return realChanges.every(change => simpleChangeTypes.has(change.type));
         });
     },
@@ -608,14 +721,19 @@ const approvalHandler = {
     /**
      * Zeigt eine Zusammenfassung der Genehmigungen an
      * @param {Object} stats - Statistiken über die Genehmigungen
+     * @param {Object} changeTracker - Tracker mit Details zu den Änderungen
      * @param {Object} ui - Die UI für Dialoge
      */
-    _showSummary(stats, ui) {
+    // Updated _showSummary method for approvalHandler.js
+
+    _showSummary(stats, changeTracker, ui) {
+        // Main summary
         const parts = [
-            '=== ZUSAMMENFASSUNG DER BANKABGLEICH-GENEHMIGUNG ===',
+            'ZUSAMMENFASSUNG DER BANKABGLEICH-GENEHMIGUNG:',
             '',
             `Insgesamt bearbeitet: ${stats.total}`,
             `Genehmigt: ${stats.approved}`,
+            ` - Davon automatisch: ${stats.autoApproved}`,
             `Abgelehnt: ${stats.rejected}`,
             '',
         ];
@@ -625,6 +743,100 @@ const approvalHandler = {
             Object.entries(stats.byType).forEach(([type, count]) => {
                 parts.push(`- ${this._getTypeName(type)}: ${count}`);
             });
+            parts.push('');
+        }
+
+        // Add detailed changes section
+        if (Object.keys(changeTracker).length > 0) {
+            parts.push('DETAILS DER ÄNDERUNGEN:');
+            parts.push('');
+
+            // First show manually approved changes
+            const manualChanges = Object.values(changeTracker).filter(item => !item.autoApproved);
+            if (manualChanges.length > 0) {
+                parts.push('Manuell genehmigte Änderungen:');
+                manualChanges.forEach(item => {
+                    // Get document reference
+                    const match = item.match;
+                    const docNumber = item.rowData && item.sheetConfig.rechnungsnummer ?
+                        item.rowData[item.sheetConfig.rechnungsnummer - 1] : match.originalRef;
+
+                    // Get document date
+                    let docDate = '';
+                    if (item.rowData && item.sheetConfig.datum) {
+                        docDate = dateUtils.formatDate(item.rowData[item.sheetConfig.datum - 1]);
+                    }
+
+                    // Construct document identifier
+                    const docIdentifier = `${this._getTypeName(match.typ)} #${match.row} (${docNumber || 'unbekannt'})${docDate ? ` vom ${docDate}` : ''}`;
+                    parts.push(`• ${docIdentifier}:`);
+
+                    // List changes excluding bank marking
+                    const realChanges = item.changes.filter(change => change.type !== 'bankMarking');
+                    realChanges.forEach(change => {
+                        let changeDesc = '';
+                        switch(change.type) {
+                        case 'date':
+                            const bankDate = typeof change.bankValue === 'string' ?
+                                change.bankValue : formatBankDate(change.bankValue);
+
+                            if (!change.sheetValue || stringUtils.isEmpty(change.sheetValue)) {
+                                changeDesc = `kein Zahlungsdatum vorhanden → aus Bank (${bankDate}) übernommen`;
+                            } else {
+                                const oldDate = dateUtils.formatDate(change.sheetValue);
+                                changeDesc = `Zahlungsdatum ${oldDate} → aus Bank (${bankDate}) übernommen`;
+                            }
+                            break;
+
+                        case 'paymentMethod':
+                            changeDesc = "keine Zahlungsart → 'Überweisung' gesetzt";
+                            break;
+
+                        case 'status':
+                            const oldStatus = change.sheetValue || 'Nicht gesetzt';
+                            changeDesc = `Status: ${oldStatus} → ${change.bankValue}`;
+                            break;
+
+                        case 'category':
+                            if (!change.sheetValue || stringUtils.isEmpty(change.sheetValue)) {
+                                changeDesc = `Kategorie fehlend → "${change.bankValue}" gesetzt`;
+                            } else {
+                                changeDesc = `Kategorie: "${change.sheetValue}" → "${change.bankValue}"`;
+                            }
+                            break;
+
+                        default:
+                            changeDesc = change.description;
+                        }
+                        parts.push(`  - ${changeDesc}`);
+                    });
+                });
+                parts.push('');
+            }
+
+            // Then show auto-approved changes if we have any
+            const autoChanges = Object.values(changeTracker).filter(item => item.autoApproved);
+            if (autoChanges.length > 0) {
+                if (autoChanges.length <= 5) {
+                    parts.push('Automatisch genehmigte Änderungen:');
+                    autoChanges.forEach(item => {
+                        const match = item.match;
+                        const docNumber = item.rowData && item.sheetConfig.rechnungsnummer ?
+                            item.rowData[item.sheetConfig.rechnungsnummer - 1] : match.originalRef;
+
+                        // Get document date
+                        let docDate = '';
+                        if (item.rowData && item.sheetConfig.datum) {
+                            docDate = dateUtils.formatDate(item.rowData[item.sheetConfig.datum - 1]);
+                        }
+
+                        parts.push(`• ${this._getTypeName(match.typ)} #${match.row} (${docNumber || 'unbekannt'})${docDate ? ` vom ${docDate}` : ''}: Bankabgleich markiert`);
+                    });
+                } else {
+                    parts.push(`Automatisch genehmigte Änderungen: ${autoChanges.length} Dokumente wurden mit Bankabgleich markiert.`);
+                }
+                parts.push('');
+            }
         }
 
         ui.alert(
