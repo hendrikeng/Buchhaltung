@@ -578,15 +578,15 @@ export default {
         columns: {
             datum: 1,              // A: Buchungsdatum
             buchungstext: 2,       // B: Buchungstext
-            betrag: 3,             // C: Betrag
-            saldo: 4,              // D: Saldo (berechnet)
-            transaktionstyp: 5,    // E: Transaktionstyp (Einnahme/Ausgabe)
-            kategorie: 6,          // F: Kategorie
-            kontoSoll: 7,          // G: Konto (Soll)
-            kontoHaben: 8,         // H: Gegenkonto (Haben)
-            referenz: 9,           // I: Referenznummer
-            verwendungszweck: 10,  // J: Verwendungszweck
-            matchInfo: 11,         // K: Match-Information zu Einnahmen/Ausgaben
+            notizen: 3,            // C: Notizen/Kommentare
+            referenz: 4,           // D: Referenznummer
+            matchInfo: 5,          // E: Match-Information zu Einnahmen/Ausgaben
+            betrag: 6,             // F: Betrag
+            saldo: 7,              // G: Saldo (berechnet)
+            transaktionstyp: 8,    // H: Transaktionstyp (Einnahme/Ausgabe)
+            kategorie: 9,          // I: Kategorie
+            kontoSoll: 10,         // J: Konto (Soll)
+            kontoHaben: 11,        // K: Gegenkonto (Haben)
             zeitstempel: 12,       // L: Zeitstempel
         },
         types: ['Einnahme', 'Ausgabe', 'Interne Buchung'],

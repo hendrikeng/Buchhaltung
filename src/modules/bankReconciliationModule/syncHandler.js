@@ -352,14 +352,26 @@ function applyColumnUpdatesInBatches(sheet, updates, columnIndex) {
 
     updates.forEach(update => {
         const { row, value } = update;
-        if (!valueGroups[value]) {
-            valueGroups[value] = [];
+
+        // Special handling for date objects
+        let processedValue = value;
+        if (value instanceof Date) {
+            // Format Date objects to German date string (DD.MM.YYYY)
+            processedValue = Utilities.formatDate(
+                value,
+                Session.getScriptTimeZone(),
+                'dd.MM.yyyy',
+            );
         }
-        valueGroups[value].push(row);
+
+        if (!valueGroups[processedValue]) {
+            valueGroups[processedValue] = [];
+        }
+        valueGroups[processedValue].push(row);
     });
 
-    // Für jeden Wert einen Batch-Update durchführen
-    Object.entries(valueGroups).forEach(([value, rows]) => {
+    // For each value, perform a batch update
+    Object.entries(valueGroups).forEach(([valueStr, rows]) => {
         // Zusammenhängende Zeilen identifizieren für Range-Updates
         const ranges = getRangesFromRows(rows);
 
@@ -370,17 +382,17 @@ function applyColumnUpdatesInBatches(sheet, updates, columnIndex) {
                 const numRows = endRow - startRow + 1;
 
                 // Wertarray für Range erstellen
-                const values = Array(numRows).fill([value]);
+                const values = Array(numRows).fill([valueStr]);
 
                 // Range in einem API-Call aktualisieren
                 sheet.getRange(startRow, columnIndex, numRows, 1).setValues(values);
             } catch (e) {
-                console.error(`Error updating range ${range[0]}-${range[1]} with value ${value}:`, e);
+                console.error(`Error updating range ${range[0]}-${range[1]} with value ${valueStr}:`, e);
 
                 // Fallback: Einzelne Zeilen aktualisieren
                 try {
                     for (let row = range[0]; row <= range[1]; row++) {
-                        sheet.getRange(row, columnIndex).setValue(value);
+                        sheet.getRange(row, columnIndex).setValue(valueStr);
                     }
                 } catch (fallbackError) {
                     console.error('Fallback error updating rows:', fallbackError);

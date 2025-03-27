@@ -546,28 +546,64 @@ const approvalHandler = {
 
             if (stringUtils.isEmpty(sheetDate)) {
                 // Zahlungsdatum fehlt im Sheet
+                // Parse/convert bankDatum to ensure we have a proper Date object
+                let bankDateObj;
+                if (typeof match.bankDatum === 'string') {
+                    // Convert German format date (DD.MM.YYYY) to Date object
+                    const parts = match.bankDatum.split('.');
+                    if (parts.length === 3) {
+                        // German date format: DD.MM.YYYY
+                        bankDateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+                    } else {
+                        // Fallback to standard date parsing
+                        bankDateObj = new Date(match.bankDatum);
+                    }
+                } else {
+                    bankDateObj = match.bankDatum;
+                }
+
                 const formattedBankDate = typeof match.bankDatum === 'string' ?
-                    match.bankDatum : dateUtils.formatDate(match.bankDatum);
+                    match.bankDatum : dateUtils.formatDate(bankDateObj);
 
                 changes.push({
                     type: 'date',
                     field: 'zahlungsdatum',
                     description: `Zahlungsdatum aus Bank (${formattedBankDate}) übernehmen - kein Zahlungsdatum vorhanden`,
-                    bankValue: match.bankDatum,
+                    bankValue: bankDateObj, // Store as proper Date object
                     sheetValue: null,
                 });
             } else {
-                // Formatierte Datumsdarstellungen für Vergleich und Anzeige
-                const formattedSheetDate = dateUtils.formatDate(sheetDate);
+                // Both sheet and bank have dates - compare them
+                // Parse the sheet date
+                const sheetDateObj = dateUtils.parseDate(sheetDate);
+
+                // Parse/convert bank date
+                let bankDateObj;
+                if (typeof match.bankDatum === 'string') {
+                    // Convert German format date (DD.MM.YYYY) to Date object
+                    const parts = match.bankDatum.split('.');
+                    if (parts.length === 3) {
+                        // German date format: DD.MM.YYYY
+                        bankDateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+                    } else {
+                        // Fallback to standard date parsing
+                        bankDateObj = new Date(match.bankDatum);
+                    }
+                } else {
+                    bankDateObj = match.bankDatum;
+                }
+
+                // Format dates for display
+                const formattedSheetDate = dateUtils.formatDate(sheetDateObj);
                 const formattedBankDate = typeof match.bankDatum === 'string' ?
-                    match.bankDatum : dateUtils.formatDate(match.bankDatum);
+                    match.bankDatum : dateUtils.formatDate(bankDateObj);
 
                 if (formattedSheetDate !== formattedBankDate) {
                     changes.push({
                         type: 'date',
                         field: 'zahlungsdatum',
                         description: `Zahlungsdatum aktualisieren: "${formattedSheetDate}" → "${formattedBankDate}"`,
-                        bankValue: match.bankDatum,
+                        bankValue: bankDateObj, // Store as proper Date object
                         sheetValue: sheetDate,
                     });
                 }
