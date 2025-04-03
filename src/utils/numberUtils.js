@@ -21,21 +21,24 @@ function parseCurrency(value) {
         return _numberCache.get(cacheKey);
     }
 
-    // Simplified approach: normalize string and parse
-    const str = value.toString()
-        .replace(/[^\d,.-]/g, '')
-        .replace(/,/g, '.'); // Replace all commas with dots
-
-    // Handle multiple decimal points (common in European formats)
+    // Handle German formatted number (e.g., "29.335,49 €")
+    const str = value.toString().trim().replace(/[€$£¥]/g, '');
     let result;
-    const parts = str.split('.');
 
-    if (parts.length > 2) {
-        // Use the last dot as decimal separator
-        const last = parts.pop();
-        result = parseFloat(parts.join('') + '.' + last);
+    // Check if this is likely a German-formatted number (with period as thousand separator)
+    if (str.includes(',') && (str.includes('.') || /\d{4,}/.test(str))) {
+        // German format: remove all periods, replace comma with period
+        const normalized = str.replace(/\./g, '').replace(',', '.');
+        result = parseFloat(normalized);
+    } else if (str.includes(',') && !str.includes('.')) {
+        // Format with comma as decimal separator only
+        const normalized = str.replace(',', '.');
+        result = parseFloat(normalized);
     } else {
-        result = parseFloat(str);
+        // Standard or US format
+        const cleaned = str.replace(/[^\d,.-]/g, '')
+            .replace(/,/g, '.'); // Replace all commas with dots
+        result = parseFloat(cleaned);
     }
 
     result = isNaN(result) ? 0 : result;

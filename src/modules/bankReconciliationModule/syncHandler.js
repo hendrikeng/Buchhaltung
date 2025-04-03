@@ -324,54 +324,46 @@ function applyUpdatesOptimized(sheet, updates, columns) {
 
     // 2. Spaltenbasierte Updates in Batches
     if (updates.bankabgleichUpdates.length > 0 && columns.bankabgleich) {
-        applyColumnUpdatesInBatches(sheet, updates.bankabgleichUpdates, columns.bankabgleich);
+        applyColumnUpdatesInBatches(sheet, updates.bankabgleichUpdates, columns.bankabgleich, false);
     }
 
     if (updates.zahlungsdatumUpdates.length > 0 && columns.zahlungsdatum) {
-        applyColumnUpdatesInBatches(sheet, updates.zahlungsdatumUpdates, columns.zahlungsdatum);
+        applyColumnUpdatesInBatches(sheet, updates.zahlungsdatumUpdates, columns.zahlungsdatum, false);
     }
 
     if (updates.zahlungsartUpdates.length > 0 && columns.zahlungsart) {
-        applyColumnUpdatesInBatches(sheet, updates.zahlungsartUpdates, columns.zahlungsart);
+        applyColumnUpdatesInBatches(sheet, updates.zahlungsartUpdates, columns.zahlungsart, false);
     }
 
     if (updates.bezahltUpdates.length > 0 && columns.bezahlt) {
-        applyColumnUpdatesInBatches(sheet, updates.bezahltUpdates, columns.bezahlt);
+        applyColumnUpdatesInBatches(sheet, updates.bezahltUpdates, columns.bezahlt, true);
     }
 }
+
 
 /**
  * Wendet Spalten-Updates in optimierten Batches an
  * @param {Sheet} sheet - Das Sheet
  * @param {Array} updates - Die Updates
  * @param {number} columnIndex - Der Spaltenindex
+ * @param {boolean} isCurrency - Ob es sich um Währungswerte handelt
  */
-function applyColumnUpdatesInBatches(sheet, updates, columnIndex) {
+function applyColumnUpdatesInBatches(sheet, updates, columnIndex, isCurrency = false) {
     // Optimierung: Updates nach Wert gruppieren
     const valueGroups = {};
 
     updates.forEach(update => {
         const { row, value } = update;
+        const valueKey = String(value);
 
-        // Special handling for date objects
-        let processedValue = value;
-        if (value instanceof Date) {
-            // Format Date objects to German date string (DD.MM.YYYY)
-            processedValue = Utilities.formatDate(
-                value,
-                Session.getScriptTimeZone(),
-                'dd.MM.yyyy',
-            );
+        if (!valueGroups[valueKey]) {
+            valueGroups[valueKey] = [];
         }
-
-        if (!valueGroups[processedValue]) {
-            valueGroups[processedValue] = [];
-        }
-        valueGroups[processedValue].push(row);
+        valueGroups[valueKey].push(row);
     });
 
-    // For each value, perform a batch update
-    Object.entries(valueGroups).forEach(([valueStr, rows]) => {
+    // Für jeden Wert einen Batch-Update durchführen
+    Object.entries(valueGroups).forEach(([valueKey, rows]) => {
         // Zusammenhängende Zeilen identifizieren für Range-Updates
         const ranges = getRangesFromRows(rows);
 
@@ -380,22 +372,40 @@ function applyColumnUpdatesInBatches(sheet, updates, columnIndex) {
             try {
                 const [startRow, endRow] = range;
                 const numRows = endRow - startRow + 1;
+                const rangeObj = sheet.getRange(startRow, columnIndex, numRows, 1);
 
-                // Wertarray für Range erstellen
-                const values = Array(numRows).fill([valueStr]);
+                // Wenn es sich um Währungswerte handelt
+                if (isCurrency) {
+                    // Erst Format setzen
+                    rangeObj.setNumberFormat('#.##0,00 €');
 
-                // Range in einem API-Call aktualisieren
-                sheet.getRange(startRow, columnIndex, numRows, 1).setValues(values);
+                    // Dann Werte als Zahl setzen (nicht als String)
+                    const numValue = Number(valueKey);
+                    const values = Array(numRows).fill([numValue]);
+                    rangeObj.setValues(values);
+                } else {
+                    // Normale Werte als String setzen
+                    const values = Array(numRows).fill([valueKey]);
+                    rangeObj.setValues(values);
+                }
             } catch (e) {
-                console.error(`Error updating range ${range[0]}-${range[1]} with value ${valueStr}:`, e);
+                console.error(`Fehler beim Aktualisieren des Bereichs ${range[0]}-${range[1]} mit Wert ${valueKey}:`, e);
 
                 // Fallback: Einzelne Zeilen aktualisieren
-                try {
-                    for (let row = range[0]; row <= range[1]; row++) {
-                        sheet.getRange(row, columnIndex).setValue(valueStr);
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const cell = sheet.getRange(row, columnIndex);
+
+                    try {
+                        if (isCurrency) {
+                            cell.setNumberFormat('#.##0,00 €');
+                            cell.setValue(Number(valueKey));
+                        } else {
+                            cell.setValue(valueKey);
+                        }
+                    } catch (cellError) {
+                        console.error(`Fehler beim Aktualisieren der Zelle ${row},${columnIndex}:`, cellError);
                     }
-                } catch (fallbackError) {
-                    console.error('Fallback error updating rows:', fallbackError);
                 }
             }
         });
