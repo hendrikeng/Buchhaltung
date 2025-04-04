@@ -85,6 +85,16 @@ export default {
                 group: 'eigenkapital',
                 besonderheit: null,
             },
+            'Umsatzsteuererstattungen': {
+                taxType: 'steuerfrei_inland',
+                group: 'steuerkonto',
+                besonderheit: 'erstattung',
+            },
+            'Gutschriften (Warenrückgabe)': {
+                taxType: 'steuerpflichtig',
+                group: 'umsatz',
+                besonderheit: 'erloesschmaelerung',
+            },
         },
         // SKR04-konforme Konten-Zuordnung
         kontoMapping: {
@@ -99,6 +109,15 @@ export default {
             'Zinsen': {soll: '1200', gegen: '4130'},
             'Gewinnvortrag': {soll: '1200', gegen: '2970'},
             'Verlustvortrag': {soll: '1200', gegen: '2978'},
+            'Umsatzsteuererstattungen': {
+                soll: '1800',
+                gegen: '3820',
+            },
+            'Gutschriften (Warenrückgabe)': {
+                soll: '4200',  // Erlösschmälerung 19%
+                gegen: '1200', // Bank oder ggf. Debitorenkonto
+                mwst: '1776',
+            },
         },
         // BWA-Mapping für Einnahmen-Kategorien
         bwaMapping: {
@@ -111,6 +130,9 @@ export default {
             'Erträge aus Anlagenabgängen': 'anlagenabgaenge',
             'Darlehen': 'sonstigeErtraege',
             'Zinsen': 'sonstigeErtraege',
+            // Umsatzsteuererstattungen nicht relevant für BWA
+            'Umsatzsteuererstattungen': 'steuerlicheKorrekturen',
+            'Gutschriften (Warenrückgabe)': 'umsatzerloese',
         },
     },
 

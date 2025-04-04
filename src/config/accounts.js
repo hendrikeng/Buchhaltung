@@ -27,6 +27,7 @@ export default {
     '3150': 'Verbindlichkeiten gegenüber Kreditinstituten',
     '3200': 'Verbindlichkeiten aus Lieferungen und Leistungen',
     '3300': 'Verbindlichkeiten gegenüber Gesellschaftern',
+    '3820': 'Umsatzsteuer-Vorauszahlungen',
 
     // Erlöskonten (Klasse 4)
     '4000': 'Umsatzerlöse',
@@ -34,6 +35,7 @@ export default {
     '4130': 'Zinsertrag',
     '4180': 'Erträge aus Vermietung und Verpachtung',
     '4190': 'Erträge aus Zuschüssen und Zulagen',
+    '4200': 'Erlösschmälerung',
     '4400': 'Erlöse aus Lieferungen und Leistungen',
     '4830': 'Sonstige betriebliche Erträge',
     '4840': 'Erträge aus Währungsumrechnung',

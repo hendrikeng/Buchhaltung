@@ -695,15 +695,19 @@ function isGoodReferenceMatch(ref1, ref2) {
     // Leere Werte behandeln
     if (!ref1 || !ref2) return false;
 
+    // Sicherstellen, dass beide Referenzen Strings sind
+    const ref1Str = String(ref1);
+    const ref2Str = String(ref2);
+
     // Frühe Rückkehr bei exakter Übereinstimmung
-    if (ref1 === ref2) return true;
+    if (ref1Str === ref2Str) return true;
 
     // Schnelle Prüfung, ob eine Referenz die andere enthält
-    if (ref1.includes(ref2) || ref2.includes(ref1)) {
+    if (ref1Str.includes(ref2Str) || ref2Str.includes(ref1Str)) {
         // Bei kurzen Referenzen (weniger als 5 Zeichen) strengere Prüfung
-        const shorter = ref1.length <= ref2.length ? ref1 : ref2;
+        const shorter = ref1Str.length <= ref2Str.length ? ref1Str : ref2Str;
         if (shorter.length < 5) {
-            return ref1.startsWith(ref2) || ref2.startsWith(ref1);
+            return ref1Str.startsWith(ref2Str) || ref2Str.startsWith(ref1Str);
         }
         return true;
     }
