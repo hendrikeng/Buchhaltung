@@ -192,16 +192,17 @@ function applyBankSheetSettings(sheet, config) {
     const initialBalanceRow = [
         anfangssaldoDate, // Datum
         'Anfangssaldo', // Buchungstext
-        '', // Betrag
-        0, // Saldo
-        '', // Transaktionstyp
-        '', // Kategorie
-        '', // Konto (Soll)
-        '', // Gegenkonto (Haben)
-        '', // Referenz
-        '', // Verwendungszweck
-        '', // Match-Info
-        '', // Zeitstempel
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
     ];
 
     // Erste Datenzeile als Anfangssaldo
@@ -689,14 +690,17 @@ function getHeaderLabel(key, sheetType) {
     const sheetLabels = {
         einnahmen: {
             kunde: 'Kunde',
+            ausland: 'Inland/Ausland',
             leistungsBeschreibung: 'Leistungsbeschreibung',
         },
         ausgaben: {
             kunde: 'Lieferant',
+            ausland: 'Inland/Ausland',
             leistungsBeschreibung: 'Leistungsbeschreibung',
         },
         eigenbelege: {
             rechnungsnummer: 'Belegnummer',
+            ausland: 'Inland/Ausland',
             ausgelegtVon: 'Ausgelegt von',
             beschreibung: 'Beschreibung',
             bezahlt: 'Bereits erstattet',
