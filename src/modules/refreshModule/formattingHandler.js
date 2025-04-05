@@ -90,7 +90,15 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
         });
     }
 
-    // 3. Alle Validierungen in effizienten Batches anwenden
+    // 4. Ausland-Dropdown für relevante Sheets
+    if (columns.ausland) {
+        validations.push({
+            column: columns.ausland,
+            values: config.common.auslandType,
+        });
+    }
+
+    // 5. Alle Validierungen in effizienten Batches anwenden
     validations.forEach(validation => {
         if (validation.column && validation.values?.length > 0) {
             cellValidator.validateDropdown(

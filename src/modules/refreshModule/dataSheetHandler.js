@@ -81,8 +81,17 @@ function refreshDataSheet(sheet, sheetName, config) {
 function createFormulaBatches(numRows, columnLetters, columns, sheetName) {
     const formulaBatches = {};
 
-    // MwSt-Betrag
-    if (columns.mwstBetrag && columns.nettobetrag && columns.mwstSatz) {
+    // MwSt-Betrag mit Berücksichtigung von Ausland
+    if (columns.mwstBetrag && columns.nettobetrag && columns.mwstSatz && columns.ausland) {
+        formulaBatches[columns.mwstBetrag] = [];
+        for (let i = 0; i < numRows; i++) {
+            const row = i + 2;
+            const formula = `=IF(OR(${columnLetters.ausland}${row}="EU-Ausland";${columnLetters.ausland}${row}="Nicht-EU-Ausland");0;${columnLetters.nettobetrag}${row}*${columnLetters.mwstSatz}${row})`;
+            formulaBatches[columns.mwstBetrag].push([formula]);
+        }
+    }
+    // Fallback für den Fall, dass keine Ausland-Spalte vorhanden ist
+    else if (columns.mwstBetrag && columns.nettobetrag && columns.mwstSatz) {
         formulaBatches[columns.mwstBetrag] = Array.from(
             {length: numRows},
             (_, i) => [`=${columnLetters.nettobetrag}${i + 2}*${columnLetters.mwstSatz}${i + 2}`],
@@ -99,10 +108,20 @@ function createFormulaBatches(numRows, columnLetters, columns, sheetName) {
 
     // Restbetrag Netto für Teilzahlungen
     if (columns.restbetragNetto && columns.bruttoBetrag && columns.bezahlt && columns.mwstSatz) {
-        formulaBatches[columns.restbetragNetto] = Array.from(
-            {length: numRows},
-            (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`],
-        );
+        // Bei Ausland ist der MwSt-Satz 0, daher müssen wir hier eine Sonderbehandlung einfügen
+        if (columns.ausland) {
+            formulaBatches[columns.restbetragNetto] = [];
+            for (let i = 0; i < numRows; i++) {
+                const row = i + 2;
+                const formula = `=IF(OR(${columnLetters.ausland}${row}="EU-Ausland";${columnLetters.ausland}${row}="Nicht-EU-Ausland");${columnLetters.bruttoBetrag}${row}-${columnLetters.bezahlt}${row};(${columnLetters.bruttoBetrag}${row}-${columnLetters.bezahlt}${row})/(1+${columnLetters.mwstSatz}${row}))`;
+                formulaBatches[columns.restbetragNetto].push([formula]);
+            }
+        } else {
+            formulaBatches[columns.restbetragNetto] = Array.from(
+                {length: numRows},
+                (_, i) => [`=(${columnLetters.bruttoBetrag}${i + 2}-${columnLetters.bezahlt}${i + 2})/(1+${columnLetters.mwstSatz}${i + 2})`],
+            );
+        }
     }
 
     // Quartal

@@ -44,6 +44,16 @@ function validateDocumentRow(row, rowIndex, sheetType = 'einnahmen', config) {
         },
     ];
 
+    // NEU: Validierungsregel für Ausland-Feld, wenn gesetzt
+    if (columns.ausland && !stringUtils.isEmpty(row[columns.ausland - 1])) {
+        const auslandWert = row[columns.ausland - 1].toString().trim();
+        const erlaubteWerte = config.common.auslandType;
+
+        if (!erlaubteWerte.includes(auslandWert)) {
+            warnings.push(`Zeile ${rowIndex}: Ungültiger Wert für Ausland "${auslandWert}". Erlaubt sind: ${erlaubteWerte.join(', ')}`);
+        }
+    }
+
     // Dokument-spezifische Regeln - Optimiert mit Funktion statt Switch
     const sheetSpecificRules = [];
     if (sheetType === 'einnahmen' || sheetType === 'ausgaben') {

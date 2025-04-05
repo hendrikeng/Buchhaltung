@@ -42,6 +42,12 @@ function processUStVARow(row, data, isIncome, isEigen = false, config) {
         // Falls kein Betrag gezahlt wurde, nichts zu verarbeiten
         if (numberUtils.isApproximatelyEqual(gezahlt, 0)) return;
 
+        // NEU: Ausland-Information auslesen
+        const auslandWert = columns.ausland && row[columns.ausland - 1] ?
+            row[columns.ausland - 1].toString().trim() : 'Inland';
+        const isEuAusland = auslandWert === 'EU-Ausland';
+        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
+
         // MwSt-Rate und Steuer berechnen mit Cache
         const mwstStr = row[columns.mwstSatz - 1]?.toString() || '';
         const cacheKey = `${mwstStr}_${gezahlt}`;
@@ -65,13 +71,43 @@ function processUStVARow(row, data, isIncome, isEigen = false, config) {
         // Kategorie ermitteln
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Verarbeitung basierend auf Zeilentyp durch optimierte Handler
+        // Verarbeitung basierend auf Zeilentyp und Ausland-Status durch optimierte Handler
         if (isIncome) {
-            processIncomeRow(data, month, gezahlt, tax, roundedRate, category, config);
+            // Bei Einnahmen UStVA-Behandlung nach Ausland-Status
+            if (isEuAusland) {
+                // Innergemeinschaftliche Lieferungen sind steuerfrei
+                data[month].innergemeinschaftliche_lieferungen += gezahlt;
+            } else if (isNichtEuAusland) {
+                // Ausfuhrlieferungen in Drittländer sind steuerfrei
+                data[month].steuerfreie_ausland_einnahmen += gezahlt;
+            } else {
+                // Normale Verarbeitung für Inland
+                processIncomeRow(data, month, gezahlt, tax, roundedRate, category, config);
+            }
         } else if (isEigen) {
+            // Eigenbelege normal verarbeiten
             processEigenRow(data, month, gezahlt, tax, roundedRate, category, config);
         } else {
-            processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config);
+            // Bei Ausgaben UStVA-Behandlung nach Ausland-Status
+            if (isEuAusland) {
+                // Innergemeinschaftliche Erwerbe: Erwerbsteuer + Vorsteuer bei B2B
+                data[month].innergemeinschaftliche_erwerbe += gezahlt;
+
+                // Erwerbsteuer nach MwSt-Satz - diese ist sowohl Zahlungspflicht als auch Vorsteuerabzug
+                if (roundedRate === 7) {
+                    data[month].erwerbsteuer_7 += tax;
+                    data[month].vst_7 += tax; // Gleichzeitig Vorsteuerabzug
+                } else if (roundedRate === 19) {
+                    data[month].erwerbsteuer_19 += tax;
+                    data[month].vst_19 += tax; // Gleichzeitig Vorsteuerabzug
+                }
+            } else if (isNichtEuAusland) {
+                // Einfuhren aus Drittländern
+                data[month].steuerfreie_ausland_ausgaben += gezahlt;
+            } else {
+                // Normale Verarbeitung für Inland
+                processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config);
+            }
         }
     } catch (e) {
         console.error('Fehler bei der Verarbeitung einer UStVA-Zeile:', e);
@@ -161,8 +197,9 @@ function processEigenRow(data, month, gezahlt, tax, roundedRate, category, confi
  * @param {number} roundedRate - Gerundeter Steuersatz
  * @param {string} category - Kategorie
  * @param {Object} config - Die Konfiguration
+ * @param {boolean} isEuAusland - True, wenn Ausland-Status EU-Ausland ist
  */
-function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config) {
+function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, config, isEuAusland = false) {
     // Kategorie-Konfiguration mit Fallback
     const catCfg = config.ausgaben.categories[category] ?? {};
     const taxType = catCfg.taxType ?? 'steuerpflichtig';
@@ -178,7 +215,8 @@ function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, con
         'steuerpflichtig': () => {
             data[month].steuerpflichtige_ausgaben += gezahlt;
 
-            if (roundedRate === 7 || roundedRate === 19) {
+            // Für EU-Ausland brauchen wir ggf. spezielle Behandlung wegen Reverse Charge
+            if (!isEuAusland && roundedRate === 7 || roundedRate === 19) {
                 data[month][`vst_${roundedRate}`] += tax;
             }
         },

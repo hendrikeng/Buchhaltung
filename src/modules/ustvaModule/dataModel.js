@@ -11,11 +11,13 @@ function createEmptyUStVA() {
         steuerpflichtige_einnahmen: 0,
         steuerfreie_inland_einnahmen: 0,
         steuerfreie_ausland_einnahmen: 0,
+        innergemeinschaftliche_lieferungen: 0,  // Neu: für EU-Ausland
 
         // Ausgaben
         steuerpflichtige_ausgaben: 0,
         steuerfreie_inland_ausgaben: 0,
         steuerfreie_ausland_ausgaben: 0,
+        innergemeinschaftliche_erwerbe: 0,      // Neu: für EU-Ausland
 
         // Eigenbelege
         eigenbelege_steuerpflichtig: 0,
@@ -27,6 +29,10 @@ function createEmptyUStVA() {
         // Umsatzsteuer
         ust_7: 0,
         ust_19: 0,
+
+        // Erwerbsteuer (für EU-Erwerbe)
+        erwerbsteuer_7: 0,             // Neu: für EU-Ausland
+        erwerbsteuer_19: 0,            // Neu: für EU-Ausland
 
         // Vorsteuer
         vst_7: 0,

@@ -337,7 +337,15 @@ function addCommonValidations(sheet, sheetName, config) {
         });
     }
 
-    // 3. Sheet-spezifische Validierungen
+    // 3. Ausland-Dropdown
+    if (columns.ausland) {
+        validations.push({
+            column: columns.ausland,
+            values: config.common.auslandType,
+        });
+    }
+
+    // 4. Sheet-spezifische Validierungen
     if (sheetName === 'Eigenbelege' && columns.ausgelegtVon) {
         // Dropdown für "Ausgelegt von"
         validations.push({

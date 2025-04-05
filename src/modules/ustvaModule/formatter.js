@@ -13,19 +13,20 @@ import sheetUtils from '../../utils/sheetUtils.js';
 function formatUStVARow(label, d) {
     // Optimierung: Werte einmal berechnen für mehrfache Verwendung
     const ust = d.ust_7 + d.ust_19;
+    const erwerbsteuer = d.erwerbsteuer_7 + d.erwerbsteuer_19;  // Neu
     const vst = d.vst_7 + d.vst_19;
     const vstNetto = vst - d.nicht_abzugsfaehige_vst;
 
-    // Berechnung der USt-Zahlung: USt minus VSt (abzüglich nicht abzugsfähiger VSt)
-    const ustZahlung = numberUtils.round(ust - vstNetto, 2);
+    // Berechnung der USt-Zahlung: USt plus Erwerbsteuer minus VSt (abzüglich nicht abzugsfähiger VSt)
+    const ustZahlung = numberUtils.round(ust + erwerbsteuer - vstNetto, 2);
 
     // Optimierung: Einnahmen und Ausgaben separat berechnen
     const einnahmen = d.steuerpflichtige_einnahmen + d.steuerfreie_inland_einnahmen +
-        d.steuerfreie_ausland_einnahmen;
+        d.steuerfreie_ausland_einnahmen + d.innergemeinschaftliche_lieferungen;
 
     const ausgaben = d.steuerpflichtige_ausgaben + d.steuerfreie_inland_ausgaben +
-        d.steuerfreie_ausland_ausgaben + d.eigenbelege_steuerpflichtig +
-        d.eigenbelege_steuerfrei;
+        d.steuerfreie_ausland_ausgaben + d.innergemeinschaftliche_erwerbe +
+        d.eigenbelege_steuerpflichtig + d.eigenbelege_steuerfrei;
 
     // Berechnung des Gesamtergebnisses: Einnahmen minus Ausgaben (ohne Steueranteil)
     const ergebnis = numberUtils.round(einnahmen - ausgaben, 2);
@@ -36,14 +37,18 @@ function formatUStVARow(label, d) {
         d.steuerpflichtige_einnahmen,
         d.steuerfreie_inland_einnahmen,
         d.steuerfreie_ausland_einnahmen,
+        d.innergemeinschaftliche_lieferungen,  // Neu
         d.steuerpflichtige_ausgaben,
         d.steuerfreie_inland_ausgaben,
         d.steuerfreie_ausland_ausgaben,
+        d.innergemeinschaftliche_erwerbe,      // Neu
         d.eigenbelege_steuerpflichtig,
         d.eigenbelege_steuerfrei,
         d.nicht_abzugsfaehige_vst,
         d.ust_7,
         d.ust_19,
+        d.erwerbsteuer_7,                      // Neu
+        d.erwerbsteuer_19,                     // Neu
         d.vst_7,
         d.vst_19,
         ustZahlung,
@@ -71,14 +76,18 @@ function generateUStVASheet(ustvaData, ss, config) {
                 'Steuerpflichtige Einnahmen',
                 'Steuerfreie Inland-Einnahmen',
                 'Steuerfreie Ausland-Einnahmen',
+                'Innergemeinschaftliche Lieferungen',  // Neu
                 'Steuerpflichtige Ausgaben',
                 'Steuerfreie Inland-Ausgaben',
                 'Steuerfreie Ausland-Ausgaben',
+                'Innergemeinschaftliche Erwerbe',      // Neu
                 'Eigenbelege steuerpflichtig',
                 'Eigenbelege steuerfrei',
                 'Nicht abzugsfähige VSt (Bewirtung)',
                 'USt 7%',
                 'USt 19%',
+                'Erwerbsteuer 7%',                    // Neu
+                'Erwerbsteuer 19%',                   // Neu
                 'VSt 7%',
                 'VSt 19%',
                 'USt-Zahlung',
