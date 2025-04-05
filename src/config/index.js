@@ -2,7 +2,6 @@
 import common from './common.js';
 import tax from './tax.js';
 import sheets from './sheets.js';
-import accounts from './accounts.js';
 
 /**
  * Konfiguration für die Buchhaltungsanwendung
@@ -17,9 +16,6 @@ const config = {
 
     // Sheet-Konfigurationen
     ...sheets,
-
-    // Kontenplan
-    kontenplan: accounts,
 
     /**
      * Initialisierungsfunktion für abgeleitete Daten
