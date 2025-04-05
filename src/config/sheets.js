@@ -1,5 +1,6 @@
 /**
  * Sheet-spezifische Konfigurationen
+ * Optimierte Struktur mit reduzierter Redundanz
  */
 export default {
     // Einnahmen-Konfiguration
@@ -29,111 +30,97 @@ export default {
             dateiname: 22,             // V: Dateiname (für importierte Dateien)
             dateilink: 23,             // W: Link zur Originaldatei
         },
-        // Kategorien mit einheitlicher Struktur
+        // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
             'Erlöse aus Lieferungen und Leistungen': {
                 taxType: 'steuerpflichtig',
                 group: 'umsatz',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4400', mwst: '1776'},
+                bwaMapping: 'umsatzerloese',
             },
             'Provisionserlöse': {
                 taxType: 'steuerpflichtig',
                 group: 'umsatz',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4120', mwst: '1776'},
+                bwaMapping: 'provisionserloese',
             },
             'Sonstige betriebliche Erträge': {
                 taxType: 'steuerpflichtig',
                 group: 'sonstige_ertraege',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4830', mwst: '1776'},
+                bwaMapping: 'sonstigeErtraege',
             },
             'Erträge aus Vermietung/Verpachtung': {
                 taxType: 'steuerfrei_inland',
                 group: 'vermietung',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4180'},
+                bwaMapping: 'vermietung',
             },
             'Erträge aus Zuschüssen': {
                 taxType: 'steuerpflichtig',
                 group: 'zuschuesse',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4190', mwst: '1776'},
+                bwaMapping: 'zuschuesse',
             },
             'Erträge aus Währungsgewinnen': {
                 taxType: 'steuerpflichtig',
                 group: 'sonstige_ertraege',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4840'},
+                bwaMapping: 'waehrungsgewinne',
             },
             'Erträge aus Anlagenabgängen': {
                 taxType: 'steuerpflichtig',
                 group: 'anlagenabgaenge',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4855'},
+                bwaMapping: 'anlagenabgaenge',
             },
             'Darlehen': {
                 taxType: 'steuerfrei_inland',
                 group: 'finanzen',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '3100'},
+                bwaMapping: 'sonstigeErtraege',
             },
             'Zinsen': {
                 taxType: 'steuerfrei_inland',
                 group: 'finanzen',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '4130'},
+                bwaMapping: 'sonstigeErtraege',
             },
             'Gewinnvortrag': {
                 taxType: 'steuerfrei_inland',
                 group: 'eigenkapital',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '2970'},
             },
             'Verlustvortrag': {
                 taxType: 'steuerfrei_inland',
                 group: 'eigenkapital',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '2978'},
             },
             'Umsatzsteuererstattungen': {
                 taxType: 'steuerfrei_inland',
                 group: 'steuerkonto',
                 besonderheit: 'erstattung',
+                kontoMapping: {soll: '1800', gegen: '3820'},
+                bwaMapping: 'steuerlicheKorrekturen',
             },
             'Gutschriften (Warenrückgabe)': {
                 taxType: 'steuerpflichtig',
                 group: 'umsatz',
                 besonderheit: 'erloesschmaelerung',
+                kontoMapping: {soll: '4200', gegen: '1200', mwst: '1776'},
+                bwaMapping: 'umsatzerloese',
             },
-        },
-        // SKR04-konforme Konten-Zuordnung
-        kontoMapping: {
-            'Erlöse aus Lieferungen und Leistungen': {soll: '1200', gegen: '4400', mwst: '1776'},
-            'Provisionserlöse': {soll: '1200', gegen: '4120', mwst: '1776'},
-            'Sonstige betriebliche Erträge': {soll: '1200', gegen: '4830', mwst: '1776'},
-            'Erträge aus Vermietung/Verpachtung': {soll: '1200', gegen: '4180'},
-            'Erträge aus Zuschüssen': {soll: '1200', gegen: '4190', mwst: '1776'},
-            'Erträge aus Währungsgewinnen': {soll: '1200', gegen: '4840'},
-            'Erträge aus Anlagenabgängen': {soll: '1200', gegen: '4855'},
-            'Darlehen': {soll: '1200', gegen: '3100'},
-            'Zinsen': {soll: '1200', gegen: '4130'},
-            'Gewinnvortrag': {soll: '1200', gegen: '2970'},
-            'Verlustvortrag': {soll: '1200', gegen: '2978'},
-            'Umsatzsteuererstattungen': {
-                soll: '1800',
-                gegen: '3820',
-            },
-            'Gutschriften (Warenrückgabe)': {
-                soll: '4200',  // Erlösschmälerung 19%
-                gegen: '1200', // Bank oder ggf. Debitorenkonto
-                mwst: '1776',
-            },
-        },
-        // BWA-Mapping für Einnahmen-Kategorien
-        bwaMapping: {
-            'Erlöse aus Lieferungen und Leistungen': 'umsatzerloese',
-            'Provisionserlöse': 'provisionserloese',
-            'Sonstige betriebliche Erträge': 'sonstigeErtraege',
-            'Erträge aus Vermietung/Verpachtung': 'vermietung',
-            'Erträge aus Zuschüssen': 'zuschuesse',
-            'Erträge aus Währungsgewinnen': 'waehrungsgewinne',
-            'Erträge aus Anlagenabgängen': 'anlagenabgaenge',
-            'Darlehen': 'sonstigeErtraege',
-            'Zinsen': 'sonstigeErtraege',
-            // Umsatzsteuererstattungen nicht relevant für BWA
-            'Umsatzsteuererstattungen': 'steuerlicheKorrekturen',
-            'Gutschriften (Warenrückgabe)': 'umsatzerloese',
         },
     },
 
@@ -164,23 +151,29 @@ export default {
             dateiname: 22,             // V: Dateiname (für importierte Dateien)
             dateilink: 23,             // W: Link zur Originaldatei
         },
-        // Kategorien mit einheitlicher Struktur
+        // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
             // Materialaufwand & Wareneinsatz
             'Wareneinsatz': {
                 taxType: 'steuerpflichtig',
                 group: 'material',
                 besonderheit: null,
+                kontoMapping: {soll: '5000', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'wareneinsatz',
             },
             'Bezogene Leistungen': {
                 taxType: 'steuerpflichtig',
                 group: 'material',
                 besonderheit: null,
+                kontoMapping: {soll: '5300', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'fremdleistungen',
             },
             'Roh-, Hilfs- & Betriebsstoffe': {
                 taxType: 'steuerpflichtig',
                 group: 'material',
                 besonderheit: null,
+                kontoMapping: {soll: '5400', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'rohHilfsBetriebsstoffe',
             },
 
             // Provisionen
@@ -188,6 +181,7 @@ export default {
                 taxType: 'steuerpflichtig',
                 group: 'leistungen',
                 besonderheit: null,
+                kontoMapping: {soll: '4920', gegen: '1200', vorsteuer: '1576'},
             },
 
             // Personalkosten
@@ -195,16 +189,22 @@ export default {
                 taxType: 'steuerfrei_inland',
                 group: 'personal',
                 besonderheit: null,
+                kontoMapping: {soll: '6000', gegen: '1200'},
+                bwaMapping: 'bruttoLoehne',
             },
             'Soziale Abgaben & Arbeitgeberanteile': {
                 taxType: 'steuerfrei_inland',
                 group: 'personal',
                 besonderheit: null,
+                kontoMapping: {soll: '6010', gegen: '1200'},
+                bwaMapping: 'sozialeAbgaben',
             },
             'Sonstige Personalkosten': {
                 taxType: 'steuerpflichtig',
                 group: 'personal',
                 besonderheit: null,
+                kontoMapping: {soll: '6020', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigePersonalkosten',
             },
 
             // Raumkosten
@@ -212,11 +212,15 @@ export default {
                 taxType: 'steuerfrei_inland',
                 group: 'raum',
                 besonderheit: null,
+                kontoMapping: {soll: '6310', gegen: '1200'},
+                bwaMapping: 'mieteNebenkosten',
             },
             'Nebenkosten': {
                 taxType: 'steuerpflichtig',
                 group: 'raum',
                 besonderheit: null,
+                kontoMapping: {soll: '6320', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'mieteNebenkosten',
             },
 
             // Betriebskosten
@@ -224,51 +228,71 @@ export default {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6300', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Marketing & Werbung': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6600', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'werbungMarketing',
             },
             'Reisekosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6650', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'reisekosten',
             },
             'Versicherungen': {
                 taxType: 'steuerfrei_inland',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6400', gegen: '1200'},
+                bwaMapping: 'versicherungen',
             },
             'Porto': {
                 taxType: 'steuerfrei_inland',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6810', gegen: '1200'},
+                bwaMapping: 'buerokosten',
             },
             'Bewirtung': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: 'bewirtung',
+                kontoMapping: {soll: '6670', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Telefon & Internet': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6805', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'telefonInternet',
             },
             'Bürokosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6815', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'buerokosten',
             },
             'Fortbildungskosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6830', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'fortbildungskosten',
             },
             'IT-Kosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6570', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
 
             // Abschreibungen & Zinsen
@@ -276,31 +300,43 @@ export default {
                 taxType: 'steuerpflichtig',
                 group: 'abschreibung',
                 besonderheit: null,
+                kontoMapping: {soll: '6200', gegen: '1200'},
+                bwaMapping: 'abschreibungenMaschinen',
             },
             'Abschreibungen Büroausstattung': {
                 taxType: 'steuerpflichtig',
                 group: 'abschreibung',
                 besonderheit: null,
+                kontoMapping: {soll: '6210', gegen: '1200'},
+                bwaMapping: 'abschreibungenBueromaterial',
             },
             'Abschreibungen immaterielle Wirtschaftsgüter': {
                 taxType: 'steuerpflichtig',
                 group: 'abschreibung',
                 besonderheit: null,
+                kontoMapping: {soll: '6220', gegen: '1200'},
+                bwaMapping: 'abschreibungenImmateriell',
             },
             'Zinsen auf Bankdarlehen': {
                 taxType: 'steuerpflichtig',
                 group: 'zinsen',
                 besonderheit: null,
+                kontoMapping: {soll: '7300', gegen: '1200'},
+                bwaMapping: 'zinsenBank',
             },
             'Zinsen auf Gesellschafterdarlehen': {
                 taxType: 'steuerpflichtig',
                 group: 'zinsen',
                 besonderheit: null,
+                kontoMapping: {soll: '7310', gegen: '1200'},
+                bwaMapping: 'zinsenGesellschafter',
             },
             'Leasingkosten': {
                 taxType: 'steuerpflichtig',
                 group: 'abschreibung',
                 besonderheit: null,
+                kontoMapping: {soll: '6240', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'leasingkosten',
             },
 
             // Steuern & Rückstellungen
@@ -308,26 +344,35 @@ export default {
                 taxType: 'steuerfrei_inland',
                 group: 'steuer',
                 besonderheit: null,
+                kontoMapping: {soll: '7610', gegen: '1200'},
+                bwaMapping: 'gewerbesteuerRueckstellungen',
             },
             'Körperschaftsteuer': {
                 taxType: 'steuerfrei_inland',
                 group: 'steuer',
                 besonderheit: null,
+                kontoMapping: {soll: '7600', gegen: '1200'},
+                bwaMapping: 'koerperschaftsteuer',
             },
             'Solidaritätszuschlag': {
                 taxType: 'steuerfrei_inland',
                 group: 'steuer',
                 besonderheit: null,
+                kontoMapping: {soll: '7620', gegen: '1200'},
+                bwaMapping: 'solidaritaetszuschlag',
             },
             'Sonstige Steuerrückstellungen': {
                 taxType: 'steuerfrei_inland',
                 group: 'steuer',
                 besonderheit: null,
+                kontoMapping: {soll: '7630', gegen: '1200'},
+                bwaMapping: 'steuerrueckstellungen',
             },
             'Steuerzahlungen': {
                 taxType: 'steuerfrei_inland',
                 group: 'steuer',
                 besonderheit: 'abgabe',
+                kontoMapping: {soll: '7610', gegen: '1200'},
             },
 
             // Sonstige Aufwendungen
@@ -335,6 +380,8 @@ export default {
                 taxType: 'steuerpflichtig',
                 group: 'sonstige',
                 besonderheit: null,
+                kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
 
             // Mobilität
@@ -342,6 +389,8 @@ export default {
                 taxType: 'steuerpflichtig',
                 group: 'mobilitaet',
                 besonderheit: null,
+                kontoMapping: {soll: '4550', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'kfzKosten',
             },
 
             // Finanzen
@@ -349,78 +398,8 @@ export default {
                 taxType: 'steuerfrei_inland',
                 group: 'finanzen',
                 besonderheit: null,
+                kontoMapping: {soll: '6855', gegen: '1200'},
             },
-        },
-        // SKR04-konforme Konten-Zuordnung
-        kontoMapping: {
-            'Wareneinsatz': {soll: '5000', gegen: '1200', vorsteuer: '1576'},
-            'Bezogene Leistungen': {soll: '5300', gegen: '1200', vorsteuer: '1576'},
-            'Roh-, Hilfs- & Betriebsstoffe': {soll: '5400', gegen: '1200', vorsteuer: '1576'},
-            'Bruttolöhne & Gehälter': {soll: '6000', gegen: '1200'},
-            'Soziale Abgaben & Arbeitgeberanteile': {soll: '6010', gegen: '1200'},
-            'Sonstige Personalkosten': {soll: '6020', gegen: '1200', vorsteuer: '1576'},
-            'Miete': {soll: '6310', gegen: '1200'},
-            'Nebenkosten': {soll: '6320', gegen: '1200', vorsteuer: '1576'},
-            'Betriebskosten': {soll: '6300', gegen: '1200', vorsteuer: '1576'},
-            'Marketing & Werbung': {soll: '6600', gegen: '1200', vorsteuer: '1576'},
-            'Reisekosten': {soll: '6650', gegen: '1200', vorsteuer: '1576'},
-            'Versicherungen': {soll: '6400', gegen: '1200'},
-            'Porto': {soll: '6810', gegen: '1200'},
-            'Bewirtung': {soll: '6670', gegen: '1200', vorsteuer: '1576'},
-            'Telefon & Internet': {soll: '6805', gegen: '1200', vorsteuer: '1576'},
-            'Bürokosten': {soll: '6815', gegen: '1200', vorsteuer: '1576'},
-            'Fortbildungskosten': {soll: '6830', gegen: '1200', vorsteuer: '1576'},
-            'Abschreibungen Maschinen': {soll: '6200', gegen: '1200'},
-            'Abschreibungen Büroausstattung': {soll: '6210', gegen: '1200'},
-            'Abschreibungen immaterielle Wirtschaftsgüter': {soll: '6220', gegen: '1200'},
-            'Zinsen auf Bankdarlehen': {soll: '7300', gegen: '1200'},
-            'Zinsen auf Gesellschafterdarlehen': {soll: '7310', gegen: '1200'},
-            'Leasingkosten': {soll: '6240', gegen: '1200', vorsteuer: '1576'},
-            'Gewerbesteuerrückstellungen': {soll: '7610', gegen: '1200'},
-            'Körperschaftsteuer': {soll: '7600', gegen: '1200'},
-            'Solidaritätszuschlag': {soll: '7620', gegen: '1200'},
-            'Sonstige Steuerrückstellungen': {soll: '7630', gegen: '1200'},
-            'Sonstige betriebliche Aufwendungen': {soll: '6800', gegen: '1200', vorsteuer: '1576'},
-            'Provisionszahlungen': { soll: '4920', gegen: '1200', vorsteuer: '1576' },
-            'IT-Kosten': { soll: '6570', gegen: '1200', vorsteuer: '1576' },
-            'Bankgebühren': { soll: '6855', gegen: '1200' },
-            'Kfz-Kosten': { soll: '4550', gegen: '1200', vorsteuer: '1576' },
-            'Steuerzahlungen': { soll: '7610', gegen: '1200' },
-
-        },
-        // BWA-Mapping für Ausgaben-Kategorien
-        bwaMapping: {
-            'Wareneinsatz': 'wareneinsatz',
-            'Bezogene Leistungen': 'fremdleistungen',
-            'Roh-, Hilfs- & Betriebsstoffe': 'rohHilfsBetriebsstoffe',
-            'Betriebskosten': 'sonstigeAufwendungen',
-            'Marketing & Werbung': 'werbungMarketing',
-            'Reisekosten': 'reisekosten',
-            'Bruttolöhne & Gehälter': 'bruttoLoehne',
-            'Soziale Abgaben & Arbeitgeberanteile': 'sozialeAbgaben',
-            'Sonstige Personalkosten': 'sonstigePersonalkosten',
-            'Sonstige betriebliche Aufwendungen': 'sonstigeAufwendungen',
-            'Miete': 'mieteNebenkosten',
-            'Nebenkosten': 'mieteNebenkosten',
-            'Versicherungen': 'versicherungen',
-            'Porto': 'buerokosten',
-            'Telefon & Internet': 'telefonInternet',
-            'Bürokosten': 'buerokosten',
-            'Fortbildungskosten': 'fortbildungskosten',
-            'Abschreibungen Maschinen': 'abschreibungenMaschinen',
-            'Abschreibungen Büroausstattung': 'abschreibungenBueromaterial',
-            'Abschreibungen immaterielle Wirtschaftsgüter': 'abschreibungenImmateriell',
-            'Zinsen auf Bankdarlehen': 'zinsenBank',
-            'Zinsen auf Gesellschafterdarlehen': 'zinsenGesellschafter',
-            'Leasingkosten': 'leasingkosten',
-            'Google Ads': 'werbungMarketing',
-            'AWS': 'sonstigeAufwendungen',
-            'Facebook Ads': 'werbungMarketing',
-            'Bewirtung': 'sonstigeAufwendungen',
-            'Gewerbesteuerrückstellungen': 'gewerbesteuerRueckstellungen',
-            'Körperschaftsteuer': 'koerperschaftsteuer',
-            'Solidaritätszuschlag': 'solidaritaetszuschlag',
-            'Sonstige Steuerrückstellungen': 'steuerrueckstellungen',
         },
     },
 
@@ -451,63 +430,57 @@ export default {
             dateiname: 22,         // V: Dateiname (für importierte Dateien)
             dateilink: 23,         // W: Link zum Originalbeleg
         },
-        // Kategorien mit einheitlicher Struktur
+        // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
             'Kleidung': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Trinkgeld': {
                 taxType: 'steuerfrei',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6800', gegen: '1200'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Private Vorauslage': {
                 taxType: 'steuerfrei',
                 group: 'sonstige',
                 besonderheit: null,
+                kontoMapping: {soll: '6800', gegen: '1890'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Bürokosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6815', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'buerokosten',
             },
             'Reisekosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
+                kontoMapping: {soll: '6650', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'reisekosten',
             },
             'Bewirtung': {
                 taxType: 'eigenbeleg',
                 group: 'betrieb',
                 besonderheit: 'bewirtung',
+                kontoMapping: {soll: '6670', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
             'Sonstiges': {
                 taxType: 'steuerpflichtig',
                 group: 'sonstige',
                 besonderheit: null,
+                kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
-        },
-        // Konten-Mapping für Eigenbelege
-        kontoMapping: {
-            'Kleidung': {soll: '6800', gegen: '1200', vorsteuer: '1576'},
-            'Trinkgeld': {soll: '6800', gegen: '1200'},
-            'Private Vorauslage': {soll: '6800', gegen: '1890'},
-            'Bürokosten': {soll: '6815', gegen: '1200', vorsteuer: '1576'},
-            'Reisekosten': {soll: '6650', gegen: '1200', vorsteuer: '1576'},
-            'Bewirtung': {soll: '6670', gegen: '1200', vorsteuer: '1576'},
-            'Sonstiges': {soll: '6800', gegen: '1200', vorsteuer: '1576'},
-        },
-        // BWA-Mapping für Eigenbelege
-        bwaMapping: {
-            'Kleidung': 'sonstigeAufwendungen',
-            'Trinkgeld': 'sonstigeAufwendungen',
-            'Private Vorauslage': 'sonstigeAufwendungen',
-            'Bürokosten': 'buerokosten',
-            'Reisekosten': 'reisekosten',
-            'Bewirtung': 'sonstigeAufwendungen',
-            'Sonstiges': 'sonstigeAufwendungen',
         },
     },
 
@@ -528,49 +501,43 @@ export default {
             uebertragJahr: 12,     // L: Übertrag Jahr
             zeitstempel: 13,       // M: Zeitstempel der letzten Änderung
         },
-        // Kategorien als Objekte mit einheitlicher Struktur
+        // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
             'Gesellschafterdarlehen': {
                 taxType: 'steuerfrei_inland',
                 group: 'gesellschafter',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '0950'},
+                bwaMapping: 'gesellschafterdarlehen',
             },
             'Ausschüttungen': {
                 taxType: 'steuerfrei_inland',
                 group: 'gesellschafter',
                 besonderheit: null,
+                kontoMapping: {soll: '2000', gegen: '1200'},
+                bwaMapping: 'ausschuettungen',
             },
             'Kapitalrückführung': {
                 taxType: 'steuerfrei_inland',
                 group: 'gesellschafter',
                 besonderheit: null,
+                kontoMapping: {soll: '1890', gegen: '1200'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
             'Privatentnahme': {
                 taxType: 'steuerfrei_inland',
                 group: 'gesellschafter',
                 besonderheit: null,
+                kontoMapping: {soll: '1800', gegen: '1200'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
             'Privateinlage': {
                 taxType: 'steuerfrei_inland',
                 group: 'gesellschafter',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '1890'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
-        },
-        // Konten-Mapping für Gesellschafterkonto
-        kontoMapping: {
-            'Gesellschafterdarlehen': {soll: '1200', gegen: '0950'},
-            'Ausschüttungen': {soll: '2000', gegen: '1200'},
-            'Kapitalrückführung': {soll: '1890', gegen: '1200'},
-            'Privatentnahme': {soll: '1800', gegen: '1200'},
-            'Privateinlage': {soll: '1200', gegen: '1890'},
-        },
-        // BWA-Mapping für Gesellschafterkonto
-        bwaMapping: {
-            'Gesellschafterdarlehen': 'gesellschafterdarlehen',
-            'Ausschüttungen': 'ausschuettungen',
-            'Kapitalrückführung': 'eigenkapitalveraenderungen',
-            'Privatentnahme': 'eigenkapitalveraenderungen',
-            'Privateinlage': 'eigenkapitalveraenderungen',
         },
     },
 
@@ -592,28 +559,22 @@ export default {
             uebertragJahr: 13,     // M: Übertrag Jahr
             zeitstempel: 14,       // N: Zeitstempel der letzten Änderung
         },
-        // Kategorien als Objekte mit einheitlicher Struktur
+        // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
             'Gewinnübertrag': {
                 taxType: 'steuerfrei_inland',
                 group: 'holding',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '8999'},
+                bwaMapping: 'gesamtRueckstellungenTransfers',
             },
             'Kapitalrückführung': {
                 taxType: 'steuerfrei_inland',
                 group: 'holding',
                 besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '2000'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
-        },
-        // Konten-Mapping für Holding Transfers
-        kontoMapping: {
-            'Gewinnübertrag': {soll: '1200', gegen: '8999'},
-            'Kapitalrückführung': {soll: '1200', gegen: '2000'},
-        },
-        // BWA-Mapping für Holding Transfers
-        bwaMapping: {
-            'Gewinnübertrag': 'gesamtRueckstellungenTransfers',
-            'Kapitalrückführung': 'eigenkapitalveraenderungen',
         },
     },
 
