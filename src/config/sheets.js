@@ -181,6 +181,13 @@ export default {
                 besonderheit: null,
             },
 
+            // Provisionen
+            'Provisionszahlungen': {
+                taxType: 'steuerpflichtig',
+                group: 'leistungen',
+                besonderheit: null,
+            },
+
             // Personalkosten
             'Bruttolöhne & Gehälter': {
                 taxType: 'steuerfrei_inland',
@@ -236,21 +243,6 @@ export default {
                 group: 'betrieb',
                 besonderheit: null,
             },
-            'Google Ads': {
-                taxType: 'steuerfrei_ausland',
-                group: 'betrieb',
-                besonderheit: null,
-            },
-            'AWS': {
-                taxType: 'steuerfrei_ausland',
-                group: 'betrieb',
-                besonderheit: null,
-            },
-            'Facebook Ads': {
-                taxType: 'steuerfrei_ausland',
-                group: 'betrieb',
-                besonderheit: null,
-            },
             'Bewirtung': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
@@ -267,6 +259,11 @@ export default {
                 besonderheit: null,
             },
             'Fortbildungskosten': {
+                taxType: 'steuerpflichtig',
+                group: 'betrieb',
+                besonderheit: null,
+            },
+            'IT-Kosten': {
                 taxType: 'steuerpflichtig',
                 group: 'betrieb',
                 besonderheit: null,
@@ -325,11 +322,30 @@ export default {
                 group: 'steuer',
                 besonderheit: null,
             },
+            'Steuerzahlungen': {
+                taxType: 'steuerfrei_inland',
+                group: 'steuer',
+                besonderheit: 'abgabe',
+            },
 
             // Sonstige Aufwendungen
             'Sonstige betriebliche Aufwendungen': {
                 taxType: 'steuerpflichtig',
                 group: 'sonstige',
+                besonderheit: null,
+            },
+
+            // Mobilität
+            'Kfz-Kosten': {
+                taxType: 'steuerpflichtig',
+                group: 'mobilitaet',
+                besonderheit: null,
+            },
+
+            // Finanzen
+            'Bankgebühren': {
+                taxType: 'steuerfrei_inland',
+                group: 'finanzen',
                 besonderheit: null,
             },
         },
@@ -348,9 +364,6 @@ export default {
             'Reisekosten': {soll: '6650', gegen: '1200', vorsteuer: '1576'},
             'Versicherungen': {soll: '6400', gegen: '1200'},
             'Porto': {soll: '6810', gegen: '1200'},
-            'Google Ads': {soll: '6600', gegen: '1200'},
-            'AWS': {soll: '6500', gegen: '1200'},
-            'Facebook Ads': {soll: '6600', gegen: '1200'},
             'Bewirtung': {soll: '6670', gegen: '1200', vorsteuer: '1576'},
             'Telefon & Internet': {soll: '6805', gegen: '1200', vorsteuer: '1576'},
             'Bürokosten': {soll: '6815', gegen: '1200', vorsteuer: '1576'},
@@ -366,6 +379,12 @@ export default {
             'Solidaritätszuschlag': {soll: '7620', gegen: '1200'},
             'Sonstige Steuerrückstellungen': {soll: '7630', gegen: '1200'},
             'Sonstige betriebliche Aufwendungen': {soll: '6800', gegen: '1200', vorsteuer: '1576'},
+            'Provisionszahlungen': { soll: '4920', gegen: '1200', vorsteuer: '1576' },
+            'IT-Kosten': { soll: '6570', gegen: '1200', vorsteuer: '1576' },
+            'Bankgebühren': { soll: '6855', gegen: '1200' },
+            'Kfz-Kosten': { soll: '4550', gegen: '1200', vorsteuer: '1576' },
+            'Steuerzahlungen': { soll: '7610', gegen: '1200' },
+
         },
         // BWA-Mapping für Ausgaben-Kategorien
         bwaMapping: {
