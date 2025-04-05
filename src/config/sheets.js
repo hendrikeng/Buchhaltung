@@ -490,7 +490,7 @@ export default {
         kontoMapping: {
             'Kleidung': {soll: '6800', gegen: '1200', vorsteuer: '1576'},
             'Trinkgeld': {soll: '6800', gegen: '1200'},
-            'Private Vorauslage': {soll: '6800', gegen: '1200'},
+            'Private Vorauslage': {soll: '6800', gegen: '1890'},
             'Bürokosten': {soll: '6815', gegen: '1200', vorsteuer: '1576'},
             'Reisekosten': {soll: '6650', gegen: '1200', vorsteuer: '1576'},
             'Bewirtung': {soll: '6670', gegen: '1200', vorsteuer: '1576'},
@@ -555,11 +555,11 @@ export default {
         },
         // Konten-Mapping für Gesellschafterkonto
         kontoMapping: {
-            'Gesellschafterdarlehen': {soll: '1200', gegen: '3300'},
+            'Gesellschafterdarlehen': {soll: '1200', gegen: '0950'},
             'Ausschüttungen': {soll: '2000', gegen: '1200'},
-            'Kapitalrückführung': {soll: '2000', gegen: '1200'},
-            'Privatentnahme': {soll: '1600', gegen: '1200'},
-            'Privateinlage': {soll: '1200', gegen: '1600'},
+            'Kapitalrückführung': {soll: '1890', gegen: '1200'},
+            'Privatentnahme': {soll: '1800', gegen: '1200'},
+            'Privateinlage': {soll: '1200', gegen: '1890'},
         },
         // BWA-Mapping für Gesellschafterkonto
         bwaMapping: {
