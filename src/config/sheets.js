@@ -8,25 +8,26 @@ export default {
             datum: 1,                  // A: Rechnungsdatum
             rechnungsnummer: 2,        // B: Rechnungsnummer
             kunde: 3,                  // C: Kunde
-            leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
-            notizen: 5,                // E: Notizen
-            kategorie: 6,              // F: Kategorie
-            buchungskonto: 7,          // G: Buchungskonto
-            nettobetrag: 8,            // H: Nettobetrag
-            mwstSatz: 9,               // I: MwSt-Satz in %
-            mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
-            bruttoBetrag: 11,          // K: Bruttobetrag (H+J)
-            bezahlt: 12,               // L: Bereits bezahlter Betrag
-            restbetragNetto: 13,       // M: Restbetrag Netto
-            quartal: 14,               // N: Berechnetes Quartal
-            zahlungsstatus: 15,        // O: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 16,           // P: Zahlungsart
-            zahlungsdatum: 17,         // Q: Zahlungsdatum
-            bankabgleich: 18,          // R: Bankabgleich-Information
-            uebertragJahr: 19,         // S: Übertrag Jahr
-            zeitstempel: 20,           // T: Zeitstempel der letzten Änderung
-            dateiname: 21,             // U: Dateiname (für importierte Dateien)
-            dateilink: 22,             // V: Link zur Originaldatei
+            ausland: 4,                // D: Ausland/EU-Ausland
+            leistungsBeschreibung: 5,  // E: Leistungsbeschreibung
+            notizen: 6,                // F: Notizen
+            kategorie: 7,              // G: Kategorie
+            buchungskonto: 8,          // H: Buchungskonto
+            nettobetrag: 9,            // I: Nettobetrag
+            mwstSatz: 10,              // J: MwSt-Satz in %
+            mwstBetrag: 11,            // K: MwSt-Betrag (H*I)
+            bruttoBetrag: 12,          // L: Bruttobetrag (H+K)
+            bezahlt: 13,               // M: Bereits bezahlter Betrag
+            restbetragNetto: 14,       // N: Restbetrag Netto
+            quartal: 15,               // O: Berechnetes Quartal
+            zahlungsstatus: 16,        // P: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 17,           // Q: Zahlungsart
+            zahlungsdatum: 18,         // R: Zahlungsdatum
+            bankabgleich: 19,          // S: Bankabgleich-Information
+            uebertragJahr: 20,         // T: Übertrag Jahr
+            zeitstempel: 21,           // U: Zeitstempel der letzten Änderung
+            dateiname: 22,             // V: Dateiname (für importierte Dateien)
+            dateilink: 23,             // W: Link zur Originaldatei
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
@@ -142,25 +143,26 @@ export default {
             datum: 1,                  // A: Rechnungsdatum
             rechnungsnummer: 2,        // B: Rechnungsnummer
             kunde: 3,                  // C: Lieferant
-            leistungsBeschreibung: 4,  // D: Leistungsbeschreibung
-            notizen: 5,                // E: Notizen
-            kategorie: 6,              // F: Kategorie
-            buchungskonto: 7,          // G: Buchungskonto
-            nettobetrag: 8,            // H: Nettobetrag
-            mwstSatz: 9,               // I: MwSt-Satz in %
-            mwstBetrag: 10,            // J: MwSt-Betrag (H*I)
-            bruttoBetrag: 11,          // K: Bruttobetrag (H+J)
-            bezahlt: 12,               // L: Bereits bezahlter Betrag
-            restbetragNetto: 13,       // M: Restbetrag Netto
-            quartal: 14,               // N: Berechnetes Quartal
-            zahlungsstatus: 15,        // O: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
-            zahlungsart: 16,           // P: Zahlungsart
-            zahlungsdatum: 17,         // Q: Zahlungsdatum
-            bankabgleich: 18,          // R: Bankabgleich-Information
-            uebertragJahr: 19,         // S: Übertrag Jahr
-            zeitstempel: 20,           // T: Zeitstempel der letzten Änderung
-            dateiname: 21,             // U: Dateiname (für importierte Dateien)
-            dateilink: 22,             // V: Link zur Originaldatei
+            ausland: 4,                // D: Ausland/EU-Ausland
+            leistungsBeschreibung: 5,  // E: Leistungsbeschreibung
+            notizen: 6,                // F: Notizen
+            kategorie: 7,              // G: Kategorie
+            buchungskonto: 8,          // H: Buchungskonto
+            nettobetrag: 9,            // I: Nettobetrag
+            mwstSatz: 10,              // J: MwSt-Satz in %
+            mwstBetrag: 11,            // K: MwSt-Betrag (H*I)
+            bruttoBetrag: 12,          // L: Bruttobetrag (H+K)
+            bezahlt: 13,               // M: Bereits bezahlter Betrag
+            restbetragNetto: 14,       // N: Restbetrag Netto
+            quartal: 15,               // O: Berechnetes Quartal
+            zahlungsstatus: 16,        // P: Zahlungsstatus (Offen/Teilbezahlt/Bezahlt)
+            zahlungsart: 17,           // Q: Zahlungsart
+            zahlungsdatum: 18,         // R: Zahlungsdatum
+            bankabgleich: 19,          // S: Bankabgleich-Information
+            uebertragJahr: 20,         // T: Übertrag Jahr
+            zeitstempel: 21,           // U: Zeitstempel der letzten Änderung
+            dateiname: 22,             // V: Dateiname (für importierte Dateien)
+            dateilink: 23,             // W: Link zur Originaldatei
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
@@ -429,24 +431,25 @@ export default {
             rechnungsnummer: 2,    // B: Belegnummer
             ausgelegtVon: 3,       // C: Ausgelegt von (Person)
             beschreibung: 4,       // D: Beschreibung
-            notizen: 5,            // E: Notizen
-            kategorie: 6,          // F: Kategorie
-            buchungskonto: 7,      // G: Buchungskonto
-            nettobetrag: 8,        // H: Nettobetrag
-            mwstSatz: 9,           // I: MwSt-Satz in %
-            mwstBetrag: 10,        // J: MwSt-Betrag (H*I)
-            bruttoBetrag: 11,      // K: Bruttobetrag (H+J)
-            bezahlt: 12,           // L: Bereits erstatteter Betrag
-            restbetragNetto: 13,   // M: Restbetrag Netto
-            quartal: 14,           // N: Berechnetes Quartal
-            zahlungsstatus: 15,    // O: Erstattungsstatus (Offen/Erstattet/Gebucht)
-            zahlungsart: 16,       // P: Erstattungsart
-            zahlungsdatum: 17,     // Q: Erstattungsdatum
-            bankabgleich: 18,      // R: Bankabgleich-Information
-            uebertragJahr: 19,     // S: Übertrag Jahr
-            zeitstempel: 20,       // T: Zeitstempel der letzten Änderung
-            dateiname: 21,         // U: Dateiname (für importierte Dateien)
-            dateilink: 22,         // V: Link zum Originalbeleg
+            ausland: 5,            // E: Ausland/EU-Ausland
+            notizen: 6,            // F: Notizen
+            kategorie: 7,          // G: Kategorie
+            buchungskonto: 8,      // H: Buchungskonto
+            nettobetrag: 9,        // I: Nettobetrag
+            mwstSatz: 10,           // J: MwSt-Satz in %
+            mwstBetrag: 11,        // K: MwSt-Betrag (H*I)
+            bruttoBetrag: 12,      // L: Bruttobetrag (H+J)
+            bezahlt: 13,           // M: Bereits erstatteter Betrag
+            restbetragNetto: 14,   // N: Restbetrag Netto
+            quartal: 15,           // O: Berechnetes Quartal
+            zahlungsstatus: 16,    // P: Erstattungsstatus (Offen/Erstattet/Gebucht)
+            zahlungsart: 17,       // Q: Erstattungsart
+            zahlungsdatum: 18,     // R: Erstattungsdatum
+            bankabgleich: 19,      // S: Bankabgleich-Information
+            uebertragJahr: 20,     // T: Übertrag Jahr
+            zeitstempel: 21,       // U: Zeitstempel der letzten Änderung
+            dateiname: 22,         // V: Dateiname (für importierte Dateien)
+            dateilink: 23,         // W: Link zum Originalbeleg
         },
         // Kategorien mit einheitlicher Struktur
         categories: {
