@@ -175,20 +175,18 @@ function collectAllowedAccounts(config) {
     const allowedKontoSoll = new Set();
     const allowedGegenkonto = new Set();
 
-    // Optimierung: Alle Mappings in einem Array definieren
-    const mappings = [
-        config.einnahmen.kontoMapping,
-        config.ausgaben.kontoMapping,
-        config.eigenbelege.kontoMapping,
-        config.gesellschafterkonto.kontoMapping,
-        config.holdingTransfers.kontoMapping,
-    ];
+    // Verarbeite alle Sheet-Typen
+    ['einnahmen', 'ausgaben', 'eigenbelege', 'gesellschafterkonto', 'holdingTransfers'].forEach(sheetType => {
+        // Hole Kategorien für dieses Sheet
+        const categories = config[sheetType].categories || {};
 
-    // Sammle alle Konten aus den Mappings
-    mappings.forEach(mapping => {
-        Object.values(mapping).forEach(m => {
-            if (m.soll) allowedKontoSoll.add(m.soll);
-            if (m.gegen) allowedGegenkonto.add(m.gegen);
+        // Extrahiere alle Konto-Mappings
+        Object.values(categories).forEach(category => {
+            const mapping = category.kontoMapping;
+            if (mapping) {
+                if (mapping.soll) allowedKontoSoll.add(mapping.soll);
+                if (mapping.gegen) allowedGegenkonto.add(mapping.gegen);
+            }
         });
     });
 

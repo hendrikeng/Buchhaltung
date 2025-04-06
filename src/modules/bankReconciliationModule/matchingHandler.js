@@ -205,24 +205,27 @@ function collectAccountInfo(config) {
     const allowedKontoSoll = new Set();
     const allowedGegenkonto = new Set();
 
-    // Alle relevanten Mappings in einem Array
-    const mappings = [
-        config.einnahmen.kontoMapping,
-        config.ausgaben.kontoMapping,
-        config.eigenbelege.kontoMapping,
-        config.gesellschafterkonto.kontoMapping,
-        config.holdingTransfers.kontoMapping,
-    ];
+    // Process all sheet types
+    const sheetTypes = ['einnahmen', 'ausgaben', 'eigenbelege', 'gesellschafterkonto', 'holdingTransfers'];
 
-    // Effizienter Durchlauf durch alle Mappings in einer Schleife
-    mappings.forEach(mapping => {
-        Object.values(mapping).forEach(m => {
-            if (m.soll) allowedKontoSoll.add(m.soll);
-            if (m.gegen) allowedGegenkonto.add(m.gegen);
+    sheetTypes.forEach(sheetType => {
+        // Skip if not in config
+        if (!config[sheetType] || !config[sheetType].categories) return;
+
+        // Get all categories for this sheet type
+        const categories = config[sheetType].categories;
+
+        // Extract accounts from each category
+        Object.keys(categories).forEach(categoryKey => {
+            const category = categories[categoryKey];
+            if (category && category.kontoMapping) {
+                if (category.kontoMapping.soll) allowedKontoSoll.add(category.kontoMapping.soll);
+                if (category.kontoMapping.gegen) allowedGegenkonto.add(category.kontoMapping.gegen);
+            }
         });
     });
 
-    // Fallback-Konten bestimmen
+    // Fallback accounts
     const fallbackKontoSoll = allowedKontoSoll.size > 0 ? Array.from(allowedKontoSoll)[0] : '';
     const fallbackKontoHaben = allowedGegenkonto.size > 0 ? Array.from(allowedGegenkonto)[0] : '';
 
@@ -366,29 +369,29 @@ function addEmptyResults(results) {
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
     results, category, config, firstDataRow, isGutschrift = false) {
 
-    // Nur Gutschrift-Verarbeitung für Einnahmen erlauben
+    // Existing checks - no changes needed here
     if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift') {
         return false;
     }
 
-    // Übereinstimmung suchen
+    // Match finding - no changes needed
     const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
     if (!matchResult) return false;
 
-    // Für Gutschrift-Matching prüfen, ob der Betrag negativ ist
+    // Check for gutschrift match
     if (isGutschrift && (!matchResult.originalData || matchResult.originalData.betrag >= 0)) {
-        return false; // Keine tatsächliche Gutschrift, diese Übereinstimmung überspringen
+        return false;
     }
 
-    // Referenz-Übereinstimmung validieren
+    // Validate reference match
     if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
         return false;
     }
 
-    // Match-Info erstellen
+    // Create match info
     const matchInfoText = createMatchInfo(matchResult, docType, betragValue);
 
-    // Kategorie und Konto aus dem gefundenen Dokument verwenden
+    // Get category and konto from the document
     let sourceCategory = '';
     let sourceKonto = '';
 
@@ -397,44 +400,71 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
         sourceKonto = matchResult.originalData.buchungskonto || '';
     }
 
-    // Konten aus dem Mapping setzen
+    // Set konten from mapping - MODIFIED SECTION
     let kontoSoll = '', kontoHaben = '';
 
-    if (sourceCategory && kontoMapping[sourceCategory]) {
-        const mapping = kontoMapping[sourceCategory];
-        kontoSoll = mapping.soll || '';
-        kontoHaben = mapping.gegen || '';
-    } else if (category && kontoMapping[category]) {
-        // Fallback auf Bank-Kategorie
-        const mapping = kontoMapping[category];
-        kontoSoll = mapping.soll || '';
-        kontoHaben = mapping.gegen || '';
+    // If source category is available, try to get mapping from appropriate category
+    if (sourceCategory && matchResult.originalData && matchResult.originalData.sheetType) {
+        // Determine the correct config key based on sheetType
+        const configKey = matchResult.originalData.sheetType;
+
+        // Safely access the category and its kontoMapping
+        const categoryConfig = config[configKey]?.categories?.[sourceCategory];
+        if (categoryConfig && categoryConfig.kontoMapping) {
+            kontoSoll = categoryConfig.kontoMapping.soll || '';
+            kontoHaben = categoryConfig.kontoMapping.gegen || '';
+        }
     }
 
-    // Ergebnisse zu den Arrays hinzufügen
+    // If we couldn't get mapping from source, try from bank category
+    if ((!kontoSoll || !kontoHaben) && category) {
+        // Determine the config key based on docType
+        let configKey;
+        if (docType === 'einnahme' || docType === 'gutschrift') {
+            configKey = 'einnahmen';
+        } else if (docType === 'ausgabe') {
+            configKey = 'ausgaben';
+        } else if (docType === 'eigenbeleg') {
+            configKey = 'eigenbelege';
+        } else if (docType === 'gesellschafterkonto') {
+            configKey = 'gesellschafterkonto';
+        } else if (docType === 'holdingtransfer') {
+            configKey = 'holdingTransfers';
+        }
+
+        // Safely access the category config
+        if (configKey) {
+            const categoryConfig = config[configKey]?.categories?.[category];
+            if (categoryConfig && categoryConfig.kontoMapping) {
+                kontoSoll = kontoSoll || categoryConfig.kontoMapping.soll || '';
+                kontoHaben = kontoHaben || categoryConfig.kontoMapping.gegen || '';
+            }
+        }
+    }
+
+    // Add results to arrays
     results.matchInfo.push([matchInfoText]);
     results.kontoSollResults.push([kontoSoll]);
     results.kontoHabenResults.push([kontoHaben]);
-    // Behalte die Bank-Kategorie, die Kategorie aus dem Dokument wird im Approval-Prozess vorgeschlagen
     results.categoryResults.push([category]);
 
-    // Optimierte Schlüsselgenerierung für Bankzuordnungen
+    // Generate key for bank matches
     const key = `${docType}#${matchResult.row}`;
 
-    // Verbesserte Gutschrift-Erkennung
+    // Detect if this is a gutschrift
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
-    // Information für spätere Markierung speichern
+    // Store information for later marking
     results.bankZuordnungen[key] = {
         typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
-        bankRow: firstDataRow + results.matchInfo.length - 1, // Speichern der aktuellen Bankzeile
+        bankRow: firstDataRow + results.matchInfo.length - 1,
         bankDatum: row[columns.datum - 1],
         matchInfo: matchInfoText,
         transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
         category: category,
-        sourceCategory: sourceCategory, // Add original document category separately
+        sourceCategory: sourceCategory,
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
         isGutschrift: isActualGutschrift,
@@ -632,24 +662,26 @@ function setDefaultAccounts(category, tranType, config, fallbackKontoSoll, fallb
     let kontoHaben = fallbackKontoHaben;
 
     if (category) {
-        // Mapping-Quelle basierend auf Transaktionstyp auswählen
-        const mappingSource = tranType === 'Einnahme' ?
-            config.einnahmen.kontoMapping :
-            config.ausgaben.kontoMapping;
+        // Select configuration source based on transaction type
+        const configKey = tranType === 'Einnahme' ? 'einnahmen' : 'ausgaben';
 
-        // Mapping für die Kategorie finden und anwenden
-        if (mappingSource && mappingSource[category]) {
-            const mapping = mappingSource[category];
+        // Safely access the category configuration
+        if (config[configKey] &&
+            config[configKey].categories &&
+            config[configKey].categories[category] &&
+            config[configKey].categories[category].kontoMapping) {
+
+            const mapping = config[configKey].categories[category].kontoMapping;
             kontoSoll = mapping.soll || fallbackKontoSoll;
             kontoHaben = mapping.gegen || fallbackKontoHaben;
         }
     }
 
-    // Ergebnisse hinzufügen
+    // Add results
     results.matchInfo.push(['']);
     results.kontoSollResults.push([kontoSoll]);
     results.kontoHabenResults.push([kontoHaben]);
-    results.categoryResults.push([category]); // Ursprüngliche Kategorie beibehalten
+    results.categoryResults.push([category]);
 }
 
 /**

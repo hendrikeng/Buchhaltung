@@ -161,12 +161,13 @@ function processEigenRow(data, month, gezahlt, tax, roundedRate, category, confi
     // Kategorie-Konfiguration mit Fallback
     const eigenCfg = config.eigenbelege.categories[category] ?? {};
     const taxType = eigenCfg.taxType ?? 'steuerpflichtig';
+    const besonderheit = eigenCfg.besonderheit;
 
     // Optimierung: Effizientere Verzweigungslogik
     if (taxType === 'steuerfrei') {
         // Steuerfreie Eigenbelege
         data[month].eigenbelege_steuerfrei += gezahlt;
-    } else if (taxType === 'eigenbeleg' && eigenCfg.besonderheit === 'bewirtung') {
+    } else if (taxType === 'eigenbeleg' && besonderheit === 'bewirtung') {
         // Bewirtungsbelege (nur 70% der Vorsteuer absetzbar)
         data[month].eigenbelege_steuerpflichtig += gezahlt;
 
@@ -203,6 +204,7 @@ function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, con
     // Kategorie-Konfiguration mit Fallback
     const catCfg = config.ausgaben.categories[category] ?? {};
     const taxType = catCfg.taxType ?? 'steuerpflichtig';
+    const besonderheit = catCfg.besonderheit;
 
     // Optimierung: Direkte Zuordnung mit Map-ähnlichem Pattern
     const typeHandlers = {
@@ -215,8 +217,17 @@ function processExpenseRow(data, month, gezahlt, tax, roundedRate, category, con
         'steuerpflichtig': () => {
             data[month].steuerpflichtige_ausgaben += gezahlt;
 
+            // Besondere Behandlung für Bewirtung
+            if (besonderheit === 'bewirtung' && (roundedRate === 7 || roundedRate === 19)) {
+                // Bei Bewirtung nur 70% VSt abziehbar
+                const vst70 = numberUtils.round(tax * 0.7, 2);
+                const vst30 = tax - vst70;
+
+                data[month][`vst_${roundedRate}`] += vst70;
+                data[month].nicht_abzugsfaehige_vst += vst30;
+            }
             // Für EU-Ausland brauchen wir ggf. spezielle Behandlung wegen Reverse Charge
-            if (!isEuAusland && roundedRate === 7 || roundedRate === 19) {
+            else if (!isEuAusland && (roundedRate === 7 || roundedRate === 19)) {
                 data[month][`vst_${roundedRate}`] += tax;
             }
         },

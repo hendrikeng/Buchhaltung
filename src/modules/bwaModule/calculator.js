@@ -42,7 +42,7 @@ function processRevenue(row, bwaData, config) {
             return;
         }
 
-        // Direkte Zuordnung basierend auf der Kategorie
+        // Direkte Zuordnung basierend auf der Kategorie für häufige Fälle
         const directMappings = {
             'Sonstige betriebliche Erträge': 'sonstigeErtraege',
             'Erträge aus Vermietung/Verpachtung': 'vermietung',
@@ -58,7 +58,9 @@ function processRevenue(row, bwaData, config) {
         }
 
         // BWA-Mapping aus Konfiguration verwenden
-        const mapping = config.einnahmen.bwaMapping[category];
+        const categoryConfig = config.einnahmen.categories[category];
+        const mapping = categoryConfig?.bwaMapping;
+
         if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
             categoryMappingCache.set(cacheKey, mapping);
             bwaData[m][mapping] += amount;
@@ -120,7 +122,7 @@ function processExpense(row, bwaData, config) {
             return;
         }
 
-        // Direkte Zuordnung basierend auf der Kategorie
+        // Direkte Zuordnung basierend auf der Kategorie für häufige Kategorien
         const directMappings = {
             'Bruttolöhne & Gehälter': 'bruttoLoehne',
             'Soziale Abgaben & Arbeitgeberanteile': 'sozialeAbgaben',
@@ -138,14 +140,16 @@ function processExpense(row, bwaData, config) {
         }
 
         // BWA-Mapping aus Konfiguration verwenden
-        const mapping = config.ausgaben.bwaMapping[category];
+        const categoryConfig = config.ausgaben.categories[category];
+        const mapping = categoryConfig?.bwaMapping;
+
         if (!mapping) {
             categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
             bwaData[m].sonstigeAufwendungen += amount;
             return;
         }
 
-        // Optimierung: Set statt switch für schnelleren Lookup
+        // Mapping für diese Kategorie cachen und anwenden
         categoryMappingCache.set(cacheKey, mapping);
         bwaData[m][mapping] += amount;
 
@@ -205,7 +209,8 @@ function processEigen(row, bwaData, config) {
         if (categoryMappingCache.has(mappingCacheKey)) {
             mapping = categoryMappingCache.get(mappingCacheKey);
         } else {
-            mapping = config.eigenbelege.bwaMapping[category] || 'sonstigeAufwendungen';
+            const categoryConfig = config.eigenbelege.categories[category];
+            mapping = categoryConfig?.bwaMapping || 'sonstigeAufwendungen';
             categoryMappingCache.set(mappingCacheKey, mapping);
         }
 
@@ -265,7 +270,8 @@ function processGesellschafter(row, bwaData, config) {
         if (categoryMappingCache.has(mappingCacheKey)) {
             mapping = categoryMappingCache.get(mappingCacheKey);
         } else {
-            mapping = config.gesellschafterkonto.bwaMapping[category];
+            const categoryConfig = config.gesellschafterkonto.categories[category];
+            mapping = categoryConfig?.bwaMapping;
             categoryMappingCache.set(mappingCacheKey, mapping || null);
         }
 
@@ -326,7 +332,8 @@ function processHolding(row, bwaData, config) {
         if (categoryMappingCache.has(mappingCacheKey)) {
             mapping = categoryMappingCache.get(mappingCacheKey);
         } else {
-            mapping = config.holdingTransfers.bwaMapping[category];
+            const categoryConfig = config.holdingTransfers.categories[category];
+            mapping = categoryConfig?.bwaMapping;
             categoryMappingCache.set(mappingCacheKey, mapping || null);
         }
 

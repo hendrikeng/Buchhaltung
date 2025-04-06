@@ -117,22 +117,23 @@ function updateBookingAccounts(sheet, sheetType, config, isBankSheet = false) {
  */
 function getAccountMapping(kategorie, row, columns, sheetType, config, isBankSheet) {
     if (isBankSheet) {
-        // For bank sheets, determine mapping based on transaction type
+        // Für Banksheets, Mapping basierend auf Transaktionstyp bestimmen
         const transType = columns.transaktionstyp ?
             (row[columns.transaktionstyp - 1]?.toString().trim() || '') : '';
 
         if (transType === 'Einnahme') {
-            return config.einnahmen.kontoMapping[kategorie];
+            // Mapping aus dem Kategorie-Objekt statt aus dem Top-Level-Mapping holen
+            return config.einnahmen.categories[kategorie]?.kontoMapping || null;
         } else if (transType === 'Ausgabe') {
-            // Try multiple mappings in order of probability
-            return config.ausgaben.kontoMapping[kategorie] ||
-                config.eigenbelege.kontoMapping[kategorie] ||
-                config.gesellschafterkonto.kontoMapping[kategorie] ||
-                config.holdingTransfers.kontoMapping[kategorie];
+            // Mehrere Mappings in der Reihenfolge der Wahrscheinlichkeit ausprobieren
+            return config.ausgaben.categories[kategorie]?.kontoMapping ||
+                config.eigenbelege.categories[kategorie]?.kontoMapping ||
+                config.gesellschafterkonto.categories[kategorie]?.kontoMapping ||
+                config.holdingTransfers.categories[kategorie]?.kontoMapping || null;
         }
     } else {
-        // For data sheets, use the sheet's own mapping
-        return config[sheetType].kontoMapping[kategorie];
+        // Für Daten-Sheets, das eigene Mapping des Sheets aus dem Kategorie-Objekt verwenden
+        return config[sheetType].categories[kategorie]?.kontoMapping || null;
     }
 
     return null;
