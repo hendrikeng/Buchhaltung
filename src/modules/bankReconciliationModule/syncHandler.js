@@ -57,6 +57,8 @@ function markPaidInvoices(ss, bankZuordnungen, config) {
         const sheet = ss.getSheetByName(sheetName);
         if (!sheet || sheet.getLastRow() <= 1) return;
 
+        console.log(`Processing sheet ${sheetType} with ${relevantZuordnungen.length} relevant assignments`);
+
         // Verarbeite das Sheet mit den relevanten Zuordnungen
         markPaidRowsOptimized(sheet, sheetType, relevantZuordnungen, config);
     });
@@ -149,6 +151,7 @@ function docTypeToSheetType(docType) {
         'ausgabe': 'ausgaben',
         'eigenbeleg': 'eigenbelege',
         'gesellschafterkonto': 'gesellschafterkonto',
+        'gesellschafterkontoEinlage': 'gesellschafterkonto',
         'holdingtransfer': 'holdingTransfers',
     };
 
@@ -625,8 +628,6 @@ function formatBankDate(date) {
     }
     return String(date);
 }
-
-// src/modules/bankReconciliationModule/matchingHandler.js
 
 /**
  * Prüft, ob zwei Referenznummern gut genug übereinstimmen

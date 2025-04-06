@@ -123,14 +123,27 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
     if (numRows <= 0) return map;
 
     // Optimierung: Nur benötigte Spalten laden
-    const requiredCols = [
-        columns.rechnungsnummer,
-        columns.nettobetrag,
-        columns.mwstSatz,
-        columns.bezahlt,
-        columns.kategorie,
-        columns.buchungskonto,
-    ].filter(col => col !== undefined);
+    let requiredCols = [];
+
+    // Für Gesellschafterkonto spezielle Konfiguration
+    if (sheetType === 'gesellschafterkonto') {
+        requiredCols = [
+            columns.referenz,         // Statt rechnungsnummer
+            columns.betrag,           // Betrag für Gesellschafterkonto
+            columns.kategorie,
+            columns.buchungskonto,
+            columns.bezahlt || 0,      // Falls vorhanden
+        ].filter(col => col !== undefined);
+    } else {
+        requiredCols = [
+            columns.rechnungsnummer,
+            columns.nettobetrag,
+            columns.mwstSatz,
+            columns.bezahlt,
+            columns.kategorie,
+            columns.buchungskonto,
+        ].filter(col => col !== undefined);
+    }
 
     const maxCol = Math.max(...requiredCols);
 
@@ -140,7 +153,14 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
     // Effizienter Aufbau der Referenzdaten
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const ref = row[columns.rechnungsnummer - 1];
+
+        // Referenz basierend auf dem Sheettyp extrahieren
+        let ref;
+        if (sheetType === 'gesellschafterkonto') {
+            ref = row[columns.referenz - 1]; // Für Gesellschafterkonto verwende referenz statt rechnungsnummer
+        } else {
+            ref = row[columns.rechnungsnummer - 1]; // Für andere Sheets verwende rechnungsnummer
+        }
 
         if (stringUtils.isEmpty(ref)) continue;
 
@@ -148,20 +168,40 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
         const key = String(ref).trim();
 
         // Werte vorab extrahieren und berechnen
-        const betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1] || 0);
+        let betrag;
+        if (sheetType === 'gesellschafterkonto') {
+            betrag = numberUtils.parseCurrency(row[columns.betrag - 1] || 0);
+        } else {
+            betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1] || 0);
+        }
+
         const isGutschrift = betrag < 0;
         const normalizedKey = stringUtils.normalizeText(key);
-        const mwstRate = columns.mwstSatz ?
-            numberUtils.parseMwstRate(row[columns.mwstSatz - 1] || 0) : 0;
-        const bezahlt = columns.bezahlt ?
-            Math.abs(numberUtils.parseCurrency(row[columns.bezahlt - 1] || 0)) : 0;
+
+        // MwSt-Rate je nach Sheettyp
+        let mwstRate = 0;
+        if (sheetType !== 'gesellschafterkonto' && columns.mwstSatz) {
+            mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1] || 0);
+        }
+
+        // Bezahlt-Betrag
+        let bezahlt = 0;
+        if (columns.bezahlt) {
+            bezahlt = Math.abs(numberUtils.parseCurrency(row[columns.bezahlt - 1] || 0));
+        }
+
         const kategorie = columns.kategorie && row[columns.kategorie - 1] ?
             row[columns.kategorie - 1].toString().trim() : '';
         const buchungskonto = columns.buchungskonto && row[columns.buchungskonto - 1] ?
             row[columns.buchungskonto - 1].toString().trim() : '';
 
-        // Bruttobetrag einmal berechnen
-        const bruttoAbs = Math.abs(betrag) * (1 + mwstRate/100);
+        // Bruttobetrag einmal berechnen (für Gesellschafterkonto ist Brutto = Betrag)
+        let bruttoAbs;
+        if (sheetType === 'gesellschafterkonto') {
+            bruttoAbs = Math.abs(betrag);
+        } else {
+            bruttoAbs = Math.abs(betrag) * (1 + mwstRate/100);
+        }
 
         // Optimiertes Datenformat mit allen benötigten Informationen
         map[key] = {
@@ -277,41 +317,57 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
 
         // Nur Matching durchführen, wenn eine Referenznummer vorhanden ist
         if (!stringUtils.isEmpty(refNumber)) {
-            // Für Ausgaben mit negativem Betrag zuerst auf Gutschriften prüfen
-            if (tranType === 'Ausgabe' && betragOriginal < 0) {
-                matchFound = processDocumentTypeMatching(
-                    sheetData.einnahmen, refNumber, betragValue, row,
-                    columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
-                    results, category, config, firstDataRow, true);
-
-                // Bei Gutschrift-Treffer den nächsten Eintrag verarbeiten
-                if (matchFound) continue;
-            }
-
-            // Standard-Logik für Einnahmen
+            // Einnahmen können auch Gesellschafterkonto-Einlagen sein
             if (tranType === 'Einnahme' && !matchFound) {
+                // Zuerst auf Einnahmen prüfen
                 matchFound = processDocumentTypeMatching(
                     sheetData.einnahmen, refNumber, betragValue, row,
                     columns, 'einnahme', config.einnahmen.columns, config.einnahmen.kontoMapping,
                     results, category, config, firstDataRow);
+
+                // Wenn keine Einnahme gefunden, auf Gesellschafterkonto mit positivem Betrag prüfen
+                if (!matchFound && sheetData.gesellschafterkonto) {
+                    matchFound = processGesellschafterkontoMatching(
+                        sheetData.gesellschafterkonto, refNumber, betragValue, row,
+                        columns, true, // isPositive = true für Einlagen
+                        config, results, firstDataRow);
+                }
             }
 
-            // Standard-Logik für Ausgaben - Optimiert mit Array von Dokumenttypen
-            if (tranType === 'Ausgabe' && !matchFound) {
-                const docTypes = [
-                    { data: sheetData.ausgaben, type: 'ausgabe', cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
-                    { data: sheetData.eigenbelege, type: 'eigenbeleg', cols: config.eigenbelege.columns, mapping: config.eigenbelege.kontoMapping },
-                    { data: sheetData.gesellschafterkonto, type: 'gesellschafterkonto', cols: config.gesellschafterkonto.columns, mapping: config.gesellschafterkonto.kontoMapping },
-                    { data: sheetData.holdingTransfers, type: 'holdingtransfer', cols: config.holdingTransfers.columns, mapping: config.holdingTransfers.kontoMapping },
-                ];
+            // Ausgaben können auch Gesellschafterkonto-Rückzahlungen sein
+            else if (tranType === 'Ausgabe' && !matchFound) {
+                // Für Ausgaben mit negativem Betrag zuerst auf Gutschriften prüfen
+                if (betragOriginal < 0) {
+                    matchFound = processDocumentTypeMatching(
+                        sheetData.einnahmen, refNumber, betragValue, row,
+                        columns, 'gutschrift', config.einnahmen.columns, config.einnahmen.kontoMapping,
+                        results, category, config, firstDataRow, true);
 
-                // Optimiert: Verwende some() für frühzeitigen Abbruch bei Treffer
-                matchFound = docTypes.some(docType =>
-                    processDocumentTypeMatching(
-                        docType.data, refNumber, betragValue, row,
-                        columns, docType.type, docType.cols, docType.mapping,
-                        results, category, config, firstDataRow),
-                );
+                    // Wenn keine Gutschrift gefunden, auf Gesellschafterkonto mit negativem Betrag prüfen
+                    if (!matchFound && sheetData.gesellschafterkonto) {
+                        matchFound = processGesellschafterkontoMatching(
+                            sheetData.gesellschafterkonto, refNumber, betragValue, row,
+                            columns, false, // isPositive = false für Rückzahlungen
+                            config, results, firstDataRow);
+                    }
+                }
+
+                // Wenn noch keine Übereinstimmung gefunden wurde, normale Ausgabentypen prüfen
+                if (!matchFound) {
+                    const docTypes = [
+                        { data: sheetData.ausgaben, type: 'ausgabe', cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
+                        { data: sheetData.eigenbelege, type: 'eigenbeleg', cols: config.eigenbelege.columns, mapping: config.eigenbelege.kontoMapping },
+                        { data: sheetData.holdingTransfers, type: 'holdingtransfer', cols: config.holdingTransfers.columns, mapping: config.holdingTransfers.kontoMapping },
+                    ];
+
+                    // Optimiert: Verwende some() für frühzeitigen Abbruch bei Treffer
+                    matchFound = docTypes.some(docType =>
+                        processDocumentTypeMatching(
+                            docType.data, refNumber, betragValue, row,
+                            columns, docType.type, docType.cols, docType.mapping,
+                            results, category, config, firstDataRow),
+                    );
+                }
             }
         }
 
@@ -367,20 +423,31 @@ function addEmptyResults(results) {
  * @returns {boolean} true wenn eine Übereinstimmung gefunden wurde
  */
 function processDocumentTypeMatching(docData, refNumber, betragValue, row, columns, docType, docCols, kontoMapping,
-    results, category, config, firstDataRow, isGutschrift = false) {
+    results, category, config, firstDataRow, isGutschrift = false, isGesellschafterEinlage = false) {
 
-    // Existing checks - no changes needed here
-    if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift') {
+    // Spezialbehandlung für Gutschriften und Gesellschafterkonto mit negativen Beträgen
+    if (isGutschrift && docType !== 'einnahme' && docType !== 'gutschrift' && docType !== 'gesellschafterkonto') {
         return false;
     }
 
     // Match finding - no changes needed
-    const matchResult = findMatch(refNumber, docData, isGutschrift ? null : betragValue);
+    const matchResult = findMatch(refNumber, docData, isGutschrift || isGesellschafterEinlage ? null : betragValue);
     if (!matchResult) return false;
 
-    // Check for gutschrift match
-    if (isGutschrift && (!matchResult.originalData || matchResult.originalData.betrag >= 0)) {
-        return false;
+    // Prüfen auf Gutschrift oder Gesellschafterkonto-Rückzahlung (negativ)
+    if (isGutschrift) {
+        // Bei Gutschriften oder Gesellschafterkonto-Rückzahlungen müssen die Beträge negativ sein
+        if (!matchResult.originalData || matchResult.originalData.betrag >= 0) {
+            return false;
+        }
+    }
+
+    // Prüfen auf Gesellschafterkonto-Einlage (positiv)
+    if (isGesellschafterEinlage) {
+        // Bei Gesellschafterkonto-Einlagen müssen die Beträge positiv sein
+        if (!matchResult.originalData || matchResult.originalData.betrag <= 0) {
+            return false;
+        }
     }
 
     // Validate reference match
@@ -389,7 +456,7 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     }
 
     // Create match info
-    const matchInfoText = createMatchInfo(matchResult, docType, betragValue);
+    const matchInfoText = createMatchInfo(matchResult, docType, betragValue, isGutschrift, isGesellschafterEinlage);
 
     // Get category and konto from the document
     let sourceCategory = '';
@@ -400,7 +467,7 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
         sourceKonto = matchResult.originalData.buchungskonto || '';
     }
 
-    // Set konten from mapping - MODIFIED SECTION
+    // Set konten from mapping
     let kontoSoll = '', kontoHaben = '';
 
     // If source category is available, try to get mapping from appropriate category
@@ -426,7 +493,7 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
             configKey = 'ausgaben';
         } else if (docType === 'eigenbeleg') {
             configKey = 'eigenbelege';
-        } else if (docType === 'gesellschafterkonto') {
+        } else if (docType === 'gesellschafterkonto' || docType === 'gesellschafterkontoEinlage') {
             configKey = 'gesellschafterkonto';
         } else if (docType === 'holdingtransfer') {
             configKey = 'holdingTransfers';
@@ -451,23 +518,32 @@ function processDocumentTypeMatching(docData, refNumber, betragValue, row, colum
     // Generate key for bank matches
     const key = `${docType}#${matchResult.row}`;
 
-    // Detect if this is a gutschrift
+    // Detect if this is a gutschrift or Gesellschafterkonto with negative amount
     const isActualGutschrift = docType === 'gutschrift' ||
         (matchResult.originalData && matchResult.originalData.betrag < 0);
 
+    // Detect if this is a Gesellschafterkonto entry with positive amount (Einlage)
+    const isGesellschafterkontoEinlage = docType === 'gesellschafterkontoEinlage' ||
+        (docType === 'gesellschafterkonto' && matchResult.originalData && matchResult.originalData.betrag > 0);
+
     // Store information for later marking
     results.bankZuordnungen[key] = {
-        typ: isActualGutschrift ? 'gutschrift' : (docType === 'gutschrift' ? 'einnahme' : docType),
+        typ: isActualGutschrift ? 'gutschrift' :
+            isGesellschafterkontoEinlage ? 'gesellschafterkontoEinlage' :
+                (docType === 'gutschrift' ? 'einnahme' : docType),
         row: matchResult.row,
         bankRow: firstDataRow + results.matchInfo.length - 1,
         bankDatum: row[columns.datum - 1],
         matchInfo: matchInfoText,
-        transTyp: isActualGutschrift ? 'Gutschrift' : row[columns.transaktionstyp - 1],
+        transTyp: isActualGutschrift ? 'Gutschrift' :
+            isGesellschafterkontoEinlage ? 'Einlage' :
+                row[columns.transaktionstyp - 1],
         category: category,
         sourceCategory: sourceCategory,
         kontoSoll: kontoSoll,
         kontoHaben: kontoHaben,
         isGutschrift: isActualGutschrift,
+        isGesellschafterkontoEinlage: isGesellschafterkontoEinlage,
         originalRef: matchResult.ref,
     };
 
@@ -603,7 +679,7 @@ function evaluateMatch(match, betrag = null) {
  * @param {number} betragValue - Der Betrag
  * @returns {string} Der Informationstext
  */
-function createMatchInfo(matchResult, docType, betragValue) {
+function createMatchInfo(matchResult, docType, betragValue, isGutschrift = false, isGesellschafterEinlage = false) {
     let matchStatus = '';
 
     // Match-Status mit Differenzanzeige
@@ -617,10 +693,14 @@ function createMatchInfo(matchResult, docType, betragValue) {
 
     // Verbesserte Gutschrift-Erkennung
     const isActualGutschrift = docType === 'gutschrift' ||
-        (matchResult.originalData && matchResult.originalData.betrag < 0);
+        (matchResult.originalData && matchResult.originalData.betrag < 0 && docType !== 'gesellschafterkontoEinlage');
+
+    // Gesellschafterkonto-Einlagen-Erkennung
+    const isActualGesellschafterEinlage = docType === 'gesellschafterkontoEinlage' ||
+        (docType === 'gesellschafterkonto' && matchResult.originalData && matchResult.originalData.betrag > 0);
 
     // Spezielle Behandlung für Gutschriften
-    if (isActualGutschrift) {
+    if (isActualGutschrift && docType !== 'gesellschafterkonto') {
         const gutschriftBetrag = Math.abs(matchResult.originalData ?
             matchResult.originalData.betrag : matchResult.brutto);
 
@@ -634,6 +714,34 @@ function createMatchInfo(matchResult, docType, betragValue) {
         }
 
         return `Gutschrift zu Einnahme #${matchResult.row}${matchStatus}`;
+    }
+
+    // Spezielle Behandlung für Gesellschafterkonto
+    if (docType === 'gesellschafterkonto' || docType === 'gesellschafterkontoEinlage') {
+        const betrag = matchResult.originalData ? Math.abs(matchResult.originalData.betrag) : betragValue;
+
+        // Status basierend auf Betrag und Vorzeichen
+        if (isActualGutschrift) {
+            // Gesellschafterkonto mit negativem Betrag (Rückzahlung)
+            if (numberUtils.isApproximatelyEqual(betragValue, betrag, 0.01)) {
+                matchStatus = ' (Vollständige Rückzahlung)';
+            } else if (betragValue < betrag) {
+                matchStatus = ' (Teilrückzahlung)';
+            } else {
+                matchStatus = ' (Ungewöhnliche Rückzahlung)';
+            }
+            return `Rückzahlung zu Gesellschafterkonto #${matchResult.row}${matchStatus}`;
+        } else if (isActualGesellschafterEinlage || isGesellschafterEinlage) {
+            // Gesellschafterkonto mit positivem Betrag (Einlage)
+            if (numberUtils.isApproximatelyEqual(betragValue, betrag, 0.01)) {
+                matchStatus = ' (Vollständige Einlage)';
+            } else if (betragValue < betrag) {
+                matchStatus = ' (Teileinlage)';
+            } else {
+                matchStatus = ' (Ungewöhnliche Einlage)';
+            }
+            return `Einlage zu Gesellschafterkonto #${matchResult.row}${matchStatus}`;
+        }
     }
 
     // Konstanten für Dokumenttypen verbessern die Lesbarkeit und Performance
@@ -746,6 +854,142 @@ function isGoodReferenceMatch(ref1, ref2) {
 
     // Keine gute Übereinstimmung
     return false;
+}
+
+/**
+ * Verarbeitet spezifisch Gesellschafterkonto-Matches
+ * @param {Object} gesellschafterData - Referenzdaten für Gesellschafterkonto
+ * @param {string} refNumber - Referenznummer
+ * @param {number} betragValue - Betrag aus Bankbewegung (absoluter Wert)
+ * @param {Array} row - Zeilendaten
+ * @param {Object} columns - Spaltenkonfiguration
+ * @param {boolean} isPositive - True für Einlagen (positive Beträge), False für Rückzahlungen (negative)
+ * @param {Object} config - Die Konfiguration
+ * @param {Object} results - Ergebnisobjekt
+ * @param {number} firstDataRow - Erste Datenzeile
+ * @returns {boolean} true wenn eine Übereinstimmung gefunden wurde
+ */
+function processGesellschafterkontoMatching(gesellschafterData, refNumber, betragValue, row, columns, isPositive, config, results, firstDataRow) {
+    // Match finding für Gesellschafterkonto
+    const matchResult = findGesellschafterMatch(gesellschafterData, refNumber, betragValue, isPositive);
+    if (!matchResult) return false;
+
+    // Validate reference match
+    if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
+        return false;
+    }
+
+    // Create match info mit korrekter Bezeichnung für Gesellschafterkonto
+    const matchType = isPositive ? 'Einlage' : 'Rückzahlung';
+    const matchInfoText = `Gesellschafterkonto ${matchType} #${matchResult.row} (${matchResult.matchType || ''})`;
+
+    // Get category from the document
+    let sourceCategory = '';
+    if (matchResult.originalData) {
+        sourceCategory = matchResult.originalData.kategorie || '';
+    }
+
+    // Kategorie aus Bankbewegung oder fallback
+    const category = row[columns.kategorie - 1] ?
+        row[columns.kategorie - 1].toString().trim() : sourceCategory;
+
+    // Set konten from mapping
+    let kontoSoll = '', kontoHaben = '';
+
+    // Mapping aus Gesellschafterkonto-Kategorie verwenden
+    if (sourceCategory) {
+        const categoryConfig = config.gesellschafterkonto?.categories?.[sourceCategory];
+        if (categoryConfig && categoryConfig.kontoMapping) {
+            kontoSoll = categoryConfig.kontoMapping.soll || '';
+            kontoHaben = categoryConfig.kontoMapping.gegen || '';
+        }
+    }
+
+    // Add results to arrays
+    results.matchInfo.push([matchInfoText]);
+    results.kontoSollResults.push([kontoSoll]);
+    results.kontoHabenResults.push([kontoHaben]);
+    results.categoryResults.push([category]);
+
+    // Generate key for bank matches
+    const key = `gesellschafterkonto#${matchResult.row}`;
+
+    // Store information for later marking
+    results.bankZuordnungen[key] = {
+        typ: 'gesellschafterkonto',
+        row: matchResult.row,
+        bankRow: firstDataRow + results.matchInfo.length - 1,
+        bankDatum: row[columns.datum - 1],
+        matchInfo: matchInfoText,
+        transTyp: isPositive ? 'Einlage' : 'Rückzahlung',
+        category: category,
+        sourceCategory: sourceCategory,
+        kontoSoll: kontoSoll,
+        kontoHaben: kontoHaben,
+        isPositive: isPositive,
+        originalRef: matchResult.ref,
+    };
+
+    return true;
+}
+
+/**
+ * Sucht spezifisch nach Gesellschafterkonto-Übereinstimmungen
+ * @param {Object} refMap - Referenzdaten für Gesellschafterkonto
+ * @param {string} reference - Referenznummer
+ * @param {number} betrag - Betrag (absoluter Wert)
+ * @param {boolean} isPositive - True für Einlagen, False für Rückzahlungen
+ * @returns {Object|null} Matchergebnis oder null
+ */
+function findGesellschafterMatch(refMap, reference, betrag, isPositive) {
+    // Keine Daten oder keine Referenz
+    if (!reference || !refMap) return null;
+
+    // Ensure reference is a string
+    const refString = String(reference).trim();
+    if (!refString) return null;
+
+    // Normalisierte Suche vorbereiten
+    const normalizedRef = stringUtils.normalizeText(refString);
+    if (!normalizedRef) return null;
+
+    // Potenzielle Treffer sammeln
+    const candidates = [];
+
+    // Durchsuche alle Einträge im refMap
+    for (const key in refMap) {
+        const entry = refMap[key];
+        // Prüfe, ob Vorzeichen passt
+        const hasCorrectSign = isPositive ? (entry.betrag > 0) : (entry.betrag < 0);
+
+        if (!hasCorrectSign) continue;
+
+        // Prüfe Referenz auf Übereinstimmung
+        if (key === refString || key === normalizedRef ||
+            isGoodReferenceMatch(key, refString)) {
+
+            // Betrag prüfen
+            const entryBetrag = Math.abs(entry.betrag);
+            if (numberUtils.isApproximatelyEqual(betrag, entryBetrag, 0.02)) {
+                candidates.push({...entry, matchType: 'Vollständige Zahlung'});
+            } else if (Math.abs(betrag - entryBetrag) <= 0.1 * entryBetrag) {
+                candidates.push({...entry, matchType: 'Annähernde Zahlung'});
+            }
+        }
+    }
+
+    // Besten Kandidaten zurückgeben (wenn vorhanden)
+    if (candidates.length > 0) {
+        // Sortiere nach Matchqualität, bevorzuge "Vollständige Zahlung"
+        candidates.sort((a, b) => {
+            if (a.matchType === 'Vollständige Zahlung' && b.matchType !== 'Vollständige Zahlung') return -1;
+            if (a.matchType !== 'Vollständige Zahlung' && b.matchType === 'Vollständige Zahlung') return 1;
+            return 0;
+        });
+        return candidates[0];
+    }
+
+    return null;
 }
 
 export default {
