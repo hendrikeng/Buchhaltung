@@ -125,11 +125,11 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
     // Optimierung: Nur benötigte Spalten laden
     let requiredCols = [];
 
-    // Für Gesellschafterkonto spezielle Konfiguration
-    if (sheetType === 'gesellschafterkonto') {
+    // Für Gesellschafterkonto und Holding Transfers spezielle Konfiguration
+    if (sheetType === 'gesellschafterkonto' || sheetType === 'holdingTransfers') {
         requiredCols = [
             columns.referenz,         // Statt rechnungsnummer
-            columns.betrag,           // Betrag für Gesellschafterkonto
+            columns.betrag,           // Betrag für Gesellschafterkonto/HoldingTransfers
             columns.kategorie,
             columns.buchungskonto,
             columns.bezahlt || 0,      // Falls vorhanden
@@ -156,8 +156,8 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
         // Referenz basierend auf dem Sheettyp extrahieren
         let ref;
-        if (sheetType === 'gesellschafterkonto') {
-            ref = row[columns.referenz - 1]; // Für Gesellschafterkonto verwende referenz statt rechnungsnummer
+        if (sheetType === 'gesellschafterkonto' || sheetType === 'holdingTransfers') {
+            ref = row[columns.referenz - 1]; // Für Gesellschafterkonto und Holding Transfers verwende referenz
         } else {
             ref = row[columns.rechnungsnummer - 1]; // Für andere Sheets verwende rechnungsnummer
         }
@@ -169,7 +169,7 @@ function loadSheetReferenceData(sheet, columns, sheetType) {
 
         // Werte vorab extrahieren und berechnen
         let betrag;
-        if (sheetType === 'gesellschafterkonto') {
+        if (sheetType === 'gesellschafterkonto' || sheetType === 'holdingTransfers') {
             betrag = numberUtils.parseCurrency(row[columns.betrag - 1] || 0);
         } else {
             betrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1] || 0);
