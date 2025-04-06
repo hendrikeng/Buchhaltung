@@ -100,12 +100,14 @@ export default {
                 group: 'eigenkapital',
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '2970'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
             'Verlustvortrag': {
                 taxType: 'steuerfrei_inland',
                 group: 'eigenkapital',
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '2978'},
+                bwaMapping: 'eigenkapitalveraenderungen',
             },
             'Umsatzsteuererstattungen': {
                 taxType: 'steuerfrei_inland',
@@ -182,6 +184,7 @@ export default {
                 group: 'leistungen',
                 besonderheit: null,
                 kontoMapping: {soll: '4920', gegen: '1200', vorsteuer: '1576'},
+                bwaMapping: 'fremdleistungen',
             },
 
             // Personalkosten
@@ -399,6 +402,7 @@ export default {
                 group: 'finanzen',
                 besonderheit: null,
                 kontoMapping: {soll: '6855', gegen: '1200'},
+                bwaMapping: 'sonstigeAufwendungen',
             },
         },
     },
