@@ -1,4 +1,4 @@
-// modules/bwaModule/calculator.js
+// modules/bwaModule/calculator.js - KORRIGIERTE VERSION
 import dateUtils from '../../utils/dateUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 import stringUtils from '../../utils/stringUtils.js';
@@ -9,6 +9,7 @@ const categoryMappingCache = new Map();
 /**
  * Verarbeitet Einnahmen und ordnet sie den BWA-Kategorien zu
  * Optimierte Version mit Cache und effizienteren Lookups
+ * KORRIGIERT für Ist-Besteuerung und Ausland-Behandlung
  * @param {Array} row - Zeile aus dem Einnahmen-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -17,33 +18,60 @@ function processRevenue(row, bwaData, config) {
     try {
         const columns = config.einnahmen.columns;
 
-        // Monat bestimmen
-        const m = dateUtils.getMonthFromRow(row, 'einnahmen', config);
-        if (!m) return;
+        // IST-BESTEUERUNG: Prüfen ob bezahlt (analog zu UStVA)
+        // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+        const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
+        if (!paymentDate || paymentDate > new Date()) return;
 
-        // Betrag extrahieren
-        const amount = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        // Monat des Zahlungsdatums für Ist-Besteuerung verwenden
+        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
+
+        // Prüfen ob Zahlungsdatum im relevanten Jahr liegt
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+        if (paymentDate.getFullYear() !== targetYear) return;
+
+        // Für Ist-Besteuerung: Verwende den bezahlten Betrag statt des Nettobetrags
+        const nettobetrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
+        const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
+
+        // Wenn nichts bezahlt wurde, gibt es nichts zu verarbeiten
+        if (bezahlt <= 0) return;
+
+        // Wenn nur teilweise bezahlt, berechne den korrekten Anteil
+        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Begrenze auf 100%
+
         if (amount === 0) return;
 
         // Kategorie extrahieren
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
+
+        // Ausland-Status prüfen
+        const auslandWert = columns.ausland && row[columns.ausland - 1] ?
+            row[columns.ausland - 1].toString().trim() : 'Inland';
+        const isEuAusland = auslandWert === 'EU-Ausland';
+        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
+        const isAusland = isEuAusland || isNichtEuAusland;
 
         // Nicht-betriebliche Buchungen ignorieren
         const nonBusinessCategories = new Set(['Gewinnvortrag', 'Verlustvortrag', 'Gewinnvortrag/Verlustvortrag']);
         if (nonBusinessCategories.has(category)) return;
 
         // Cache-Schlüssel für Kategorie-Zuordnung
-        const cacheKey = `rev_cat_${category}`;
+        const cacheKey = `rev_cat_${category}_${auslandWert}`;
 
         // Prüfen, ob Zuordnung im Cache
         if (categoryMappingCache.has(cacheKey)) {
             const target = categoryMappingCache.get(cacheKey);
-            bwaData[m][target] += amount;
+            bwaData[paymentMonth][target] += amount;
             return;
         }
 
         // Direkte Zuordnung basierend auf der Kategorie für häufige Fälle
         const directMappings = {
+            'Erlöse aus Lieferungen und Leistungen': 'umsatzerloese',
+            'Provisionserlöse': 'provisionserloese',
             'Sonstige betriebliche Erträge': 'sonstigeErtraege',
             'Erträge aus Vermietung/Verpachtung': 'vermietung',
             'Erträge aus Zuschüssen': 'zuschuesse',
@@ -51,29 +79,51 @@ function processRevenue(row, bwaData, config) {
             'Erträge aus Anlagenabgängen': 'anlagenabgaenge',
         };
 
-        if (directMappings[category]) {
-            categoryMappingCache.set(cacheKey, directMappings[category]);
-            bwaData[m][directMappings[category]] += amount;
-            return;
-        }
-
         // BWA-Mapping aus Konfiguration verwenden
         const categoryConfig = config.einnahmen.categories[category];
-        const mapping = categoryConfig?.bwaMapping;
+        let mapping = categoryConfig?.bwaMapping;
 
-        if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
+        // Direktes Mapping aus Liste wenn verfügbar
+        if (!mapping && directMappings[category]) {
+            mapping = directMappings[category];
+        }
+
+        // Wenn Mapping vorhanden, Ausland-Status berücksichtigen
+        if (mapping) {
+            // Bei Ausland je nach Kategorie anpassen
+            if (isAusland) {
+                if (isEuAusland) {
+                    // EU-Ausland: Innergemeinschaftliche Lieferungen
+                    // BWA-Mappings behalten aber spezielle UStVA-Kategorie
+                    if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
+                        // Zusätzlich als steuerfreie Ausland-Einnahmen markieren
+                        bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
+                    }
+                } else if (isNichtEuAusland) {
+                    // Nicht-EU-Ausland: Export
+                    if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
+                        // Zusätzlich als steuerfreie Ausland-Einnahmen markieren
+                        bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
+                    }
+                }
+            }
+
+            // Mapping im Cache speichern und anwenden
             categoryMappingCache.set(cacheKey, mapping);
-            bwaData[m][mapping] += amount;
+            bwaData[paymentMonth][mapping] += amount;
             return;
         }
 
-        // Kategorisierung nach Steuersatz
-        if (numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst) === 0) {
+        // Fallback-Kategorisierung nach Steuersatz und Ausland
+        if (isAusland) {
+            categoryMappingCache.set(cacheKey, 'steuerfreieAuslandEinnahmen');
+            bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
+        } else if (numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst) === 0) {
             categoryMappingCache.set(cacheKey, 'steuerfreieInlandEinnahmen');
-            bwaData[m].steuerfreieInlandEinnahmen += amount;
+            bwaData[paymentMonth].steuerfreieInlandEinnahmen += amount;
         } else {
             categoryMappingCache.set(cacheKey, 'umsatzerloese');
-            bwaData[m].umsatzerloese += amount;
+            bwaData[paymentMonth].umsatzerloese += amount;
         }
     } catch (e) {
         console.error('Fehler bei der Verarbeitung einer Einnahme:', e);
@@ -82,7 +132,7 @@ function processRevenue(row, bwaData, config) {
 
 /**
  * Verarbeitet Ausgaben und ordnet sie den BWA-Kategorien zu
- * Optimierte Version mit Cache und effizienteren Lookups
+ * KORRIGIERT für Ist-Besteuerung und Ausland-Behandlung
  * @param {Array} row - Zeile aus dem Ausgaben-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -91,16 +141,41 @@ function processExpense(row, bwaData, config) {
     try {
         const columns = config.ausgaben.columns;
 
-        // Monat bestimmen
-        const m = dateUtils.getMonthFromRow(row, 'ausgaben', config);
-        if (!m) return;
+        // IST-BESTEUERUNG: Prüfen ob bezahlt (analog zu UStVA)
+        // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+        const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
+        if (!paymentDate || paymentDate > new Date()) return;
 
-        // Betrag extrahieren
-        const amount = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        // Monat des Zahlungsdatums für Ist-Besteuerung verwenden
+        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
+
+        // Prüfen ob Zahlungsdatum im relevanten Jahr liegt
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+        if (paymentDate.getFullYear() !== targetYear) return;
+
+        // Für Ist-Besteuerung: Verwende den bezahlten Betrag statt des Nettobetrags
+        const nettobetrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
+        const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
+
+        // Wenn nichts bezahlt wurde, gibt es nichts zu verarbeiten
+        if (bezahlt <= 0) return;
+
+        // Wenn nur teilweise bezahlt, berechne den korrekten Anteil
+        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Begrenze auf 100%
+
         if (amount === 0) return;
 
         // Kategorie extrahieren
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
+
+        // Ausland-Status prüfen
+        const auslandWert = columns.ausland && row[columns.ausland - 1] ?
+            row[columns.ausland - 1].toString().trim() : 'Inland';
+        const isEuAusland = auslandWert === 'EU-Ausland';
+        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
+        const isAusland = isEuAusland || isNichtEuAusland;
 
         // Nicht-betriebliche Positionen ignorieren (mit Set für schnelleren Lookup)
         const nonBusinessCategories = new Set([
@@ -112,30 +187,49 @@ function processExpense(row, bwaData, config) {
             return;
         }
 
-        // Cache-Schlüssel für Kategorie-Zuordnung
-        const cacheKey = `exp_cat_${category}`;
+        // Cache-Schlüssel für Kategorie-Zuordnung (inklusive Ausland-Status)
+        const cacheKey = `exp_cat_${category}_${auslandWert}`;
 
         // Prüfen, ob Zuordnung im Cache
         if (categoryMappingCache.has(cacheKey)) {
             const target = categoryMappingCache.get(cacheKey);
-            bwaData[m][target] += amount;
+            bwaData[paymentMonth][target] += amount;
             return;
         }
 
         // Direkte Zuordnung basierend auf der Kategorie für häufige Kategorien
         const directMappings = {
+            'Wareneinsatz': 'wareneinsatz',
+            'Bezogene Leistungen': 'fremdleistungen',
+            'Roh-, Hilfs- & Betriebsstoffe': 'rohHilfsBetriebsstoffe',
             'Bruttolöhne & Gehälter': 'bruttoLoehne',
             'Soziale Abgaben & Arbeitgeberanteile': 'sozialeAbgaben',
             'Sonstige Personalkosten': 'sonstigePersonalkosten',
-            'Gewerbesteuerrückstellungen': 'gewerbesteuerRueckstellungen',
+            'Marketing & Werbung': 'werbungMarketing',
+            'Werbung & Marketing': 'werbungMarketing',
+            'Reisekosten': 'reisekosten',
+            'Versicherungen': 'versicherungen',
             'Telefon & Internet': 'telefonInternet',
             'Bürokosten': 'buerokosten',
             'Fortbildungskosten': 'fortbildungskosten',
+            'Kfz-Kosten': 'kfzKosten',
+            'Abschreibungen Maschinen': 'abschreibungenMaschinen',
+            'Abschreibungen Büroausstattung': 'abschreibungenBueromaterial',
+            'Abschreibungen immaterielle Wirtschaftsgüter': 'abschreibungenImmateriell',
+            'Zinsen auf Bankdarlehen': 'zinsenBank',
+            'Zinsen auf Gesellschafterdarlehen': 'zinsenGesellschafter',
+            'Leasingkosten': 'leasingkosten',
+            'Gewerbesteuerrückstellungen': 'gewerbesteuerRueckstellungen',
+            'Körperschaftsteuer': 'koerperschaftsteuer',
+            'Solidaritätszuschlag': 'solidaritaetszuschlag',
+            'Sonstige Steuerrückstellungen': 'steuerrueckstellungen',
+            'Sonstige betriebliche Aufwendungen': 'sonstigeAufwendungen',
         };
 
+        // Direktes Mapping aus Liste wenn verfügbar
         if (directMappings[category]) {
             categoryMappingCache.set(cacheKey, directMappings[category]);
-            bwaData[m][directMappings[category]] += amount;
+            bwaData[paymentMonth][directMappings[category]] += amount;
             return;
         }
 
@@ -143,16 +237,30 @@ function processExpense(row, bwaData, config) {
         const categoryConfig = config.ausgaben.categories[category];
         const mapping = categoryConfig?.bwaMapping;
 
-        if (!mapping) {
-            categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
-            bwaData[m].sonstigeAufwendungen += amount;
+        if (mapping) {
+            // Mapping für diese Kategorie cachen und anwenden
+            categoryMappingCache.set(cacheKey, mapping);
+            bwaData[paymentMonth][mapping] += amount;
             return;
         }
 
-        // Mapping für diese Kategorie cachen und anwenden
-        categoryMappingCache.set(cacheKey, mapping);
-        bwaData[m][mapping] += amount;
-
+        // Fallback-Handling für Ausland und ohne konkretes Mapping
+        if (isAusland) {
+            // Bei EU-Ausland: Unterscheidung nach Reverse-Charge-Verfahren
+            if (isEuAusland) {
+                // Bei EU-Ausland werden die meisten Ausgaben als normale betriebliche Aufwendungen mit Reverse-Charge gebucht
+                categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
+                bwaData[paymentMonth].sonstigeAufwendungen += amount;
+            } else {
+                // Bei Nicht-EU Ausland als steuerfreie Auslandsausgaben
+                categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
+                bwaData[paymentMonth].sonstigeAufwendungen += amount;
+            }
+        } else {
+            // Fallback: Als sonstige Aufwendungen erfassen
+            categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
+            bwaData[paymentMonth].sonstigeAufwendungen += amount;
+        }
     } catch (e) {
         console.error('Fehler bei der Verarbeitung einer Ausgabe:', e);
     }
@@ -160,7 +268,7 @@ function processExpense(row, bwaData, config) {
 
 /**
  * Verarbeitet Eigenbelege und ordnet sie den BWA-Kategorien zu
- * Optimierte Version mit Cache und effizienteren Lookups
+ * KORRIGIERT für Ist-Besteuerung und Ausland-Handling
  * @param {Array} row - Zeile aus dem Eigenbelege-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -169,19 +277,43 @@ function processEigen(row, bwaData, config) {
     try {
         const columns = config.eigenbelege.columns;
 
-        // Monat bestimmen
-        const m = dateUtils.getMonthFromRow(row, 'eigenbelege', config);
-        if (!m) return;
+        // IST-BESTEUERUNG: Prüfen ob erstattet/bezahlt (analog zu UStVA)
+        // Erstattungsdatum prüfen (nur abgeschlossene Zahlungen)
+        const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
+        if (!paymentDate || paymentDate > new Date()) return;
 
-        // Betrag extrahieren
-        const amount = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        // Monat des Zahlungsdatums für Ist-Besteuerung verwenden
+        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
+
+        // Prüfen ob Zahlungsdatum im relevanten Jahr liegt
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+        if (paymentDate.getFullYear() !== targetYear) return;
+
+        // Für Ist-Besteuerung: Verwende den bezahlten Betrag statt des Nettobetrags
+        const nettobetrag = numberUtils.parseCurrency(row[columns.nettobetrag - 1]);
+        const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
+        const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
+
+        // Wenn nichts bezahlt wurde, gibt es nichts zu verarbeiten
+        if (bezahlt <= 0) return;
+
+        // Wenn nur teilweise bezahlt, berechne den korrekten Anteil
+        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Begrenze auf 100%
+
         if (amount === 0) return;
 
         // Kategorie extrahieren
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Cache-Schlüssel für Kategorie-Zuordnung
-        const cacheKey = `eig_cat_${category}`;
+        // Ausland-Status prüfen
+        const auslandWert = columns.ausland && row[columns.ausland - 1] ?
+            row[columns.ausland - 1].toString().trim() : 'Inland';
+        const isEuAusland = auslandWert === 'EU-Ausland';
+        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
+
+        // Cache-Schlüssel für Kategorie-Zuordnung (mit Ausland-Status)
+        const cacheKey = `eig_cat_${category}_${auslandWert}`;
 
         // Prüfen, ob Kategorie-Konfiguration im Cache
         let eigenCfg, taxType;
@@ -196,14 +328,14 @@ function processEigen(row, bwaData, config) {
         }
 
         // Basierend auf Steuertyp zuordnen
-        if (taxType === 'steuerfrei') {
-            bwaData[m].eigenbelegeSteuerfrei += amount;
+        if (taxType === 'steuerfrei' || isEuAusland || isNichtEuAusland) {
+            bwaData[paymentMonth].eigenbelegeSteuerfrei += amount;
         } else {
-            bwaData[m].eigenbelegeSteuerpflichtig += amount;
+            bwaData[paymentMonth].eigenbelegeSteuerpflichtig += amount;
         }
 
         // BWA-Mapping verwenden wenn vorhanden (mit Cache)
-        const mappingCacheKey = `eig_map_${category}`;
+        const mappingCacheKey = `eig_map_${category}_${auslandWert}`;
         let mapping;
 
         if (categoryMappingCache.has(mappingCacheKey)) {
@@ -214,8 +346,7 @@ function processEigen(row, bwaData, config) {
             categoryMappingCache.set(mappingCacheKey, mapping);
         }
 
-        bwaData[m][mapping] += amount;
-
+        bwaData[paymentMonth][mapping] += amount;
     } catch (e) {
         console.error('Fehler bei der Verarbeitung eines Eigenbelegs:', e);
     }
@@ -223,7 +354,7 @@ function processEigen(row, bwaData, config) {
 
 /**
  * Verarbeitet Gesellschafterkonto und ordnet Positionen den BWA-Kategorien zu
- * Optimierte Version mit Cache und effizienteren Zeitstempeln
+ * KORRIGIERT für Ist-Besteuerung
  * @param {Array} row - Zeile aus dem Gesellschafterkonto-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -232,29 +363,17 @@ function processGesellschafter(row, bwaData, config) {
     try {
         const columns = config.gesellschafterkonto.columns;
 
-        // Datum aus der Zeile extrahieren und Monat ermitteln
-        const zeitstempelDatum = row[columns.zeitstempel - 1];
-        if (!zeitstempelDatum) return;
+        // IST-BESTEUERUNG: Prüfen ob bezahlt
+        // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+        const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
+        if (!paymentDate || paymentDate > new Date()) return;
 
-        // Optimierung: Datum und Jahr gecacht prüfen
-        const dateCacheKey = `gesellschafter_date_${zeitstempelDatum}`;
+        // Monat des Zahlungsdatums für Ist-Besteuerung verwenden
+        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
 
-        let d, m;
-        if (categoryMappingCache.has(dateCacheKey)) {
-            const cached = categoryMappingCache.get(dateCacheKey);
-            d = cached.date;
-            m = cached.month;
-        } else {
-            d = dateUtils.parseDate(zeitstempelDatum);
-            if (!d) return;
-
-            // Prüfen, ob das Jahr mit dem Konfigurationsjahr übereinstimmt
-            const targetYear = config?.tax?.year || new Date().getFullYear();
-            if (d.getFullYear() !== targetYear) return;
-
-            m = d.getMonth() + 1; // Monat (1-12)
-            categoryMappingCache.set(dateCacheKey, { date: d, month: m });
-        }
+        // Prüfen ob Zahlungsdatum im relevanten Jahr liegt
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+        if (paymentDate.getFullYear() !== targetYear) return;
 
         // Betrag extrahieren
         const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
@@ -276,7 +395,7 @@ function processGesellschafter(row, bwaData, config) {
         }
 
         if (mapping) {
-            bwaData[m][mapping] += amount;
+            bwaData[paymentMonth][mapping] += amount;
         }
     } catch (e) {
         console.error('Fehler bei der Verarbeitung einer Gesellschafterkonto-Position:', e);
@@ -285,7 +404,7 @@ function processGesellschafter(row, bwaData, config) {
 
 /**
  * Verarbeitet Holding Transfers und ordnet Positionen den BWA-Kategorien zu
- * Optimierte Version mit Cache und effizienteren Lookups
+ * KORRIGIERT für Ist-Besteuerung
  * @param {Array} row - Zeile aus dem Holding Transfers-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -294,36 +413,24 @@ function processHolding(row, bwaData, config) {
     try {
         const columns = config.holdingTransfers.columns;
 
-        // Datum aus der Zeile extrahieren und Monat ermitteln
-        const zeitstempelDatum = row[columns.zeitstempel - 1];
-        if (!zeitstempelDatum) return;
+        // IST-BESTEUERUNG: Prüfen ob bezahlt
+        // Zahlungsdatum prüfen (nur abgeschlossene Zahlungen)
+        const paymentDate = dateUtils.parseDate(row[columns.zahlungsdatum - 1]);
+        if (!paymentDate || paymentDate > new Date()) return;
 
-        // Optimierung: Datum und Jahr gecacht prüfen
-        const dateCacheKey = `holding_date_${zeitstempelDatum}`;
+        // Monat des Zahlungsdatums für Ist-Besteuerung verwenden
+        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
 
-        let d, m;
-        if (categoryMappingCache.has(dateCacheKey)) {
-            const cached = categoryMappingCache.get(dateCacheKey);
-            d = cached.date;
-            m = cached.month;
-        } else {
-            d = dateUtils.parseDate(zeitstempelDatum);
-            if (!d) return;
-
-            // Prüfen, ob das Jahr mit dem Konfigurationsjahr übereinstimmt
-            const targetYear = config?.tax?.year || new Date().getFullYear();
-            if (d.getFullYear() !== targetYear) return;
-
-            m = d.getMonth() + 1; // Monat (1-12)
-            categoryMappingCache.set(dateCacheKey, { date: d, month: m });
-        }
+        // Prüfen ob Zahlungsdatum im relevanten Jahr liegt
+        const targetYear = config?.tax?.year || new Date().getFullYear();
+        if (paymentDate.getFullYear() !== targetYear) return;
 
         // Betrag extrahieren
         const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
         if (amount === 0) return;
 
         // Kategorie extrahieren
-        const category = row[columns.art - 1]?.toString().trim() || '';
+        const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
         // BWA-Mapping verwenden (mit Cache)
         const mappingCacheKey = `holding_map_${category}`;
@@ -338,7 +445,7 @@ function processHolding(row, bwaData, config) {
         }
 
         if (mapping) {
-            bwaData[m][mapping] += amount;
+            bwaData[paymentMonth][mapping] += amount;
         }
     } catch (e) {
         console.error('Fehler bei der Verarbeitung eines Holding Transfers:', e);
