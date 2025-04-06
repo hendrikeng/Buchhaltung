@@ -288,6 +288,8 @@ function collectAccountInfo(config) {
  * @param {Object} accountInfo - Kontoinformationen
  * @param {Object} config - Die Konfiguration
  */
+// src/modules/bankReconciliationModule/matchingHandler.js - modified processBankEntries function
+
 function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
     results, accountInfo, config) {
 
@@ -317,7 +319,7 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
 
         // Nur Matching durchführen, wenn eine Referenznummer vorhanden ist
         if (!stringUtils.isEmpty(refNumber)) {
-            // Einnahmen können auch Gesellschafterkonto-Einlagen sein
+            // Einnahmen können auch Gesellschafterkonto-Einlagen oder Holding-Transfers sein
             if (tranType === 'Einnahme' && !matchFound) {
                 // Zuerst auf Einnahmen prüfen
                 matchFound = processDocumentTypeMatching(
@@ -332,9 +334,17 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                         columns, true, // isPositive = true für Einlagen
                         config, results, firstDataRow);
                 }
+
+                // Wenn immer noch kein Match, auf Holding Transfers mit positivem Betrag prüfen
+                if (!matchFound && sheetData.holdingTransfers) {
+                    matchFound = processHoldingTransferMatching(
+                        sheetData.holdingTransfers, refNumber, betragValue, row,
+                        columns, true, // isPositive = true für Kapitalrückführung
+                        config, results, firstDataRow);
+                }
             }
 
-            // Ausgaben können auch Gesellschafterkonto-Rückzahlungen sein
+            // Ausgaben können auch Gesellschafterkonto-Rückzahlungen oder negative Holding-Transfers sein
             else if (tranType === 'Ausgabe' && !matchFound) {
                 // Für Ausgaben mit negativem Betrag zuerst auf Gutschriften prüfen
                 if (betragOriginal < 0) {
@@ -350,6 +360,14 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                             columns, false, // isPositive = false für Rückzahlungen
                             config, results, firstDataRow);
                     }
+
+                    // Wenn immer noch kein Match, auf Holding Transfer mit negativem Betrag prüfen
+                    if (!matchFound && sheetData.holdingTransfers) {
+                        matchFound = processHoldingTransferMatching(
+                            sheetData.holdingTransfers, refNumber, betragValue, row,
+                            columns, false, // isPositive = false für Gewinnübertrag
+                            config, results, firstDataRow);
+                    }
                 }
 
                 // Wenn noch keine Übereinstimmung gefunden wurde, normale Ausgabentypen prüfen
@@ -357,7 +375,6 @@ function processBankEntries(bankData, firstDataRow, lastRow, columns, sheetData,
                     const docTypes = [
                         { data: sheetData.ausgaben, type: 'ausgabe', cols: config.ausgaben.columns, mapping: config.ausgaben.kontoMapping },
                         { data: sheetData.eigenbelege, type: 'eigenbeleg', cols: config.eigenbelege.columns, mapping: config.eigenbelege.kontoMapping },
-                        { data: sheetData.holdingTransfers, type: 'holdingtransfer', cols: config.holdingTransfers.columns, mapping: config.holdingTransfers.kontoMapping },
                     ];
 
                     // Optimiert: Verwende some() für frühzeitigen Abbruch bei Treffer
@@ -693,14 +710,15 @@ function createMatchInfo(matchResult, docType, betragValue, isGutschrift = false
 
     // Verbesserte Gutschrift-Erkennung
     const isActualGutschrift = docType === 'gutschrift' ||
-        (matchResult.originalData && matchResult.originalData.betrag < 0 && docType !== 'gesellschafterkontoEinlage');
+        (matchResult.originalData && matchResult.originalData.betrag < 0 &&
+            docType !== 'gesellschafterkontoEinlage' && docType !== 'holdingtransfer');
 
     // Gesellschafterkonto-Einlagen-Erkennung
     const isActualGesellschafterEinlage = docType === 'gesellschafterkontoEinlage' ||
         (docType === 'gesellschafterkonto' && matchResult.originalData && matchResult.originalData.betrag > 0);
 
     // Spezielle Behandlung für Gutschriften
-    if (isActualGutschrift && docType !== 'gesellschafterkonto') {
+    if (isActualGutschrift && docType !== 'gesellschafterkonto' && docType !== 'holdingtransfer') {
         const gutschriftBetrag = Math.abs(matchResult.originalData ?
             matchResult.originalData.betrag : matchResult.brutto);
 
@@ -741,6 +759,52 @@ function createMatchInfo(matchResult, docType, betragValue, isGutschrift = false
                 matchStatus = ' (Ungewöhnliche Einlage)';
             }
             return `Einlage zu Gesellschafterkonto #${matchResult.row}${matchStatus}`;
+        }
+    }
+
+    // Spezielle Behandlung für Holding Transfers
+    if (docType === 'holdingtransfer') {
+        const betrag = matchResult.originalData ? Math.abs(matchResult.originalData.betrag) : betragValue;
+
+        // Kategorie und isHolding extrahieren
+        const kategorie = matchResult.originalData?.kategorie || '';
+        const isHolding = matchResult.isHolding || false;
+
+        // Status basierend auf Kategorie, isHolding und Betrag
+        if (kategorie === 'Gewinnübertrag') {
+            // Gewinnübertrag: Bei Holding GmbH Einnahme, bei operativer GmbH Ausgabe
+            const perspective = isHolding ? 'Einnahme' : 'Ausgabe';
+            if (numberUtils.isApproximatelyEqual(betragValue, betrag, 0.01)) {
+                matchStatus = ' (Vollständige Übertragung)';
+            } else if (betragValue < betrag) {
+                matchStatus = ' (Teilübertragung)';
+            } else {
+                matchStatus = ' (Ungewöhnliche Übertragung)';
+            }
+            return `Gewinnübertrag ${perspective} #${matchResult.row}${matchStatus}`;
+        }
+        else if (kategorie === 'Kapitalrückführung') {
+            // Kapitalrückführung: Bei Holding GmbH Ausgabe, bei operativer GmbH Einnahme
+            const perspective = isHolding ? 'Ausgabe' : 'Einnahme';
+            if (numberUtils.isApproximatelyEqual(betragValue, betrag, 0.01)) {
+                matchStatus = ' (Vollständige Rückführung)';
+            } else if (betragValue < betrag) {
+                matchStatus = ' (Teilrückführung)';
+            } else {
+                matchStatus = ' (Ungewöhnliche Rückführung)';
+            }
+            return `Kapitalrückführung ${perspective} #${matchResult.row}${matchStatus}`;
+        }
+        else {
+            // Andere Holding Transfer Typen
+            if (numberUtils.isApproximatelyEqual(betragValue, betrag, 0.01)) {
+                matchStatus = ' (Vollständig)';
+            } else if (betragValue < betrag) {
+                matchStatus = ' (Teilweise)';
+            } else {
+                matchStatus = ' (Ungewöhnlich)';
+            }
+            return `Holding Transfer ${kategorie} #${matchResult.row}${matchStatus}`;
         }
     }
 
@@ -961,6 +1025,180 @@ function findGesellschafterMatch(refMap, reference, betrag, isPositive) {
         const entry = refMap[key];
         // Prüfe, ob Vorzeichen passt
         const hasCorrectSign = isPositive ? (entry.betrag > 0) : (entry.betrag < 0);
+
+        if (!hasCorrectSign) continue;
+
+        // Prüfe Referenz auf Übereinstimmung
+        if (key === refString || key === normalizedRef ||
+            isGoodReferenceMatch(key, refString)) {
+
+            // Betrag prüfen
+            const entryBetrag = Math.abs(entry.betrag);
+            if (numberUtils.isApproximatelyEqual(betrag, entryBetrag, 0.02)) {
+                candidates.push({...entry, matchType: 'Vollständige Zahlung'});
+            } else if (Math.abs(betrag - entryBetrag) <= 0.1 * entryBetrag) {
+                candidates.push({...entry, matchType: 'Annähernde Zahlung'});
+            }
+        }
+    }
+
+    // Besten Kandidaten zurückgeben (wenn vorhanden)
+    if (candidates.length > 0) {
+        // Sortiere nach Matchqualität, bevorzuge "Vollständige Zahlung"
+        candidates.sort((a, b) => {
+            if (a.matchType === 'Vollständige Zahlung' && b.matchType !== 'Vollständige Zahlung') return -1;
+            if (a.matchType !== 'Vollständige Zahlung' && b.matchType === 'Vollständige Zahlung') return 1;
+            return 0;
+        });
+        return candidates[0];
+    }
+
+    return null;
+}
+
+/**
+ * Verarbeitet spezifisch Holding Transfer-Matches
+ * @param {Object} holdingData - Referenzdaten für Holding Transfers
+ * @param {string} refNumber - Referenznummer
+ * @param {number} betragValue - Betrag aus Bankbewegung (absoluter Wert)
+ * @param {Array} row - Zeilendaten
+ * @param {Object} columns - Spaltenkonfiguration
+ * @param {boolean} isPositive - Betrag positiv oder negativ in der Bankbewegung
+ * @param {Object} config - Die Konfiguration
+ * @param {Object} results - Ergebnisobjekt
+ * @param {number} firstDataRow - Erste Datenzeile
+ * @returns {boolean} true wenn eine Übereinstimmung gefunden wurde
+ */
+function processHoldingTransferMatching(holdingData, refNumber, betragValue, row, columns, isPositive, config, results, firstDataRow) {
+    // Prüfe, ob wir eine Holding GmbH oder eine operative GmbH haben
+    const isHolding = config.tax.isHolding || false;
+
+    // Match finding für Holding Transfers - Beachte, dass die erwartete Vorzeichenrichtung
+    // vom isHolding-Flag abhängt
+    const matchResult = findHoldingTransferMatch(holdingData, refNumber, betragValue, isPositive, isHolding);
+    if (!matchResult) return false;
+
+    // Validate reference match
+    if (matchResult.ref && !isGoodReferenceMatch(refNumber, matchResult.ref)) {
+        return false;
+    }
+
+    // Kategorie aus dem Originaldokument extrahieren
+    const kategorie = matchResult.originalData?.kategorie || '';
+
+    // Match-Typ basierend auf Kategorie und Buchungsrichtung bestimmen
+    let matchType = 'Transfer';
+    if (kategorie === 'Gewinnübertrag') {
+        matchType = 'Gewinnübertrag';
+    } else if (kategorie === 'Kapitalrückführung') {
+        matchType = 'Kapitalrückführung';
+    }
+
+    // Match-Info mit Berücksichtigung der Perspektive (Holding oder Operative)
+    const matchInfoText = `Holding Transfer ${matchType} #${matchResult.row} (${matchResult.matchType || ''})`;
+
+    // Get category from the document
+    let sourceCategory = '';
+    if (matchResult.originalData) {
+        sourceCategory = matchResult.originalData.kategorie || '';
+    }
+
+    // Kategorie aus Bankbewegung oder fallback
+    const category = row[columns.kategorie - 1] ?
+        row[columns.kategorie - 1].toString().trim() : sourceCategory;
+
+    // Set konten from mapping
+    let kontoSoll = '', kontoHaben = '';
+
+    // Mapping aus Holding Transfer-Kategorie verwenden
+    if (sourceCategory) {
+        const categoryConfig = config.holdingTransfers?.categories?.[sourceCategory];
+        if (categoryConfig && categoryConfig.kontoMapping) {
+            kontoSoll = categoryConfig.kontoMapping.soll || '';
+            kontoHaben = categoryConfig.kontoMapping.gegen || '';
+        }
+    }
+
+    // Add results to arrays
+    results.matchInfo.push([matchInfoText]);
+    results.kontoSollResults.push([kontoSoll]);
+    results.kontoHabenResults.push([kontoHaben]);
+    results.categoryResults.push([category]);
+
+    // Generate key for bank matches
+    const key = `holdingtransfer#${matchResult.row}`;
+
+    // Store information for later marking
+    results.bankZuordnungen[key] = {
+        typ: 'holdingtransfer',
+        row: matchResult.row,
+        bankRow: firstDataRow + results.matchInfo.length - 1,
+        bankDatum: row[columns.datum - 1],
+        matchInfo: matchInfoText,
+        transTyp: matchType,
+        category: category,
+        sourceCategory: sourceCategory,
+        kontoSoll: kontoSoll,
+        kontoHaben: kontoHaben,
+        isPositive: isPositive,
+        isHolding: isHolding,
+        originalRef: matchResult.ref,
+        originalCategory: kategorie,
+    };
+
+    return true;
+}
+
+/**
+ * Sucht spezifisch nach Holding Transfer-Übereinstimmungen
+ * @param {Object} refMap - Referenzdaten für Holding Transfers
+ * @param {string} reference - Referenznummer
+ * @param {number} betrag - Betrag (absoluter Wert)
+ * @param {boolean} isPositive - Ist der Bankbetrag positiv
+ * @param {boolean} isHolding - Ist es eine Holding GmbH
+ * @returns {Object|null} Matchergebnis oder null
+ */
+function findHoldingTransferMatch(refMap, reference, betrag, isPositive, isHolding) {
+    // Keine Daten oder keine Referenz
+    if (!reference || !refMap) return null;
+
+    // Ensure reference is a string
+    const refString = String(reference).trim();
+    if (!refString) return null;
+
+    // Normalisierte Suche vorbereiten
+    const normalizedRef = stringUtils.normalizeText(refString);
+    if (!normalizedRef) return null;
+
+    // Potenzielle Treffer sammeln
+    const candidates = [];
+
+    // Durchsuche alle Einträge im refMap
+    for (const key in refMap) {
+        const entry = refMap[key];
+        const category = entry.originalData?.kategorie;
+
+        // Prüfe, ob Vorzeichen passt basierend auf Kategorie und isHolding
+        let hasCorrectSign = false;
+
+        if (category === 'Gewinnübertrag') {
+            // Für Gewinnübertrag:
+            // - Bei operativer GmbH (isHolding=false): Betrag negativ, Bankbuchung negativ
+            // - Bei Holding GmbH (isHolding=true): Betrag positiv, Bankbuchung positiv
+            hasCorrectSign = (isHolding && entry.betrag > 0 && isPositive) ||
+                (!isHolding && entry.betrag < 0 && !isPositive);
+        }
+        else if (category === 'Kapitalrückführung') {
+            // Für Kapitalrückführung:
+            // - Bei operativer GmbH: Betrag positiv, Bankbuchung positiv
+            // - Bei Holding GmbH: Betrag negativ, Bankbuchung negativ
+            hasCorrectSign = (isHolding && entry.betrag < 0 && !isPositive) ||
+                (!isHolding && entry.betrag > 0 && isPositive);
+        }
+        else {
+            // Für andere Kategorien: prüfe basierend auf Vorzeichen
+            hasCorrectSign = (entry.betrag > 0 && isPositive) || (entry.betrag < 0 && !isPositive);
+        }
 
         if (!hasCorrectSign) continue;
 
