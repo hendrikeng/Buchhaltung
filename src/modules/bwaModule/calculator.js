@@ -1,4 +1,4 @@
-// modules/bwaModule/calculator.js - KORRIGIERTE VERSION
+// modules/bwaModule/calculator.js - FIXED VERSION
 import dateUtils from '../../utils/dateUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 import stringUtils from '../../utils/stringUtils.js';
@@ -8,8 +8,7 @@ const categoryMappingCache = new Map();
 
 /**
  * Verarbeitet Einnahmen und ordnet sie den BWA-Kategorien zu
- * Optimierte Version mit Cache und effizienteren Lookups
- * KORRIGIERT für Ist-Besteuerung und Ausland-Behandlung
+ * KORRIGIERT für Ist-Besteuerung und Ausland-Handling
  * @param {Array} row - Zeile aus dem Einnahmen-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -58,6 +57,13 @@ function processRevenue(row, bwaData, config) {
         const nonBusinessCategories = new Set(['Gewinnvortrag', 'Verlustvortrag', 'Gewinnvortrag/Verlustvortrag']);
         if (nonBusinessCategories.has(category)) return;
 
+        // FIX: Für EU-Ausland und Nicht-EU-Ausland immer als steuerfreie Auslandseinnahmen buchen
+        // und nicht in andere BWA-Kategorien einfließen lassen (verhindert Doppelzählung)
+        if (isAusland) {
+            bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
+            return; // Wichtig: Early return, keine weitere Verarbeitung
+        }
+
         // Cache-Schlüssel für Kategorie-Zuordnung
         const cacheKey = `rev_cat_${category}_${auslandWert}`;
 
@@ -88,37 +94,16 @@ function processRevenue(row, bwaData, config) {
             mapping = directMappings[category];
         }
 
-        // Wenn Mapping vorhanden, Ausland-Status berücksichtigen
+        // Wenn Mapping vorhanden, anwenden
         if (mapping) {
-            // Bei Ausland je nach Kategorie anpassen
-            if (isAusland) {
-                if (isEuAusland) {
-                    // EU-Ausland: Innergemeinschaftliche Lieferungen
-                    // BWA-Mappings behalten aber spezielle UStVA-Kategorie
-                    if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
-                        // Zusätzlich als steuerfreie Ausland-Einnahmen markieren
-                        bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
-                    }
-                } else if (isNichtEuAusland) {
-                    // Nicht-EU-Ausland: Export
-                    if (mapping === 'umsatzerloese' || mapping === 'provisionserloese') {
-                        // Zusätzlich als steuerfreie Ausland-Einnahmen markieren
-                        bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
-                    }
-                }
-            }
-
             // Mapping im Cache speichern und anwenden
             categoryMappingCache.set(cacheKey, mapping);
             bwaData[paymentMonth][mapping] += amount;
             return;
         }
 
-        // Fallback-Kategorisierung nach Steuersatz und Ausland
-        if (isAusland) {
-            categoryMappingCache.set(cacheKey, 'steuerfreieAuslandEinnahmen');
-            bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
-        } else if (numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst) === 0) {
+        // Fallback-Kategorisierung nach Steuersatz
+        if (numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst) === 0) {
             categoryMappingCache.set(cacheKey, 'steuerfreieInlandEinnahmen');
             bwaData[paymentMonth].steuerfreieInlandEinnahmen += amount;
         } else {
@@ -132,7 +117,7 @@ function processRevenue(row, bwaData, config) {
 
 /**
  * Verarbeitet Ausgaben und ordnet sie den BWA-Kategorien zu
- * KORRIGIERT für Ist-Besteuerung und Ausland-Behandlung
+ * KORRIGIERT für Ist-Besteuerung und Ausland-Handling
  * @param {Array} row - Zeile aus dem Ausgaben-Sheet
  * @param {Object} bwaData - BWA-Datenstruktur
  * @param {Object} config - Die Konfiguration
@@ -187,7 +172,14 @@ function processExpense(row, bwaData, config) {
             return;
         }
 
-        // Cache-Schlüssel für Kategorie-Zuordnung (inklusive Ausland-Status)
+        // FIX: Für EU-Ausland und Nicht-EU-Ausland immer als steuerfreie Auslandsausgaben buchen
+        // und nicht in andere BWA-Kategorien einfließen lassen (verhindert Doppelzählung)
+        if (isAusland) {
+            bwaData[paymentMonth].steuerfreieAuslandAusgaben += amount;
+            return; // Wichtig: Early return, keine weitere Verarbeitung
+        }
+
+        // Cache-Schlüssel für Kategorie-Zuordnung
         const cacheKey = `exp_cat_${category}_${auslandWert}`;
 
         // Prüfen, ob Zuordnung im Cache
@@ -244,23 +236,9 @@ function processExpense(row, bwaData, config) {
             return;
         }
 
-        // Fallback-Handling für Ausland und ohne konkretes Mapping
-        if (isAusland) {
-            // Bei EU-Ausland: Unterscheidung nach Reverse-Charge-Verfahren
-            if (isEuAusland) {
-                // Bei EU-Ausland werden die meisten Ausgaben als normale betriebliche Aufwendungen mit Reverse-Charge gebucht
-                categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
-                bwaData[paymentMonth].sonstigeAufwendungen += amount;
-            } else {
-                // Bei Nicht-EU Ausland als steuerfreie Auslandsausgaben
-                categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
-                bwaData[paymentMonth].sonstigeAufwendungen += amount;
-            }
-        } else {
-            // Fallback: Als sonstige Aufwendungen erfassen
-            categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
-            bwaData[paymentMonth].sonstigeAufwendungen += amount;
-        }
+        // Fallback: Als sonstige Aufwendungen erfassen
+        categoryMappingCache.set(cacheKey, 'sonstigeAufwendungen');
+        bwaData[paymentMonth].sonstigeAufwendungen += amount;
     } catch (e) {
         console.error('Fehler bei der Verarbeitung einer Ausgabe:', e);
     }
@@ -311,11 +289,12 @@ function processEigen(row, bwaData, config) {
             row[columns.ausland - 1].toString().trim() : 'Inland';
         const isEuAusland = auslandWert === 'EU-Ausland';
         const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
+        const isAusland = isEuAusland || isNichtEuAusland;
 
-        // Cache-Schlüssel für Kategorie-Zuordnung (mit Ausland-Status)
+        // Cache-Schlüssel für Kategorie-Konfiguration
         const cacheKey = `eig_cat_${category}_${auslandWert}`;
 
-        // Prüfen, ob Kategorie-Konfiguration im Cache
+        // Eigenbelege nach steuertyp kategorisieren
         let eigenCfg, taxType;
 
         if (categoryMappingCache.has(cacheKey)) {
@@ -327,8 +306,14 @@ function processEigen(row, bwaData, config) {
             categoryMappingCache.set(cacheKey, { taxType });
         }
 
+        // FIX: Korrektes Handling für Ausland - nur als steuerfrei erfassen, keine Doppelzählung
+        if (isAusland) {
+            bwaData[paymentMonth].eigenbelegeSteuerfrei += amount;
+            return; // Wichtig: Early return
+        }
+
         // Basierend auf Steuertyp zuordnen
-        if (taxType === 'steuerfrei' || isEuAusland || isNichtEuAusland) {
+        if (taxType === 'steuerfrei') {
             bwaData[paymentMonth].eigenbelegeSteuerfrei += amount;
         } else {
             bwaData[paymentMonth].eigenbelegeSteuerpflichtig += amount;
@@ -346,6 +331,7 @@ function processEigen(row, bwaData, config) {
             categoryMappingCache.set(mappingCacheKey, mapping);
         }
 
+        // Einmal dem BWA-Mapping zuordnen
         bwaData[paymentMonth][mapping] += amount;
     } catch (e) {
         console.error('Fehler bei der Verarbeitung eines Eigenbelegs:', e);
