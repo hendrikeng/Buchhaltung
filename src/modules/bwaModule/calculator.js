@@ -6,6 +6,7 @@ import stringUtils from '../../utils/stringUtils.js';
 // Cache for frequently used category mappings
 const categoryMappingCache = new Map();
 
+
 /**
  * Processes revenue and maps to BWA categories
  * Optimized for cash-based accounting and foreign country handling
@@ -52,6 +53,13 @@ function processRevenue(row, bwaData, config) {
         const isEuAusland = auslandWert === 'EU-Ausland';
         const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
         const isAusland = isEuAusland || isNichtEuAusland;
+
+        // Track VAT
+        if (!isAusland) {
+            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
+            const mwstAmount = amount * (mwstRate / 100);
+            bwaData[paymentMonth].umsatzsteuer += mwstAmount;
+        }
 
         // Skip non-business categories
         const nonBusinessCategories = new Set(['Gewinnvortrag', 'Verlustvortrag', 'Gewinnvortrag/Verlustvortrag']);
@@ -162,6 +170,21 @@ function processExpense(row, bwaData, config) {
         const isEuAusland = auslandWert === 'EU-Ausland';
         const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
         const isAusland = isEuAusland || isNichtEuAusland;
+
+        // Track VAT
+        if (!isAusland) {
+            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
+            const mwstAmount = amount * (mwstRate / 100);
+            bwaData[paymentMonth].vorsteuer += mwstAmount;
+
+            // Track non-deductible VAT (for entertainment expenses)
+            if (category === 'Bewirtung') {
+                // Only 70% of VAT is deductible for entertainment
+                const nonDeductible = mwstAmount * 0.3;
+                bwaData[paymentMonth].nichtAbzugsfaehigeVSt += nonDeductible;
+                bwaData[paymentMonth].vorsteuer -= nonDeductible; // Reduce deductible portion
+            }
+        }
 
         // Skip non-business categories
         const nonBusinessCategories = new Set([
@@ -510,7 +533,7 @@ function calculateAggregates(bwaData, config) {
             ? taxConfig.gewinnUebertragSteuerpflichtig / 100
             : 1;
 
-        // Tax calculations (adjusted for clarity and optimization)
+        // Tax calculations (adjusted to never be negative)
         d.gewerbesteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.gewerbesteuer / 10000) * steuerfaktor, 2));
         d.koerperschaftsteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor, 2));
         d.solidaritaetszuschlag = Math.max(0, numberUtils.round(d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100), 2));
