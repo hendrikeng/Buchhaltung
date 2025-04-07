@@ -470,7 +470,8 @@ function calculateAggregates(bwaData, config) {
         d.gesamtBetriebsausgaben = numberUtils.round(
             d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
             d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
-            d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.sonstigeAufwendungen,
+            d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.mieteNebenkosten +
+            d.sonstigeAufwendungen,
             2,
         );
 
@@ -510,9 +511,9 @@ function calculateAggregates(bwaData, config) {
             : 1;
 
         // Tax calculations (adjusted for clarity and optimization)
-        d.gewerbesteuer = numberUtils.round(d.ebit * (taxConfig.gewerbesteuer / 10000) * steuerfaktor, 2);
-        d.koerperschaftsteuer = numberUtils.round(d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor, 2);
-        d.solidaritaetszuschlag = numberUtils.round(d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100), 2);
+        d.gewerbesteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.gewerbesteuer / 10000) * steuerfaktor, 2));
+        d.koerperschaftsteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor, 2));
+        d.solidaritaetszuschlag = Math.max(0, numberUtils.round(d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100), 2));
 
         // Total tax burden
         d.steuerlast = numberUtils.round(
