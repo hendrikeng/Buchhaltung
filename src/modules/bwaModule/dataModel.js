@@ -1,17 +1,18 @@
-// modules/bwaModule/dataModel.js (Optimized)
+// modules/bwaModule/dataModel.js
+
 /**
  * Creates an empty BWA data object with zero values
  * Optimized structure for better performance
  * @returns {Object} Empty BWA data structure
  */
 function createEmptyBWA() {
-    // Initialize with zero values
     return {
-        // Group 1: Business revenue (Income)
+        // Group 1: Business income
         umsatzerloese: 0,
         provisionserloese: 0,
         steuerfreieInlandEinnahmen: 0,
         steuerfreieAuslandEinnahmen: 0,
+        innergemeinschaftlicheLieferungen: 0, // EU sales
         sonstigeErtraege: 0,
         vermietung: 0,
         zuschuesse: 0,
@@ -19,13 +20,13 @@ function createEmptyBWA() {
         anlagenabgaenge: 0,
         gesamtErloese: 0,
 
-        // Group 2: Material costs & Purchases
+        // Group 2: Material expenses & Cost of goods
         wareneinsatz: 0,
         fremdleistungen: 0,
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
 
-        // Group 3: Operating expenses (Overhead costs)
+        // Group 3: Operating expenses
         bruttoLoehne: 0,
         sozialeAbgaben: 0,
         sonstigePersonalkosten: 0,
@@ -36,8 +37,7 @@ function createEmptyBWA() {
         buerokosten: 0,
         fortbildungskosten: 0,
         kfzKosten: 0,
-        itKosten: 0, // Added for IT costs
-        mieteNebenkosten: 0, // Added for rent and utilities
+        mieteNebenkosten: 0,
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
 
@@ -50,7 +50,7 @@ function createEmptyBWA() {
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
 
-        // Group 5: Special items (Capital movements)
+        // Group 5: Special items (capital movements)
         eigenkapitalveraenderungen: 0,
         gesellschafterdarlehen: 0,
         ausschuettungen: 0,
@@ -64,7 +64,7 @@ function createEmptyBWA() {
         // Group 7: EBIT
         ebit: 0,
 
-        // Group 8: Taxes & VAT
+        // Group 8: Taxes & Input tax
         umsatzsteuer: 0,
         vorsteuer: 0,
         nichtAbzugsfaehigeVSt: 0,
@@ -73,14 +73,18 @@ function createEmptyBWA() {
         gewerbesteuer: 0,
         gewerbesteuerRueckstellungen: 0,
         sonstigeSteuerrueckstellungen: 0,
+        steuerlicheKorrekturen: 0,
         steuerlast: 0,
 
-        // Group 9: Annual net profit/loss
+        // Group 9: Net profit/loss
         gewinnNachSteuern: 0,
 
         // Own receipts (for aggregation)
         eigenbelegeSteuerfrei: 0,
         eigenbelegeSteuerpflichtig: 0,
+
+        // EU purchases (for VAT)
+        innergemeinschaftlicheErwerbe: 0,
     };
 }
 

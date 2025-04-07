@@ -1,4 +1,4 @@
-// modules/bwaModule/index.js (Optimized)
+// modules/bwaModule/index.js
 import dataModel from './dataModel.js';
 import collector from './collector.js';
 import calculator from './calculator.js';
@@ -6,18 +6,19 @@ import formatter from './formatter.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
- * Module for calculating the Betriebswirtschaftliche Auswertung (BWA)
+ * Module for calculating business management analysis (BWA)
  */
 const BWAModule = {
     /**
      * Clear cache with targeted invalidation
      */
     clearCache() {
+        console.log('Clearing BWA module cache');
         globalCache.clear('bwa');
     },
 
     /**
-     * Main function for calculating the BWA with optimized error handling
+     * Main function for calculating BWA with optimized error handling
      * @param {Object} config - Configuration
      * @returns {boolean} - true on success, false on error
      */
@@ -29,6 +30,7 @@ const BWAModule = {
             // Reset cache for current data
             this.clearCache();
 
+            console.log('Starting BWA calculation...');
             ui.alert('BWA wird berechnet...', 'Bitte warten Sie, während die BWA berechnet wird.', ui.ButtonSet.OK);
 
             // Collect data
@@ -49,13 +51,13 @@ const BWAModule = {
                 return false;
             }
         } catch (e) {
-            console.error('Fehler bei der BWA-Berechnung:', e);
+            console.error('Error calculating BWA:', e);
             SpreadsheetApp.getUi().alert('Fehler bei der BWA-Berechnung: ' + e.toString());
             return false;
         }
     },
 
-    // Methods for testing and advanced functionality
+    // Methods for testing and extended functionality
     _internal: {
         createEmptyBWA: dataModel.createEmptyBWA,
         processRevenue: calculator.processRevenue,

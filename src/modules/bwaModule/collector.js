@@ -4,17 +4,19 @@ import dataModel from './dataModel.js';
 import calculator from './calculator.js';
 
 /**
- * Collects all BWA data from various sheets with optimized batch processing
+ * Collects all BWA data from the various sheets with optimized batch processing
  * @param {Object} config - Configuration
- * @returns {Object|null} BWA data by month or null in case of error
+ * @returns {Object|null} BWA data by month or null on error
  */
 function aggregateBWAData(config) {
     try {
         // Check if cache is valid
         if (globalCache.has('computed', 'bwa')) {
+            console.log('Using cached BWA data');
             return globalCache.get('computed', 'bwa');
         }
 
+        console.log('Aggregating BWA data...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
         // Optimized structure for sheets and their processors
@@ -43,7 +45,16 @@ function aggregateBWAData(config) {
             Array.from({length: 12}, (_, i) => [i + 1, dataModel.createEmptyBWA()]),
         );
 
-        // Process all sheets in a single pass
+        // Counter for processed rows
+        const processedRows = {
+            einnahmen: 0,
+            ausgaben: 0,
+            eigenbelege: 0,
+            gesellschafterkonto: 0,
+            holdingTransfers: 0,
+        };
+
+        // Process all sheets in one pass
         for (const processor of sheetProcessors) {
             const sheet = sheets[processor.type];
             if (!sheet) continue;
@@ -51,20 +62,26 @@ function aggregateBWAData(config) {
             const lastRow = sheet.getLastRow();
             if (lastRow <= 1) continue; // Only header, no data
 
-            // Optimization: Load data in a batch for fewer API calls
+            console.log(`Processing ${processor.name} sheet for BWA...`);
+
+            // Optimization: load data in one batch for fewer API calls
             const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
-            // Process data with the appropriate processor function
+            // Process data with appropriate processor function
             for (const row of data) {
                 processor.processor(row, bwaData, config);
+                processedRows[processor.type]++;
             }
         }
 
-        // Calculate all aggregates in a single pass
+        console.log('Processed rows:', JSON.stringify(processedRows));
+
+        // Calculate all aggregates in one pass
         calculator.calculateAggregates(bwaData, config);
 
         // Cache result
         globalCache.set('computed', 'bwa', bwaData);
+        console.log('BWA data aggregation complete');
 
         return bwaData;
     } catch (e) {
