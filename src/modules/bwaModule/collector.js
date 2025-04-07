@@ -16,7 +16,7 @@ function aggregateBWAData(config) {
             return globalCache.get('computed', 'bwa');
         }
 
-        console.log('Aggregating BWA data...');
+        console.log('[BWA-DEBUG] Aggregating BWA data...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
         // Optimierte Struktur für Sheets und ihre Prozessoren
@@ -35,7 +35,7 @@ function aggregateBWAData(config) {
             sheets[processor.type] = ss.getSheetByName(processor.name);
 
             if (processor.required && !sheets[processor.type]) {
-                console.error(`Fehlendes Blatt: '${processor.name}'`);
+                console.error(`[BWA-DEBUG] Fehlendes Blatt: '${processor.name}'`);
                 return null;
             }
         }
@@ -45,6 +45,15 @@ function aggregateBWAData(config) {
             Array.from({length: 12}, (_, i) => [i + 1, dataModel.createEmptyBWA()]),
         );
 
+        // Debug-Zähler für verarbeitete Zeilen
+        const processedRows = {
+            einnahmen: 0,
+            ausgaben: 0,
+            eigenbelege: 0,
+            gesellschafterkonto: 0,
+            holdingTransfers: 0,
+        };
+
         // Optimierung: Alle Sheets in einem Durchgang verarbeiten
         for (const processor of sheetProcessors) {
             const sheet = sheets[processor.type];
@@ -53,7 +62,7 @@ function aggregateBWAData(config) {
             const lastRow = sheet.getLastRow();
             if (lastRow <= 1) continue; // Nur Header, keine Daten
 
-            console.log(`Processing ${processor.name} sheet for BWA...`);
+            console.log(`[BWA-DEBUG] Processing ${processor.name} sheet for BWA...`);
 
             // Optimierung: Daten in einem Batch laden für weniger API-Calls
             const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
@@ -61,15 +70,23 @@ function aggregateBWAData(config) {
             // Daten verarbeiten mit der passenden Prozessorfunktion
             for (const row of data) {
                 processor.processor(row, bwaData, config);
+                processedRows[processor.type]++;
             }
         }
+
+        // Debug-Ausgabe verarbeiteter Zeilen
+        console.log('[BWA-DEBUG] Verarbeitete Zeilen:', JSON.stringify(processedRows));
 
         // Alle Aggregate in einem Durchgang berechnen
         calculator.calculateAggregates(bwaData, config);
 
+        // Debug-Ausgabe Quartalswerte
+        const q4Erloese = bwaData[10].gesamtErloese + bwaData[11].gesamtErloese + bwaData[12].gesamtErloese;
+        console.log(`[BWA-DEBUG] Berechnete Q4 Betriebserlöse: ${q4Erloese} €`);
+
         // Ergebnis cachen
         globalCache.set('computed', 'bwa', bwaData);
-        console.log('BWA data aggregation complete');
+        console.log('[BWA-DEBUG] BWA data aggregation complete');
 
         return bwaData;
     } catch (e) {
