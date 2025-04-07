@@ -33,14 +33,15 @@ function processRevenue(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // Skip if nothing paid
-        if (bezahlt <= 0) return;
+        // FIX: For credits/refunds we need to check if anything has been refunded
+        // Skip if nothing paid (for positive amounts) or nothing refunded (for negative amounts)
+        if (Math.abs(bezahlt) <= 0) return;
 
-        // Calculate paid proportion for partial payments
-        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
-        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Limit to 100%
+        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
-        if (amount === 0) return;
+        if (Math.abs(amount) === 0) return;
 
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
@@ -143,14 +144,14 @@ function processExpense(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // Skip if nothing paid
-        if (bezahlt <= 0) return;
+        // FIX: For credits/refunds we need to check if anything has been refunded
+        if (Math.abs(bezahlt) <= 0) return;
 
-        // Calculate paid proportion for partial payments
-        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
-        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Limit to 100%
+        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
-        if (amount === 0) return;
+        if (Math.abs(amount) === 0) return;
 
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
@@ -275,14 +276,14 @@ function processEigen(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // Skip if nothing paid
-        if (bezahlt <= 0) return;
+        // FIX: For credits/refunds we need to check if anything has been refunded
+        if (Math.abs(bezahlt) <= 0) return;
 
-        // Calculate paid proportion for partial payments
-        const bezahltAnteil = bezahlt / (bruttobetrag || 1);
-        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Limit to 100%
+        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
+        const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
-        if (amount === 0) return;
+        if (Math.abs(amount) === 0) return;
 
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
@@ -363,9 +364,9 @@ function processGesellschafter(row, bwaData, config) {
         // Get payment month for cash-based accounting
         const paymentMonth = paymentDate.getMonth() + 1; // 1-12
 
-        // Extract amount
+        // Extract amount (already handles sign correctly)
         const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
-        if (amount === 0) return;
+        if (Math.abs(amount) === 0) return;
 
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
@@ -412,9 +413,9 @@ function processHolding(row, bwaData, config) {
         // Get payment month for cash-based accounting
         const paymentMonth = paymentDate.getMonth() + 1; // 1-12
 
-        // Extract amount
+        // Extract amount (already handles sign correctly)
         const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
-        if (amount === 0) return;
+        if (Math.abs(amount) === 0) return;
 
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
