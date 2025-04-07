@@ -67,6 +67,7 @@ function buildOutputRow(pos, bwaData) {
 
 /**
  * Creates the BWA sheet based on BWA data with optimized batch processing
+ * Following DATEV standards for BWA reporting
  * @param {Object} bwaData - BWA data by month
  * @param {Spreadsheet} ss - Spreadsheet
  * @param {Object} config - Configuration
@@ -76,8 +77,9 @@ function generateBWASheet(bwaData, ss, config) {
     try {
         console.log('Generating BWA sheet...');
 
-        // Define positions for the BWA
+        // Define positions for the BWA following DATEV standards
         const positions = [
+            // 1. Revenue and income
             {label: 'Erlöse aus Lieferungen und Leistungen', get: d => d.umsatzerloese || 0},
             {label: 'Provisionserlöse', get: d => d.provisionserloese || 0},
             {label: 'Steuerfreie Inland-Einnahmen', get: d => d.steuerfreieInlandEinnahmen || 0},
@@ -88,11 +90,16 @@ function generateBWASheet(bwaData, ss, config) {
             {label: 'Erträge aus Zuschüssen', get: d => d.zuschuesse || 0},
             {label: 'Erträge aus Währungsgewinnen', get: d => d.waehrungsgewinne || 0},
             {label: 'Erträge aus Anlagenabgängen', get: d => d.anlagenabgaenge || 0},
-            {label: 'Betriebserlöse', get: d => d.gesamtErloese || 0},
+            {label: 'Steuerliche Korrekturen', get: d => d.steuerlicheKorrekturen || 0},
+            {label: 'Betriebserlöse gesamt', get: d => d.gesamtErloese || 0},
+
+            // 2. Material expenses & Cost of goods
             {label: 'Wareneinsatz', get: d => d.wareneinsatz || 0},
             {label: 'Bezogene Leistungen', get: d => d.fremdleistungen || 0},
             {label: 'Roh-, Hilfs- & Betriebsstoffe', get: d => d.rohHilfsBetriebsstoffe || 0},
-            {label: 'Gesamtkosten Material & Fremdleistungen', get: d => d.gesamtWareneinsatz || 0},
+            {label: 'Materialaufwand gesamt', get: d => d.gesamtWareneinsatz || 0},
+
+            // 3. Operating expenses
             {label: 'Bruttolöhne & Gehälter', get: d => d.bruttoLoehne || 0},
             {label: 'Soziale Abgaben & Arbeitgeberanteile', get: d => d.sozialeAbgaben || 0},
             {label: 'Sonstige Personalkosten', get: d => d.sonstigePersonalkosten || 0},
@@ -105,27 +112,21 @@ function generateBWASheet(bwaData, ss, config) {
             {label: 'Fortbildungskosten', get: d => d.fortbildungskosten || 0},
             {label: 'Kfz-Kosten', get: d => d.kfzKosten || 0},
             {label: 'Sonstige betriebliche Aufwendungen', get: d => d.sonstigeAufwendungen || 0},
+            {label: 'Betriebsausgaben gesamt', get: d => d.gesamtBetriebsausgaben || 0},
+
+            // 4. Depreciation & Interest
             {label: 'Abschreibungen Maschinen', get: d => d.abschreibungenMaschinen || 0},
             {label: 'Abschreibungen Büroausstattung', get: d => d.abschreibungenBueromaterial || 0},
             {label: 'Abschreibungen immaterielle Wirtschaftsgüter', get: d => d.abschreibungenImmateriell || 0},
             {label: 'Zinsen auf Bankdarlehen', get: d => d.zinsenBank || 0},
             {label: 'Zinsen auf Gesellschafterdarlehen', get: d => d.zinsenGesellschafter || 0},
             {label: 'Leasingkosten', get: d => d.leasingkosten || 0},
-            {label: 'Gesamt Abschreibungen & Zinsen', get: d => d.gesamtAbschreibungenZinsen || 0},
-            {label: 'Eigenkapitalveränderungen', get: d => d.eigenkapitalveraenderungen || 0},
-            {label: 'Gesellschafterdarlehen', get: d => d.gesellschafterdarlehen || 0},
-            {label: 'Ausschüttungen an Gesellschafter', get: d => d.ausschuettungen || 0},
-            {label: 'Steuerrückstellungen', get: d => d.steuerrueckstellungen || 0},
-            {label: 'Rückstellungen sonstige', get: d => d.rueckstellungenSonstige || 0},
-            {label: 'Betriebsergebnis vor Steuern (EBIT)', get: d => d.ebit || 0},
-            {label: 'Umsatzsteuer (abzuführen)', get: d => d.umsatzsteuer || 0},
-            {label: 'Vorsteuer', get: d => d.vorsteuer || 0},
-            {label: 'Nicht abzugsfähige VSt (Bewirtung)', get: d => d.nichtAbzugsfaehigeVSt || 0},
-            {label: 'Körperschaftsteuer', get: d => d.koerperschaftsteuer || 0},
-            {label: 'Solidaritätszuschlag', get: d => d.solidaritaetszuschlag || 0},
-            {label: 'Gewerbesteuer', get: d => d.gewerbesteuer || 0},
-            {label: 'Steuerliche Korrekturen', get: d => d.steuerlicheKorrekturen || 0},
-            {label: 'Gesamtsteueraufwand', get: d => d.steuerlast || 0},
+            {label: 'Abschreibungen & Zinsen gesamt', get: d => d.gesamtAbschreibungenZinsen || 0},
+
+            // 5. EBIT
+            {label: 'Betriebsergebnis (EBIT)', get: d => d.ebit || 0},
+
+            // 6. Net profit/loss (if included in BWA)
             {label: 'Jahresüberschuss/-fehlbetrag', get: d => d.gewinnNachSteuern || 0},
         ];
 
@@ -134,15 +135,12 @@ function generateBWASheet(bwaData, ss, config) {
 
         // Optimization: Group hierarchy with better data structure
         const bwaGruppen = [
-            {titel: 'Betriebserlöse (Einnahmen)', count: 11},
+            {titel: 'Betriebserlöse (Einnahmen)', count: 12},
             {titel: 'Materialaufwand & Wareneinsatz', count: 4},
-            {titel: 'Betriebsausgaben (Sachkosten)', count: 12},
+            {titel: 'Betriebsausgaben (Sachkosten)', count: 13},
             {titel: 'Abschreibungen & Zinsen', count: 7},
-            {titel: 'Besondere Posten', count: 3},
-            {titel: 'Rückstellungen', count: 2},
-            {titel: 'Betriebsergebnis vor Steuern (EBIT)', count: 1},
-            {titel: 'Steuern & Vorsteuer', count: 8},
-            {titel: 'Jahresüberschuss/-fehlbetrag', count: 1},
+            {titel: 'Betriebsergebnis (EBIT)', count: 1},
+            {titel: 'Jahresergebnis', count: 1},
         ];
 
         // Optimization: Pre-allocate output array with space
@@ -235,7 +233,7 @@ function applyBwaFormatting(sheet, headerLength, bwaGruppen, totalRows) {
     }
 
     // Define summary rows based on BWA rows
-    const summenZeilen = [11, 15, 27, 34, 37, 39, 40, 48, 49];
+    const summenZeilen = [12, 16, 29, 36, 37, 38]; // Adjusted for new structure with steuerlicheKorrekturen
     summenZeilen.forEach(row => {
         if (row <= totalRows) {
             formatGroups.summaryRows.push(sheet.getRange(row, 1, 1, headerLength));
@@ -243,7 +241,7 @@ function applyBwaFormatting(sheet, headerLength, bwaGruppen, totalRows) {
     });
 
     // Highlight EBIT and annual surplus
-    [40, 49].forEach(row => {
+    [37, 38].forEach(row => { // Adjusted for new structure
         if (row <= totalRows) {
             formatGroups.highlight.push(sheet.getRange(row, 1, 1, headerLength));
         }

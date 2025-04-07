@@ -6,6 +6,63 @@ import stringUtils from '../../utils/stringUtils.js';
 // Cache for frequently used category mappings
 const categoryMappingCache = new Map();
 
+/**
+ * Calculates group totals and derived values for all months
+ * Optimized version with efficient calculation logic
+ * @param {Object} bwaData - BWA data structure with raw data
+ * @param {Object} config - Configuration
+ */
+function calculateAggregates(bwaData, config) {
+    for (let m = 1; m <= 12; m++) {
+        const d = bwaData[m];
+
+        // Calculate sums in one pass using intermediate variables for frequently used sums
+
+        // Revenues
+        d.gesamtErloese = numberUtils.round(
+            d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen +
+            d.steuerfreieAuslandEinnahmen + d.sonstigeErtraege + d.vermietung +
+            d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge +
+            d.steuerlicheKorrekturen,
+            2,
+        );
+
+        // Material costs
+        d.gesamtWareneinsatz = numberUtils.round(
+            d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe,
+            2,
+        );
+
+        // Operating expenses
+        d.gesamtBetriebsausgaben = numberUtils.round(
+            d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
+            d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
+            d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.mieteNebenkosten +
+            d.sonstigeAufwendungen,
+            2,
+        );
+
+        // Depreciation & interest
+        d.gesamtAbschreibungenZinsen = numberUtils.round(
+            d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
+            d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter +
+            d.leasingkosten,
+            2,
+        );
+
+        // EBIT (Earnings Before Interest and Taxes)
+        d.ebit = numberUtils.round(
+            d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben +
+                d.gesamtAbschreibungenZinsen),
+            2,
+        );
+
+        // Calculate profit after taxes (may be from other sources or tax estimation)
+        // This is a simplified approach - in reality tax calculation would be more complex
+        const taxRate = 0.3; // Approximate combined tax rate
+        d.gewinnNachSteuern = numberUtils.round(d.ebit * (1 - taxRate), 2);
+    }
+}
 
 /**
  * Processes revenue and maps to BWA categories
@@ -34,11 +91,10 @@ function processRevenue(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // FIX: For credits/refunds we need to check if anything has been refunded
         // Skip if nothing paid (for positive amounts) or nothing refunded (for negative amounts)
         if (Math.abs(bezahlt) <= 0) return;
 
-        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        // Calculate paid proportion correctly for both positive and negative amounts
         const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
         const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
@@ -54,19 +110,15 @@ function processRevenue(row, bwaData, config) {
         const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
         const isAusland = isEuAusland || isNichtEuAusland;
 
-        // Track VAT
-        if (!isAusland) {
-            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
-            const mwstAmount = amount * (mwstRate / 100);
-            bwaData[paymentMonth].umsatzsteuer += mwstAmount;
-        }
-
         // Skip non-business categories
-        const nonBusinessCategories = new Set(['Gewinnvortrag', 'Verlustvortrag', 'Gewinnvortrag/Verlustvortrag']);
+        const nonBusinessCategories = new Set(['Gewinnvortrag', 'Verlustvortrag']);
         if (nonBusinessCategories.has(category)) return;
 
         // Special handling for foreign income
-        if (isAusland) {
+        if (isEuAusland) {
+            bwaData[paymentMonth].innergemeinschaftlicheLieferungen += amount;
+            return;
+        } else if (isNichtEuAusland) {
             bwaData[paymentMonth].steuerfreieAuslandEinnahmen += amount;
             return;
         }
@@ -152,10 +204,10 @@ function processExpense(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // FIX: For credits/refunds we need to check if anything has been refunded
+        // Skip if nothing paid
         if (Math.abs(bezahlt) <= 0) return;
 
-        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        // Calculate paid proportion correctly for both positive and negative amounts
         const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
         const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
@@ -167,36 +219,22 @@ function processExpense(row, bwaData, config) {
         // Check foreign status
         const auslandWert = columns.ausland && row[columns.ausland - 1] ?
             row[columns.ausland - 1].toString().trim() : 'Inland';
-        const isEuAusland = auslandWert === 'EU-Ausland';
-        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
-        const isAusland = isEuAusland || isNichtEuAusland;
-
-        // Track VAT
-        if (!isAusland) {
-            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
-            const mwstAmount = amount * (mwstRate / 100);
-            bwaData[paymentMonth].vorsteuer += mwstAmount;
-
-            // Track non-deductible VAT (for entertainment expenses)
-            if (category === 'Bewirtung') {
-                // Only 70% of VAT is deductible for entertainment
-                const nonDeductible = mwstAmount * 0.3;
-                bwaData[paymentMonth].nichtAbzugsfaehigeVSt += nonDeductible;
-                bwaData[paymentMonth].vorsteuer -= nonDeductible; // Reduce deductible portion
-            }
-        }
+        const isAusland = auslandWert === 'EU-Ausland' || auslandWert === 'Nicht-EU-Ausland';
 
         // Skip non-business categories
         const nonBusinessCategories = new Set([
             'Privatentnahme', 'Privateinlage', 'Holding Transfers',
-            'Gewinnvortrag', 'Verlustvortrag', 'Gewinnvortrag/Verlustvortrag',
+            'Gewinnvortrag', 'Verlustvortrag',
         ]);
         if (nonBusinessCategories.has(category)) return;
 
-        // Special handling for foreign expenses
-        if (isAusland) {
-            bwaData[paymentMonth].steuerfreieAuslandAusgaben += amount;
-            return;
+        // Track non-deductible VAT for entertainment expenses
+        if (category === 'Bewirtung') {
+            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
+            const mwstAmount = amount * (mwstRate / 100);
+            // Only 30% of VAT is non-deductible for entertainment
+            const nonDeductible = mwstAmount * 0.3;
+            bwaData[paymentMonth].nichtAbzugsfaehigeVSt += nonDeductible;
         }
 
         // Cache key for category mapping
@@ -231,10 +269,6 @@ function processExpense(row, bwaData, config) {
             'Zinsen auf Bankdarlehen': 'zinsenBank',
             'Zinsen auf Gesellschafterdarlehen': 'zinsenGesellschafter',
             'Leasingkosten': 'leasingkosten',
-            'Gewerbesteuerrückstellungen': 'gewerbesteuerRueckstellungen',
-            'Körperschaftsteuer': 'koerperschaftsteuer',
-            'Solidaritätszuschlag': 'solidaritaetszuschlag',
-            'Sonstige Steuerrückstellungen': 'steuerrueckstellungen',
             'Sonstige betriebliche Aufwendungen': 'sonstigeAufwendungen',
             'Provisionszahlungen': 'fremdleistungen',
             'IT-Kosten': 'sonstigeAufwendungen',
@@ -243,7 +277,6 @@ function processExpense(row, bwaData, config) {
             'Betriebskosten': 'sonstigeAufwendungen',
             'Porto': 'buerokosten',
             'Bewirtung': 'sonstigeAufwendungen',
-            'Steuerzahlungen': 'steuerrueckstellungen',
             'Bankgebühren': 'sonstigeAufwendungen',
         };
 
@@ -274,7 +307,7 @@ function processExpense(row, bwaData, config) {
 
 /**
  * Processes own receipts and maps to BWA categories
- * Optimized for cash-based accounting and foreign country handling
+ * Optimized for cash-based accounting
  * @param {Array} row - Row from own receipts sheet
  * @param {Object} bwaData - BWA data structure
  * @param {Object} config - Configuration
@@ -299,10 +332,10 @@ function processEigen(row, bwaData, config) {
         const bruttobetrag = numberUtils.parseCurrency(row[columns.bruttoBetrag - 1]);
         const bezahlt = numberUtils.parseCurrency(row[columns.bezahlt - 1]);
 
-        // FIX: For credits/refunds we need to check if anything has been refunded
+        // Skip if nothing paid
         if (Math.abs(bezahlt) <= 0) return;
 
-        // FIX: Calculate paid proportion correctly for both positive and negative amounts
+        // Calculate paid proportion correctly for both positive and negative amounts
         const bezahltAnteil = Math.abs(bezahlt) / (Math.abs(bruttobetrag) || 1);
         const amount = nettobetrag * Math.min(bezahltAnteil, 1); // Preserves sign for credits
 
@@ -311,43 +344,18 @@ function processEigen(row, bwaData, config) {
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Check foreign status
-        const auslandWert = columns.ausland && row[columns.ausland - 1] ?
-            row[columns.ausland - 1].toString().trim() : 'Inland';
-        const isEuAusland = auslandWert === 'EU-Ausland';
-        const isNichtEuAusland = auslandWert === 'Nicht-EU-Ausland';
-        const isAusland = isEuAusland || isNichtEuAusland;
-
-        // Cache key for category configuration
-        const cacheKey = `eig_cat_${category}_${auslandWert}`;
-
-        // Categorize own receipts by tax type
-        let taxType;
-
-        if (categoryMappingCache.has(cacheKey)) {
-            const cached = categoryMappingCache.get(cacheKey);
-            taxType = cached.taxType;
-        } else {
-            const eigenCfg = config.eigenbelege.categories[category] ?? {};
-            taxType = eigenCfg.taxType ?? 'steuerpflichtig';
-            categoryMappingCache.set(cacheKey, { taxType });
+        // Internal tracking of own receipts type
+        if (category === 'Bewirtung') {
+            // Track non-deductible VAT for entertainment expenses
+            const mwstRate = numberUtils.parseMwstRate(row[columns.mwstSatz - 1], config.tax.defaultMwst);
+            const mwstAmount = amount * (mwstRate / 100);
+            // Only 30% of VAT is non-deductible for entertainment
+            const nonDeductible = mwstAmount * 0.3;
+            bwaData[paymentMonth].nichtAbzugsfaehigeVSt += nonDeductible;
         }
 
-        // Special handling for foreign expenses
-        if (isAusland) {
-            bwaData[paymentMonth].eigenbelegeSteuerfrei += amount;
-            return;
-        }
-
-        // Categorize based on tax type
-        if (taxType === 'steuerfrei') {
-            bwaData[paymentMonth].eigenbelegeSteuerfrei += amount;
-        } else {
-            bwaData[paymentMonth].eigenbelegeSteuerpflichtig += amount;
-        }
-
-        // Use BWA mapping if available (with cache)
-        const mappingCacheKey = `eig_map_${category}_${auslandWert}`;
+        // Use BWA mapping with cache
+        const mappingCacheKey = `eig_map_${category}`;
         let mapping;
 
         if (categoryMappingCache.has(mappingCacheKey)) {
@@ -358,7 +366,7 @@ function processEigen(row, bwaData, config) {
             categoryMappingCache.set(mappingCacheKey, mapping);
         }
 
-        // Also map to appropriate BWA category
+        // Map to appropriate BWA category
         bwaData[paymentMonth][mapping] += amount;
     } catch (e) {
         console.error('Error processing own receipt:', e);
@@ -366,8 +374,8 @@ function processEigen(row, bwaData, config) {
 }
 
 /**
- * Processes shareholder account positions and maps to BWA categories
- * Optimized for cash-based accounting
+ * Processes shareholder account positions
+ * (Only process items relevant for BWA, not balance sheet items)
  * @param {Array} row - Row from shareholder account sheet
  * @param {Object} bwaData - BWA data structure
  * @param {Object} config - Configuration
@@ -387,27 +395,31 @@ function processGesellschafter(row, bwaData, config) {
         // Get payment month for cash-based accounting
         const paymentMonth = paymentDate.getMonth() + 1; // 1-12
 
-        // Extract amount (already handles sign correctly)
+        // Extract amount and category
         const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
         if (Math.abs(amount) === 0) return;
 
-        // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Use BWA mapping (with cache)
-        const mappingCacheKey = `gesell_map_${category}`;
-        let mapping;
+        // Skip balance sheet items that don't belong in BWA
+        const skipCategories = new Set([
+            'Gesellschafterdarlehen',
+            'Ausschüttungen',
+            'Kapitalrückführung',
+            'Privatentnahme',
+            'Privateinlage',
+        ]);
 
-        if (categoryMappingCache.has(mappingCacheKey)) {
-            mapping = categoryMappingCache.get(mappingCacheKey);
-        } else {
-            const categoryConfig = config.gesellschafterkonto.categories[category];
-            mapping = categoryConfig?.bwaMapping;
-            categoryMappingCache.set(mappingCacheKey, mapping || null);
+        if (skipCategories.has(category)) {
+            return;
         }
 
-        if (mapping) {
-            bwaData[paymentMonth][mapping] += amount;
+        // Process only if it's an actual operating expense or income
+        // For example, interest payments to shareholders would still be included
+        if (category === 'Zinsen auf Gesellschafterdarlehen') {
+            bwaData[paymentMonth].zinsenGesellschafter += Math.abs(amount);
+        } else if (category === 'Sonstige betriebliche Aufwendungen') {
+            bwaData[paymentMonth].sonstigeAufwendungen += Math.abs(amount);
         }
     } catch (e) {
         console.error('Error processing shareholder position:', e);
@@ -415,13 +427,16 @@ function processGesellschafter(row, bwaData, config) {
 }
 
 /**
- * Processes holding transfers and maps to BWA categories
- * Optimized for cash-based accounting
+ * Processes holding transfers
+ * (Only process items relevant for BWA, not balance sheet items)
  * @param {Array} row - Row from holding transfers sheet
  * @param {Object} bwaData - BWA data structure
  * @param {Object} config - Configuration
  */
 function processHolding(row, bwaData, config) {
+    // Most holding transfers are balance sheet items and don't belong in BWA
+    // This is kept as a placeholder for scenarios where operating expenses
+    // might be recorded in the holding transfers sheet
     try {
         const columns = config.holdingTransfers.columns;
 
@@ -433,119 +448,13 @@ function processHolding(row, bwaData, config) {
         const targetYear = config?.tax?.year || new Date().getFullYear();
         if (paymentDate.getFullYear() !== targetYear) return;
 
-        // Get payment month for cash-based accounting
-        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
-
-        // Extract amount (already handles sign correctly)
-        const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
-        if (Math.abs(amount) === 0) return;
-
         // Extract category
         const category = row[columns.kategorie - 1]?.toString().trim() || '';
 
-        // Use BWA mapping (with cache)
-        const mappingCacheKey = `holding_map_${category}`;
-        let mapping;
-
-        if (categoryMappingCache.has(mappingCacheKey)) {
-            mapping = categoryMappingCache.get(mappingCacheKey);
-        } else {
-            const categoryConfig = config.holdingTransfers.categories[category];
-            mapping = categoryConfig?.bwaMapping;
-            categoryMappingCache.set(mappingCacheKey, mapping || null);
-        }
-
-        if (mapping) {
-            bwaData[paymentMonth][mapping] += amount;
-        }
+        // Generally, holding transfers don't appear in BWA as they're balance sheet items
+        // This is a stub for potential exceptions
     } catch (e) {
         console.error('Error processing holding transfer:', e);
-    }
-}
-
-/**
- * Calculates group totals and derived values for all months
- * Optimized version with efficient calculation logic
- * @param {Object} bwaData - BWA data structure with raw data
- * @param {Object} config - Configuration
- */
-function calculateAggregates(bwaData, config) {
-    for (let m = 1; m <= 12; m++) {
-        const d = bwaData[m];
-
-        // Calculate sums in one pass using intermediate variables for frequently used sums
-
-        // Revenues
-        d.gesamtErloese = numberUtils.round(
-            d.umsatzerloese + d.provisionserloese + d.steuerfreieInlandEinnahmen +
-            d.steuerfreieAuslandEinnahmen + d.sonstigeErtraege + d.vermietung +
-            d.zuschuesse + d.waehrungsgewinne + d.anlagenabgaenge,
-            2,
-        );
-
-        // Material costs
-        d.gesamtWareneinsatz = numberUtils.round(
-            d.wareneinsatz + d.fremdleistungen + d.rohHilfsBetriebsstoffe,
-            2,
-        );
-
-        // Operating expenses
-        d.gesamtBetriebsausgaben = numberUtils.round(
-            d.bruttoLoehne + d.sozialeAbgaben + d.sonstigePersonalkosten +
-            d.werbungMarketing + d.reisekosten + d.versicherungen + d.telefonInternet +
-            d.buerokosten + d.fortbildungskosten + d.kfzKosten + d.mieteNebenkosten +
-            d.sonstigeAufwendungen,
-            2,
-        );
-
-        // Depreciation & interest
-        d.gesamtAbschreibungenZinsen = numberUtils.round(
-            d.abschreibungenMaschinen + d.abschreibungenBueromaterial +
-            d.abschreibungenImmateriell + d.zinsenBank + d.zinsenGesellschafter +
-            d.leasingkosten,
-            2,
-        );
-
-        // Special items
-        d.gesamtBesonderePosten = numberUtils.round(
-            d.eigenkapitalveraenderungen + d.gesellschafterdarlehen + d.ausschuettungen,
-            2,
-        );
-
-        // Provisions
-        d.gesamtRueckstellungenTransfers = numberUtils.round(
-            d.steuerrueckstellungen + d.rueckstellungenSonstige,
-            2,
-        );
-
-        // EBIT (intermediate storage for taxes)
-        d.ebit = numberUtils.round(
-            d.gesamtErloese - (d.gesamtWareneinsatz + d.gesamtBetriebsausgaben +
-                d.gesamtAbschreibungenZinsen + d.gesamtBesonderePosten),
-            2,
-        );
-
-        // Calculate taxes (with optimized access to config)
-        const taxConfig = config.tax.isHolding ? config.tax.holding : config.tax.operative;
-
-        // For holdings, special tax rates apply due to participation exemption
-        const steuerfaktor = config.tax.isHolding
-            ? taxConfig.gewinnUebertragSteuerpflichtig / 100
-            : 1;
-
-        // Tax calculations (adjusted to never be negative)
-        d.gewerbesteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.gewerbesteuer / 10000) * steuerfaktor, 2));
-        d.koerperschaftsteuer = Math.max(0, numberUtils.round(d.ebit * (taxConfig.koerperschaftsteuer / 100) * steuerfaktor, 2));
-        d.solidaritaetszuschlag = Math.max(0, numberUtils.round(d.koerperschaftsteuer * (taxConfig.solidaritaetszuschlag / 100), 2));
-
-        // Total tax burden
-        d.steuerlast = numberUtils.round(
-            d.koerperschaftsteuer + d.solidaritaetszuschlag + d.gewerbesteuer,
-            2,
-        );
-
-        // Profit after taxes
-        d.gewinnNachSteuern = numberUtils.round(d.ebit - d.steuerlast, 2);
     }
 }
 

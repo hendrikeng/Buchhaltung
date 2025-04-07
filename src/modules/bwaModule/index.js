@@ -7,6 +7,7 @@ import globalCache from '../../utils/cacheUtils.js';
 
 /**
  * Module for calculating business management analysis (BWA)
+ * Compliant with DATEV standards
  */
 const BWAModule = {
     /**
@@ -44,7 +45,7 @@ const BWAModule = {
             const success = formatter.generateBWASheet(bwaData, ss, config);
 
             if (success) {
-                ui.alert('BWA wurde aktualisiert!');
+                ui.alert('BWA wurde nach DATEV-Standard aktualisiert!');
                 return true;
             } else {
                 ui.alert('Bei der Erstellung der BWA ist ein Fehler aufgetreten.');

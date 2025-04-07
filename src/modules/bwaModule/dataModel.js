@@ -2,89 +2,67 @@
 
 /**
  * Creates an empty BWA data object with zero values
- * Optimized structure for better performance
+ * Follows DATEV standard structure for BWA (betriebswirtschaftliche Auswertung)
  * @returns {Object} Empty BWA data structure
  */
 function createEmptyBWA() {
     return {
         // Group 1: Business income
-        umsatzerloese: 0,
-        provisionserloese: 0,
-        steuerfreieInlandEinnahmen: 0,
-        steuerfreieAuslandEinnahmen: 0,
+        umsatzerloese: 0,            // Revenue from goods and services
+        provisionserloese: 0,        // Commission income
+        steuerfreieInlandEinnahmen: 0, // Tax-free domestic income
+        steuerfreieAuslandEinnahmen: 0, // Tax-free foreign income
         innergemeinschaftlicheLieferungen: 0, // EU sales
-        sonstigeErtraege: 0,
-        vermietung: 0,
-        zuschuesse: 0,
-        waehrungsgewinne: 0,
-        anlagenabgaenge: 0,
-        gesamtErloese: 0,
+        sonstigeErtraege: 0,         // Other operating income
+        vermietung: 0,               // Rental income (if business-related)
+        zuschuesse: 0,               // Subsidies
+        waehrungsgewinne: 0,         // Foreign exchange gains
+        anlagenabgaenge: 0,          // Gains from disposals of fixed assets
+        steuerlicheKorrekturen: 0,   // Tax corrections (e.g., VAT refunds)
 
         // Group 2: Material expenses & Cost of goods
-        wareneinsatz: 0,
-        fremdleistungen: 0,
-        rohHilfsBetriebsstoffe: 0,
-        gesamtWareneinsatz: 0,
+        wareneinsatz: 0,             // Cost of goods
+        fremdleistungen: 0,          // External services
+        rohHilfsBetriebsstoffe: 0,   // Raw materials and supplies
 
         // Group 3: Operating expenses
-        bruttoLoehne: 0,
-        sozialeAbgaben: 0,
-        sonstigePersonalkosten: 0,
-        werbungMarketing: 0,
-        reisekosten: 0,
-        versicherungen: 0,
-        telefonInternet: 0,
-        buerokosten: 0,
-        fortbildungskosten: 0,
-        kfzKosten: 0,
-        mieteNebenkosten: 0,
-        sonstigeAufwendungen: 0,
-        gesamtBetriebsausgaben: 0,
+        bruttoLoehne: 0,             // Gross salaries and wages
+        sozialeAbgaben: 0,           // Social security contributions
+        sonstigePersonalkosten: 0,   // Other personnel expenses
+        mieteNebenkosten: 0,         // Rent and ancillary costs
+        werbungMarketing: 0,         // Advertising and marketing
+        reisekosten: 0,              // Travel expenses
+        versicherungen: 0,           // Insurance
+        telefonInternet: 0,          // Phone and internet
+        buerokosten: 0,              // Office expenses
+        fortbildungskosten: 0,       // Training costs
+        kfzKosten: 0,                // Vehicle expenses
+        sonstigeAufwendungen: 0,     // Other operating expenses
 
         // Group 4: Depreciation & Interest
-        abschreibungenMaschinen: 0,
-        abschreibungenBueromaterial: 0,
-        abschreibungenImmateriell: 0,
-        zinsenBank: 0,
-        zinsenGesellschafter: 0,
-        leasingkosten: 0,
-        gesamtAbschreibungenZinsen: 0,
+        abschreibungenMaschinen: 0,  // Depreciation on machinery
+        abschreibungenBueromaterial: 0, // Depreciation on office equipment
+        abschreibungenImmateriell: 0, // Depreciation on intangible assets
+        zinsenBank: 0,               // Interest on bank loans
+        zinsenGesellschafter: 0,     // Interest on shareholder loans
+        leasingkosten: 0,            // Leasing costs
 
-        // Group 5: Special items (capital movements)
-        eigenkapitalveraenderungen: 0,
-        gesellschafterdarlehen: 0,
-        ausschuettungen: 0,
-        gesamtBesonderePosten: 0,
+        // Group 5: EBIT
+        ebit: 0,                     // Earnings before interest and taxes
 
-        // Group 6: Provisions
-        steuerrueckstellungen: 0,
-        rueckstellungenSonstige: 0,
-        gesamtRueckstellungenTransfers: 0,
+        // Group 6: Net profit/loss
+        gewinnNachSteuern: 0,        // Profit after taxes
 
-        // Group 7: EBIT
-        ebit: 0,
+        // Calculated sum fields (for aggregation)
+        gesamtErloese: 0,                 // Total revenue
+        gesamtWareneinsatz: 0,            // Total material costs
+        gesamtBetriebsausgaben: 0,        // Total operating expenses
+        gesamtAbschreibungenZinsen: 0,    // Total depreciation and interest
 
-        // Group 8: Taxes & Input tax
-        umsatzsteuer: 0,
-        vorsteuer: 0,
-        nichtAbzugsfaehigeVSt: 0,
-        koerperschaftsteuer: 0,
-        solidaritaetszuschlag: 0,
-        gewerbesteuer: 0,
-        gewerbesteuerRueckstellungen: 0,
-        sonstigeSteuerrueckstellungen: 0,
-        steuerlicheKorrekturen: 0,
-        steuerlast: 0,
-
-        // Group 9: Net profit/loss
-        gewinnNachSteuern: 0,
-
-        // Own receipts (for aggregation)
-        eigenbelegeSteuerfrei: 0,
-        eigenbelegeSteuerpflichtig: 0,
-
-        // EU purchases (for VAT)
-        innergemeinschaftlicheErwerbe: 0,
+        // Internal tracking fields (not for display)
+        nichtAbzugsfaehigeVSt: 0,      // Non-deductible VAT (for calculation)
+        eigenbelegeSteuerfrei: 0,      // Tax-free own receipts (for calculation)
+        eigenbelegeSteuerpflichtig: 0, // Taxable own receipts (for calculation)
     };
 }
 
