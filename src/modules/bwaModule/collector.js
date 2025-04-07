@@ -4,7 +4,7 @@ import dataModel from './dataModel.js';
 import calculator from './calculator.js';
 
 /**
- * Collects all BWA data from the various sheets with optimized batch processing
+ * Collects all BWA data from the various sheets with DATEV-compliant structure
  * @param {Object} config - Configuration
  * @returns {Object|null} BWA data by month or null on error
  */
@@ -16,7 +16,7 @@ function aggregateBWAData(config) {
             return globalCache.get('computed', 'bwa');
         }
 
-        console.log('Aggregating BWA data...');
+        console.log('Aggregating BWA data with DATEV-compliant structure...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
         // Optimized structure for sheets and their processors

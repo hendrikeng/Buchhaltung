@@ -10,7 +10,7 @@ import sheetUtils from '../../utils/sheetUtils.js';
 function buildHeaderRow(config) {
     const headers = ['Kategorie'];
 
-    // Optimization: Build header with a for loop instead of implicit iteration
+    // Build header with months and quarters
     for (let q = 0; q < 4; q++) {
         for (let m = q * 3; m < q * 3 + 3; m++) {
             headers.push(`${config.common.months[m]} (€)`);
@@ -24,23 +24,24 @@ function buildHeaderRow(config) {
 
 /**
  * Creates an output row for a position with optimized calculation logic
- * @param {Object} pos - Position with label and value function
+ * @param {string} label - Position label
+ * @param {function} getter - Function to get the value from BWA data
  * @param {Object} bwaData - BWA data
  * @returns {Array} Formatted row
  */
-function buildOutputRow(pos, bwaData) {
-    // Optimization: Pre-allocate arrays for values
+function buildOutputRow(label, getter, bwaData) {
+    // Pre-allocate arrays for values
     const monthly = new Array(12).fill(0);
     const quarters = new Array(4).fill(0);
     let yearly = 0;
 
-    // Optimization: Get monthly values in one pass
+    // Get monthly values in one pass
     for (let m = 1; m <= 12; m++) {
-        const val = pos.get(bwaData[m]) || 0;
+        const val = getter(bwaData[m]) || 0;
         monthly[m-1] = val;
         yearly += val;
 
-        // Count quarters directly (optimized)
+        // Count quarters directly
         quarters[Math.floor((m-1) / 3)] += val;
     }
 
@@ -52,7 +53,7 @@ function buildOutputRow(pos, bwaData) {
     // Build row with optimized structure
     // [Label, Jan, Feb, Mar, Q1, Apr, May, Jun, Q2, ...]
     return [
-        pos.label,
+        label,
         ...roundedMonthly.slice(0, 3),
         roundedQuarters[0],
         ...roundedMonthly.slice(3, 6),
@@ -66,8 +67,7 @@ function buildOutputRow(pos, bwaData) {
 }
 
 /**
- * Creates the BWA sheet based on BWA data with optimized batch processing
- * Following DATEV standards for BWA reporting
+ * Creates the BWA sheet based on BWA data with DATEV-compliant structure
  * @param {Object} bwaData - BWA data by month
  * @param {Spreadsheet} ss - Spreadsheet
  * @param {Object} config - Configuration
@@ -75,115 +75,135 @@ function buildOutputRow(pos, bwaData) {
  */
 function generateBWASheet(bwaData, ss, config) {
     try {
-        console.log('Generating BWA sheet...');
+        console.log('Generating DATEV-compliant BWA sheet...');
 
-        // Define positions for the BWA following DATEV standards
-        const positions = [
-            // 1. Revenue and income
-            {label: 'Erlöse aus Lieferungen und Leistungen', get: d => d.umsatzerloese || 0},
-            {label: 'Provisionserlöse', get: d => d.provisionserloese || 0},
-            {label: 'Steuerfreie Inland-Einnahmen', get: d => d.steuerfreieInlandEinnahmen || 0},
-            {label: 'Steuerfreie Ausland-Einnahmen', get: d => d.steuerfreieAuslandEinnahmen || 0},
-            {label: 'Innergemeinschaftliche Lieferungen', get: d => d.innergemeinschaftlicheLieferungen || 0},
-            {label: 'Sonstige betriebliche Erträge', get: d => d.sonstigeErtraege || 0},
-            {label: 'Erträge aus Vermietung/Verpachtung', get: d => d.vermietung || 0},
-            {label: 'Erträge aus Zuschüssen', get: d => d.zuschuesse || 0},
-            {label: 'Erträge aus Währungsgewinnen', get: d => d.waehrungsgewinne || 0},
-            {label: 'Erträge aus Anlagenabgängen', get: d => d.anlagenabgaenge || 0},
-            {label: 'Steuerliche Korrekturen', get: d => d.steuerlicheKorrekturen || 0},
-            {label: 'Betriebserlöse gesamt', get: d => d.gesamtErloese || 0},
-
-            // 2. Material expenses & Cost of goods
-            {label: 'Wareneinsatz', get: d => d.wareneinsatz || 0},
-            {label: 'Bezogene Leistungen', get: d => d.fremdleistungen || 0},
-            {label: 'Roh-, Hilfs- & Betriebsstoffe', get: d => d.rohHilfsBetriebsstoffe || 0},
-            {label: 'Materialaufwand gesamt', get: d => d.gesamtWareneinsatz || 0},
-
-            // 3. Operating expenses
-            {label: 'Bruttolöhne & Gehälter', get: d => d.bruttoLoehne || 0},
-            {label: 'Soziale Abgaben & Arbeitgeberanteile', get: d => d.sozialeAbgaben || 0},
-            {label: 'Sonstige Personalkosten', get: d => d.sonstigePersonalkosten || 0},
-            {label: 'Miete & Nebenkosten', get: d => d.mieteNebenkosten || 0},
-            {label: 'Werbung & Marketing', get: d => d.werbungMarketing || 0},
-            {label: 'Reisekosten', get: d => d.reisekosten || 0},
-            {label: 'Versicherungen', get: d => d.versicherungen || 0},
-            {label: 'Telefon & Internet', get: d => d.telefonInternet || 0},
-            {label: 'Bürokosten', get: d => d.buerokosten || 0},
-            {label: 'Fortbildungskosten', get: d => d.fortbildungskosten || 0},
-            {label: 'Kfz-Kosten', get: d => d.kfzKosten || 0},
-            {label: 'Sonstige betriebliche Aufwendungen', get: d => d.sonstigeAufwendungen || 0},
-            {label: 'Betriebsausgaben gesamt', get: d => d.gesamtBetriebsausgaben || 0},
-
-            // 4. Depreciation & Interest
-            {label: 'Abschreibungen Maschinen', get: d => d.abschreibungenMaschinen || 0},
-            {label: 'Abschreibungen Büroausstattung', get: d => d.abschreibungenBueromaterial || 0},
-            {label: 'Abschreibungen immaterielle Wirtschaftsgüter', get: d => d.abschreibungenImmateriell || 0},
-            {label: 'Zinsen auf Bankdarlehen', get: d => d.zinsenBank || 0},
-            {label: 'Zinsen auf Gesellschafterdarlehen', get: d => d.zinsenGesellschafter || 0},
-            {label: 'Leasingkosten', get: d => d.leasingkosten || 0},
-            {label: 'Abschreibungen & Zinsen gesamt', get: d => d.gesamtAbschreibungenZinsen || 0},
-
-            // 5. EBIT
-            {label: 'Betriebsergebnis (EBIT)', get: d => d.ebit || 0},
-
-            // 6. Net profit/loss (if included in BWA)
-            {label: 'Jahresüberschuss/-fehlbetrag', get: d => d.gewinnNachSteuern || 0},
+        // Define DATEV-compliant BWA structure based on JSON provided
+        const bwaStructure = [
+            {
+                kategorie: '1. Betriebserlöse (Einnahmen)',
+                positionen: [
+                    {label: 'Erlöse aus Lieferungen und Leistungen', get: d => d.erloeseLieferungenLeistungen || 0},
+                    {label: 'Provisionserlöse', get: d => d.provisionserloese || 0},
+                    {label: 'Steuerfreie Inland-Erlöse', get: d => d.steuerfreieInlandErloese || 0},
+                    {label: 'Steuerfreie Ausland-Erlöse', get: d => d.steuerfreieAuslandErloese || 0},
+                    {label: 'Innergemeinschaftliche Lieferungen', get: d => d.innergemeinschaftlicheLieferungen || 0},
+                    {label: 'Sonstige betriebliche Erträge', get: d => d.sonstigeBetrieblicheErtraege || 0},
+                    {label: 'Erträge aus Vermietung und Verpachtung', get: d => d.ertraegeVermietungVerpachtung || 0},
+                    {label: 'Erträge aus Zuschüssen', get: d => d.ertraegeZuschuesse || 0},
+                    {label: 'Erträge aus Kursgewinnen', get: d => d.ertraegeKursgewinne || 0},
+                    {label: 'Erträge aus Anlagenabgängen', get: d => d.ertraegeAnlagenabgaenge || 0},
+                ],
+                summe: {label: 'Betriebserlöse gesamt', get: d => d.betriebserloese_gesamt || 0},
+            },
+            {
+                kategorie: '2. Materialaufwand & Wareneinsatz',
+                positionen: [
+                    {label: 'Wareneinsatz', get: d => d.wareneinsatz || 0},
+                    {label: 'Bezogene Leistungen', get: d => d.bezogeneLeistungen || 0},
+                    {label: 'Roh-, Hilfs- und Betriebsstoffe', get: d => d.rohHilfsBetriebsstoffe || 0},
+                ],
+                summe: {label: 'Materialaufwand gesamt', get: d => d.materialaufwand_gesamt || 0},
+            },
+            {
+                kategorie: '3. Personalaufwand',
+                positionen: [
+                    {label: 'Löhne und Gehälter', get: d => d.loehneGehaelter || 0},
+                    {label: 'Soziale Abgaben und Arbeitgeberanteile', get: d => d.sozialeAbgaben || 0},
+                    {label: 'Sonstige Personalkosten', get: d => d.sonstigePersonalkosten || 0},
+                ],
+                summe: {label: 'Personalaufwand gesamt', get: d => d.personalaufwand_gesamt || 0},
+            },
+            {
+                kategorie: '4. Sonstige betriebliche Aufwendungen',
+                positionen: [
+                    {label: 'Miete und Leasing', get: d => d.mieteLeasing || 0},
+                    {label: 'Werbung und Marketing', get: d => d.werbungMarketing || 0},
+                    {label: 'Reisekosten', get: d => d.reisekosten || 0},
+                    {label: 'Versicherungen', get: d => d.versicherungen || 0},
+                    {label: 'Telefon und Internet', get: d => d.telefonInternet || 0},
+                    {label: 'Bürokosten', get: d => d.buerokosten || 0},
+                    {label: 'Fortbildungskosten', get: d => d.fortbildungskosten || 0},
+                    {label: 'Kfz-Kosten', get: d => d.kfzKosten || 0},
+                    {label: 'Beiträge und Abgaben', get: d => d.beitraegeAbgaben || 0},
+                    {label: 'Bewirtungskosten (abzugsfähig)', get: d => d.bewirtungskosten || 0},
+                    {label: 'Sonstige betriebliche Aufwendungen', get: d => d.sonstigeBetrieblicheAufwendungen || 0},
+                ],
+                summe: {label: 'Sonstige betriebliche Aufwendungen gesamt', get: d => d.sonstigeAufwendungen_gesamt || 0},
+            },
+            {
+                kategorie: '5. Abschreibungen und Zinsen',
+                positionen: [
+                    {label: 'Abschreibungen auf Sachanlagen', get: d => d.abschreibungenSachanlagen || 0},
+                    {label: 'Abschreibungen auf immaterielle Vermögensgegenstände', get: d => d.abschreibungenImmaterielleVG || 0},
+                    {label: 'Zinsaufwendungen aus Bankdarlehen', get: d => d.zinsenBankdarlehen || 0},
+                    {label: 'Zinsaufwendungen aus Gesellschafterdarlehen', get: d => d.zinsenGesellschafterdarlehen || 0},
+                    {label: 'Leasingzinsen', get: d => d.leasingzinsen || 0},
+                ],
+                summe: {label: 'Abschreibungen und Zinsen gesamt', get: d => d.abschreibungenZinsen_gesamt || 0},
+            },
+            {
+                kategorie: '6. Betriebsergebnis (EBIT)',
+                positionen: [
+                    {label: 'Betriebsergebnis vor Steuern (EBIT)', get: d => d.ebit || 0},
+                ],
+            },
+            {
+                kategorie: '7. Jahresergebnis',
+                positionen: [
+                    {label: 'Jahresüberschuss / Jahresfehlbetrag', get: d => d.jahresergebnis || 0},
+                ],
+            },
         ];
 
-        // Header row and group hierarchy in one batch
+        // Header row
         const headerRow = buildHeaderRow(config);
 
-        // Optimization: Group hierarchy with better data structure
-        const bwaGruppen = [
-            {titel: 'Betriebserlöse (Einnahmen)', count: 12},
-            {titel: 'Materialaufwand & Wareneinsatz', count: 4},
-            {titel: 'Betriebsausgaben (Sachkosten)', count: 13},
-            {titel: 'Abschreibungen & Zinsen', count: 7},
-            {titel: 'Betriebsergebnis (EBIT)', count: 1},
-            {titel: 'Jahresergebnis', count: 1},
-        ];
+        // Calculate total number of rows needed
+        let totalRows = 1; // Header row
+        bwaStructure.forEach(group => {
+            totalRows += 1; // Group header
+            totalRows += group.positionen.length;
+            if (group.summe) totalRows += 1; // Sum row
+            totalRows += 1; // Empty line after group
+        });
 
-        // Optimization: Pre-allocate output array with space
-        // (headers + positions + group headers + empty lines)
-        const totalRows = 1 + positions.length + bwaGruppen.length + (bwaGruppen.length - 1);
+        // Pre-allocate output array
         const outputRows = new Array(totalRows);
-
-        // Header as first row
         outputRows[0] = headerRow;
 
-        // Output with group hierarchy
+        // Build output rows
         let rowIndex = 1;
-        let posIndex = 0;
 
-        for (let gruppenIndex = 0; gruppenIndex < bwaGruppen.length; gruppenIndex++) {
-            const gruppe = bwaGruppen[gruppenIndex];
-
+        for (const group of bwaStructure) {
             // Group heading
             outputRows[rowIndex++] = [
-                `${gruppenIndex + 1}. ${gruppe.titel}`,
+                group.kategorie,
                 ...Array(headerRow.length - 1).fill(''),
             ];
 
-            // Group positions
-            for (let i = 0; i < gruppe.count; i++) {
-                outputRows[rowIndex++] = buildOutputRow(positions[posIndex++], bwaData);
+            // Position rows
+            for (const position of group.positionen) {
+                outputRows[rowIndex++] = buildOutputRow(position.label, position.get, bwaData);
             }
 
-            // Empty line after each group except the last
-            if (gruppenIndex < bwaGruppen.length - 1) {
-                outputRows[rowIndex++] = Array(headerRow.length).fill('');
+            // Sum row if exists
+            if (group.summe) {
+                outputRows[rowIndex++] = buildOutputRow(group.summe.label, group.summe.get, bwaData);
             }
+
+            // Empty line after group
+            outputRows[rowIndex++] = Array(headerRow.length).fill('');
         }
 
         // Create or update BWA sheet
         const bwaSheet = sheetUtils.getOrCreateSheet(ss, 'BWA');
         bwaSheet.clearContents();
 
-        // Optimization: Write data in one batch API call
-        bwaSheet.getRange(1, 1, outputRows.length, outputRows[0].length).setValues(outputRows);
+        // Write data in one batch API call
+        bwaSheet.getRange(1, 1, rowIndex, outputRows[0].length).setValues(outputRows);
 
         // Apply formatting in optimized batches
-        applyBwaFormatting(bwaSheet, headerRow.length, bwaGruppen, outputRows.length);
+        applyBwaFormatting(bwaSheet, bwaStructure, rowIndex);
 
         // Activate BWA sheet
         ss.setActiveSheet(bwaSheet);
@@ -197,89 +217,80 @@ function generateBWASheet(bwaData, ss, config) {
 }
 
 /**
- * Applies formatting to the BWA sheet with optimized batch formatting
+ * Applies formatting to the BWA sheet with DATEV-compliant styling
  * @param {Sheet} sheet - Sheet to format
- * @param {number} headerLength - Number of columns
- * @param {Array} bwaGruppen - Group hierarchy
+ * @param {Array} bwaStructure - BWA structure definition
  * @param {number} totalRows - Total number of rows
  */
-function applyBwaFormatting(sheet, headerLength, bwaGruppen, totalRows) {
-    // Optimization: Group formatting for batch application
-    const formatGroups = {
-        // Header formatting
-        header: {
-            range: sheet.getRange(1, 1, 1, headerLength),
-            formats: {
-                fontWeight: 'bold',
-                background: '#f3f3f3',
-            },
-        },
+function applyBwaFormatting(sheet, bwaStructure, totalRows) {
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    headerRange.setFontWeight('bold').setBackground('#f3f3f3');
 
-        // Group title formatting
-        groupTitles: [],
+    // Track row positions for formatting
+    let rowIndex = 2; // Start after header
 
-        // Summary row formatting
-        summaryRows: [],
+    // Group headers and sums formatting
+    for (const group of bwaStructure) {
+        // Format group header
+        const groupHeader = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
+        groupHeader.setFontWeight('bold').setBackground('#eaeaea');
+        rowIndex++;
 
-        // EBIT and annual surplus formatting
-        highlight: [],
-    };
+        // Skip position rows (just track the count)
+        rowIndex += group.positionen.length;
 
-    // Find group title rows
-    let rowIndex = 2;
-    for (const gruppe of bwaGruppen) {
-        formatGroups.groupTitles.push(sheet.getRange(rowIndex, 1));
-        rowIndex += gruppe.count + 1; // +1 for the empty line
-    }
-
-    // Define summary rows based on BWA rows
-    const summenZeilen = [12, 16, 29, 36, 37, 38]; // Adjusted for new structure with steuerlicheKorrekturen
-    summenZeilen.forEach(row => {
-        if (row <= totalRows) {
-            formatGroups.summaryRows.push(sheet.getRange(row, 1, 1, headerLength));
+        // Format sum row if exists
+        if (group.summe) {
+            const sumRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
+            sumRow.setFontWeight('bold').setBackground('#e6f2ff');
+            rowIndex++;
         }
-    });
 
-    // Highlight EBIT and annual surplus
-    [37, 38].forEach(row => { // Adjusted for new structure
-        if (row <= totalRows) {
-            formatGroups.highlight.push(sheet.getRange(row, 1, 1, headerLength));
+        // Skip empty line
+        rowIndex++;
+    }
+
+    // Special formatting for EBIT and Jahresergebnis
+    // Find rows for EBIT and Jahresergebnis
+    let ebitRow = 0;
+    let jahresergebnisRow = 0;
+
+    rowIndex = 2;
+    for (const group of bwaStructure) {
+        if (group.kategorie === '6. Betriebsergebnis (EBIT)') {
+            ebitRow = rowIndex + 1; // +1 for the first position row
+        } else if (group.kategorie === '7. Jahresergebnis') {
+            jahresergebnisRow = rowIndex + 1; // +1 for the first position row
         }
-    });
 
-    // Apply optimized batch formatting
-
-    // 1. Format header
-    formatGroups.header.range
-        .setFontWeight(formatGroups.header.formats.fontWeight)
-        .setBackground(formatGroups.header.formats.background);
-
-    // 2. Format group titles
-    if (formatGroups.groupTitles.length > 0) {
-        formatGroups.groupTitles.forEach(range => {
-            range.setFontWeight('bold');
-        });
+        // Move to next group
+        rowIndex += 1 + group.positionen.length;
+        if (group.summe) rowIndex += 1;
+        rowIndex += 1; // Empty line
     }
 
-    // 3. Format summary rows
-    if (formatGroups.summaryRows.length > 0) {
-        formatGroups.summaryRows.forEach(range => {
-            range.setBackground('#e6f2ff');
-        });
+    // Apply special formatting
+    if (ebitRow > 0) {
+        sheet.getRange(ebitRow, 1, 1, sheet.getLastColumn())
+            .setFontWeight('bold')
+            .setBackground('#d9edf7');
     }
 
-    // 4. Highlight EBIT and annual surplus
-    if (formatGroups.highlight.length > 0) {
-        formatGroups.highlight.forEach(range => {
-            range.setFontWeight('bold');
-        });
+    if (jahresergebnisRow > 0) {
+        sheet.getRange(jahresergebnisRow, 1, 1, sheet.getLastColumn())
+            .setFontWeight('bold')
+            .setBackground('#dff0d8');
     }
 
-    // 5. Currency format for all numeric values in one batch
-    sheet.getRange(2, 2, totalRows - 1, headerLength - 1).setNumberFormat('#,##0.00 €');
+    // Currency format for all numeric values
+    sheet.getRange(2, 2, totalRows - 1, sheet.getLastColumn() - 1)
+        .setNumberFormat('#,##0.00 €');
 
-    // 6. Adjust column widths
-    sheet.autoResizeColumns(1, headerLength);
+    // Adjust column widths
+    sheet.autoResizeColumns(1, sheet.getLastColumn());
+
+    // Make first column a bit wider for labels
+    sheet.setColumnWidth(1, 360);
 }
 
 export default {
