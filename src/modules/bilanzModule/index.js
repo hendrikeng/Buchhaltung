@@ -4,6 +4,7 @@ import collector from './collector.js';
 import calculator from './calculator.js';
 import formatter from './formatter.js';
 import globalCache from '../../utils/cacheUtils.js';
+import numberUtils from '../../utils/numberUtils.js';
 
 /**
  * Modul zur Erstellung einer Bilanz nach SKR04
