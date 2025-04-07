@@ -4,22 +4,20 @@ import dataModel from './dataModel.js';
 import calculator from './calculator.js';
 
 /**
- * Sammelt alle BWA-Daten aus den verschiedenen Sheets mit optimierter Batch-Verarbeitung
- * @param {Object} config - Die Konfiguration
- * @returns {Object|null} BWA-Daten nach Monaten oder null bei Fehler
+ * Collects all BWA data from various sheets with optimized batch processing
+ * @param {Object} config - Configuration
+ * @returns {Object|null} BWA data by month or null in case of error
  */
 function aggregateBWAData(config) {
     try {
-        // Prüfen ob Cache gültig ist
+        // Check if cache is valid
         if (globalCache.has('computed', 'bwa')) {
-            console.log('Using cached BWA data');
             return globalCache.get('computed', 'bwa');
         }
 
-        console.log('[BWA-DEBUG] Aggregating BWA data...');
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-        // Optimierte Struktur für Sheets und ihre Prozessoren
+        // Optimized structure for sheets and their processors
         const sheetProcessors = [
             { name: 'Einnahmen', type: 'einnahmen', processor: calculator.processRevenue, required: true },
             { name: 'Ausgaben', type: 'ausgaben', processor: calculator.processExpense, required: true },
@@ -28,69 +26,49 @@ function aggregateBWAData(config) {
             { name: 'Holding Transfers', type: 'holdingTransfers', processor: calculator.processHolding, required: false },
         ];
 
-        // Prüfe zuerst, ob alle erforderlichen Sheets existieren
+        // First check if all required sheets exist
         const sheets = {};
 
         for (const processor of sheetProcessors) {
             sheets[processor.type] = ss.getSheetByName(processor.name);
 
             if (processor.required && !sheets[processor.type]) {
-                console.error(`[BWA-DEBUG] Fehlendes Blatt: '${processor.name}'`);
+                console.error(`Missing sheet: '${processor.name}'`);
                 return null;
             }
         }
 
-        // BWA-Daten für alle Monate initialisieren (für bessere Performance einmal)
+        // Initialize BWA data for all months (once for better performance)
         const bwaData = Object.fromEntries(
             Array.from({length: 12}, (_, i) => [i + 1, dataModel.createEmptyBWA()]),
         );
 
-        // Debug-Zähler für verarbeitete Zeilen
-        const processedRows = {
-            einnahmen: 0,
-            ausgaben: 0,
-            eigenbelege: 0,
-            gesellschafterkonto: 0,
-            holdingTransfers: 0,
-        };
-
-        // Optimierung: Alle Sheets in einem Durchgang verarbeiten
+        // Process all sheets in a single pass
         for (const processor of sheetProcessors) {
             const sheet = sheets[processor.type];
             if (!sheet) continue;
 
             const lastRow = sheet.getLastRow();
-            if (lastRow <= 1) continue; // Nur Header, keine Daten
+            if (lastRow <= 1) continue; // Only header, no data
 
-            console.log(`[BWA-DEBUG] Processing ${processor.name} sheet for BWA...`);
-
-            // Optimierung: Daten in einem Batch laden für weniger API-Calls
+            // Optimization: Load data in a batch for fewer API calls
             const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
-            // Daten verarbeiten mit der passenden Prozessorfunktion
+            // Process data with the appropriate processor function
             for (const row of data) {
                 processor.processor(row, bwaData, config);
-                processedRows[processor.type]++;
             }
         }
 
-        // Debug-Ausgabe verarbeiteter Zeilen
-        console.log('[BWA-DEBUG] Verarbeitete Zeilen:', JSON.stringify(processedRows));
-
-        // Alle Aggregate in einem Durchgang berechnen
+        // Calculate all aggregates in a single pass
         calculator.calculateAggregates(bwaData, config);
 
-        // Debug-Ausgabe Quartalswerte
-        const q4Erloese = bwaData[10].gesamtErloese + bwaData[11].gesamtErloese + bwaData[12].gesamtErloese;
-        console.log(`[BWA-DEBUG] Berechnete Q4 Betriebserlöse: ${q4Erloese} €`);
-
-        // Ergebnis cachen
+        // Cache result
         globalCache.set('computed', 'bwa', bwaData);
-        console.log('[BWA-DEBUG] BWA data aggregation complete');
 
         return bwaData;
     } catch (e) {
-        console.error('Fehler bei der Aggregation der BWA-Daten:', e);
+        console.error('Error aggregating BWA data:', e);
         return null;
     }
 }

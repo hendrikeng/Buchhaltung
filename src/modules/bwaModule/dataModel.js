@@ -1,12 +1,13 @@
-// modules/bwaModule/dataModel.js
+// modules/bwaModule/dataModel.js (Optimized)
 /**
- * Erstellt ein leeres BWA-Datenobjekt mit Nullwerten
- * Optimierte Struktur für bessere Performance
- * @returns {Object} Leere BWA-Datenstruktur
+ * Creates an empty BWA data object with zero values
+ * Optimized structure for better performance
+ * @returns {Object} Empty BWA data structure
  */
 function createEmptyBWA() {
+    // Initialize with zero values
     return {
-        // Gruppe 1: Betriebserlöse (Einnahmen)
+        // Group 1: Business revenue (Income)
         umsatzerloese: 0,
         provisionserloese: 0,
         steuerfreieInlandEinnahmen: 0,
@@ -18,13 +19,13 @@ function createEmptyBWA() {
         anlagenabgaenge: 0,
         gesamtErloese: 0,
 
-        // Gruppe 2: Materialaufwand & Wareneinsatz
+        // Group 2: Material costs & Purchases
         wareneinsatz: 0,
         fremdleistungen: 0,
         rohHilfsBetriebsstoffe: 0,
         gesamtWareneinsatz: 0,
 
-        // Gruppe 3: Betriebsausgaben (Sachkosten)
+        // Group 3: Operating expenses (Overhead costs)
         bruttoLoehne: 0,
         sozialeAbgaben: 0,
         sonstigePersonalkosten: 0,
@@ -35,10 +36,12 @@ function createEmptyBWA() {
         buerokosten: 0,
         fortbildungskosten: 0,
         kfzKosten: 0,
+        itKosten: 0, // Added for IT costs
+        mieteNebenkosten: 0, // Added for rent and utilities
         sonstigeAufwendungen: 0,
         gesamtBetriebsausgaben: 0,
 
-        // Gruppe 4: Abschreibungen & Zinsen
+        // Group 4: Depreciation & Interest
         abschreibungenMaschinen: 0,
         abschreibungenBueromaterial: 0,
         abschreibungenImmateriell: 0,
@@ -47,21 +50,21 @@ function createEmptyBWA() {
         leasingkosten: 0,
         gesamtAbschreibungenZinsen: 0,
 
-        // Gruppe 5: Besondere Posten (Kapitalbewegungen)
+        // Group 5: Special items (Capital movements)
         eigenkapitalveraenderungen: 0,
         gesellschafterdarlehen: 0,
         ausschuettungen: 0,
         gesamtBesonderePosten: 0,
 
-        // Gruppe 6: Rückstellungen
+        // Group 6: Provisions
         steuerrueckstellungen: 0,
         rueckstellungenSonstige: 0,
         gesamtRueckstellungenTransfers: 0,
 
-        // Gruppe 7: EBIT
+        // Group 7: EBIT
         ebit: 0,
 
-        // Gruppe 8: Steuern & Vorsteuer
+        // Group 8: Taxes & VAT
         umsatzsteuer: 0,
         vorsteuer: 0,
         nichtAbzugsfaehigeVSt: 0,
@@ -72,10 +75,10 @@ function createEmptyBWA() {
         sonstigeSteuerrueckstellungen: 0,
         steuerlast: 0,
 
-        // Gruppe 9: Jahresüberschuss/-fehlbetrag
+        // Group 9: Annual net profit/loss
         gewinnNachSteuern: 0,
 
-        // Eigenbelege (zur Aggregation)
+        // Own receipts (for aggregation)
         eigenbelegeSteuerfrei: 0,
         eigenbelegeSteuerpflichtig: 0,
     };

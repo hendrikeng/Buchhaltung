@@ -1,4 +1,4 @@
-// modules/bwaModule/index.js
+// modules/bwaModule/index.js (Optimized)
 import dataModel from './dataModel.js';
 import collector from './collector.js';
 import calculator from './calculator.js';
@@ -6,41 +6,39 @@ import formatter from './formatter.js';
 import globalCache from '../../utils/cacheUtils.js';
 
 /**
- * Modul zur Berechnung der Betriebswirtschaftlichen Auswertung (BWA)
+ * Module for calculating the Betriebswirtschaftliche Auswertung (BWA)
  */
 const BWAModule = {
     /**
-     * Cache leeren mit gezielter Invalidierung
+     * Clear cache with targeted invalidation
      */
     clearCache() {
-        console.log('Clearing BWA module cache');
         globalCache.clear('bwa');
     },
 
     /**
-     * Hauptfunktion zur Berechnung der BWA mit optimierter Fehlerbehandlung
-     * @param {Object} config - Die Konfiguration
-     * @returns {boolean} - true bei Erfolg, false bei Fehler
+     * Main function for calculating the BWA with optimized error handling
+     * @param {Object} config - Configuration
+     * @returns {boolean} - true on success, false on error
      */
     calculateBWA(config) {
         try {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const ui = SpreadsheetApp.getUi();
 
-            // Cache zurücksetzen für aktuelle Daten
+            // Reset cache for current data
             this.clearCache();
 
-            console.log('Starting BWA calculation...');
             ui.alert('BWA wird berechnet...', 'Bitte warten Sie, während die BWA berechnet wird.', ui.ButtonSet.OK);
 
-            // Daten sammeln
+            // Collect data
             const bwaData = collector.aggregateBWAData(config);
             if (!bwaData) {
                 ui.alert('BWA-Daten konnten nicht generiert werden.');
                 return false;
             }
 
-            // BWA-Sheet erstellen oder aktualisieren
+            // Create or update BWA sheet
             const success = formatter.generateBWASheet(bwaData, ss, config);
 
             if (success) {
@@ -57,7 +55,7 @@ const BWAModule = {
         }
     },
 
-    // Methoden für Testzwecke und erweiterte Funktionalität
+    // Methods for testing and advanced functionality
     _internal: {
         createEmptyBWA: dataModel.createEmptyBWA,
         processRevenue: calculator.processRevenue,
