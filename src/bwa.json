@@ -1,0 +1,78 @@
+{
+  "bwa": [
+    {
+      "kategorie": "1. Betriebserlöse (Einnahmen)",
+      "positionen": [
+        "Erlöse aus Lieferungen und Leistungen",
+        "Provisionserlöse",
+        "Steuerfreie Inland-Erlöse",
+        "Steuerfreie Ausland-Erlöse",
+        "Innergemeinschaftliche Lieferungen",
+        "Sonstige betriebliche Erträge",
+        "Erträge aus Vermietung und Verpachtung",
+        "Erträge aus Zuschüssen",
+        "Erträge aus Kursgewinnen",
+        "Erträge aus Anlagenabgängen"
+      ],
+      "summe": "Betriebserlöse gesamt"
+    },
+    {
+      "kategorie": "2. Materialaufwand & Wareneinsatz",
+      "positionen": [
+        "Wareneinsatz",
+        "Bezogene Leistungen",
+        "Roh-, Hilfs- und Betriebsstoffe"
+      ],
+      "summe": "Materialaufwand gesamt"
+    },
+    {
+      "kategorie": "3. Personalaufwand",
+      "positionen": [
+        "Löhne und Gehälter",
+        "Soziale Abgaben und Arbeitgeberanteile",
+        "Sonstige Personalkosten"
+      ],
+      "summe": "Personalaufwand gesamt"
+    },
+    {
+      "kategorie": "4. Sonstige betriebliche Aufwendungen",
+      "positionen": [
+        "Miete und Leasing",
+        "Werbung und Marketing",
+        "Reisekosten",
+        "Versicherungen",
+        "Telefon und Internet",
+        "Bürokosten",
+        "Fortbildungskosten",
+        "Kfz-Kosten",
+        "Beiträge und Abgaben",
+        "Bewirtungskosten (abzugsfähig)",
+        "Sonstige betriebliche Aufwendungen"
+      ],
+      "summe": "Sonstige betriebliche Aufwendungen gesamt"
+    },
+    {
+      "kategorie": "5. Abschreibungen und Zinsen",
+      "positionen": [
+        "Abschreibungen auf Sachanlagen",
+        "Abschreibungen auf immaterielle Vermögensgegenstände",
+        "Zinsaufwendungen aus Bankdarlehen",
+        "Zinsaufwendungen aus Gesellschafterdarlehen",
+        "Leasingzinsen"
+      ],
+      "summe": "Abschreibungen und Zinsen gesamt"
+    },
+    {
+      "kategorie": "6. Betriebsergebnis (EBIT)",
+      "positionen": [
+        "Betriebsergebnis vor Steuern (EBIT)"
+      ]
+    },
+    {
+      "kategorie": "7. Jahresergebnis",
+      "positionen": [
+        "Jahresüberschuss / Jahresfehlbetrag"
+      ]
+    }
+  ]
+}
