@@ -149,6 +149,16 @@ function createFormulaBatches(numRows, columnLetters, columns, sheetName) {
         }
     }
 
+    if (sheetName === 'Gesellschafterkonto' && columns.rueckzahlungsstatus && columns.bezahlt && columns.betrag) {
+        formulaBatches[columns.rueckzahlungsstatus] = [];
+        for (let i = 0; i < numRows; i++) {
+            const row = i + 2;
+            // Only calculate status for non-Ausgleichsbuchung entries
+            const formula = `=IF(${columnLetters.transaktionstyp}${row}="Ausgleichsbuchung";"";IF(VALUE(${columnLetters.bezahlt}${row})=0;"Offen";IF(VALUE(${columnLetters.bezahlt}${row})>=ABS(VALUE(${columnLetters.betrag}${row}));"Zurückgezahlt";"Teilweise zurückgezahlt")))`;
+            formulaBatches[columns.rueckzahlungsstatus].push([formula]);
+        }
+    }
+
     return formulaBatches;
 }
 
@@ -225,22 +235,41 @@ function updateEmptyPaymentValues(sheet, columns, numRows) {
  * @param {Sheet} sheet - Das Sheet
  * @param {string} sheetName - Name des Sheets
  * @param {string} statusColumn - Spalte für den Status
+ * @param columns
+ * @param columnLetters
  */
-function applyStatusColumnFormatting(sheet, sheetName, statusColumn) {
+function applyStatusColumnFormatting(sheet, sheetName, statusColumn, columns, columnLetters) {
     try {
-        if (sheetName !== 'Eigenbelege') {
-            // Für Einnahmen und Ausgaben
-            formattingHandler.setConditionalFormattingForStatusColumn(sheet, statusColumn, [
-                {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
-                {value: 'Teilbezahlt', background: '#FFEB9C', fontColor: '#9C6500'},
-                {value: 'Bezahlt', background: '#C6EFCE', fontColor: '#006100'},
-            ]);
-        } else {
+        if (sheetName === 'Eigenbelege') {
             // Für Eigenbelege
             formattingHandler.setConditionalFormattingForStatusColumn(sheet, statusColumn, [
                 {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
                 {value: 'Teilerstattet', background: '#FFEB9C', fontColor: '#9C6500'},
                 {value: 'Erstattet', background: '#C6EFCE', fontColor: '#006100'},
+            ]);
+        } else if (sheetName === 'Gesellschafterkonto') {
+            // Check which column we're formatting
+            if (columns.rueckzahlungsstatus && statusColumn === columnLetters.rueckzahlungsstatus) {
+                // For the Rückzahlungsstatus column
+                formattingHandler.setConditionalFormattingForStatusColumn(sheet, statusColumn, [
+                    {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
+                    {value: 'Teilweise zurückgezahlt', background: '#FFEB9C', fontColor: '#9C6500'},
+                    {value: 'Zurückgezahlt', background: '#C6EFCE', fontColor: '#006100'},
+                ]);
+            } else if (columns.transaktionstyp && statusColumn === columnLetters.transaktionstyp) {
+                // For the Transaktionstyp column
+                formattingHandler.setConditionalFormattingForStatusColumn(sheet, statusColumn, [
+                    {value: 'Eingang', background: '#C6EFCE', fontColor: '#006100'},
+                    {value: 'Ausgang', background: '#FFC7CE', fontColor: '#9C0006'},
+                    {value: 'Ausgleichsbuchung', background: '#DDEBF7', fontColor: '#2F5597'},
+                ]);
+            }
+        } else {
+            // Für Einnahmen und Ausgaben
+            formattingHandler.setConditionalFormattingForStatusColumn(sheet, statusColumn, [
+                {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
+                {value: 'Teilbezahlt', background: '#FFEB9C', fontColor: '#9C6500'},
+                {value: 'Bezahlt', background: '#C6EFCE', fontColor: '#006100'},
             ]);
         }
     } catch (e) {

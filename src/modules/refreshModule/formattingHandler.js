@@ -64,6 +64,22 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
                 values: config.common.shareholders,
             });
         }
+
+        // Transaktionstyp-Dropdown
+        if (columns.transaktionstyp) {
+            validations.push({
+                column: columns.transaktionstyp,
+                values: ['Eingang', 'Ausgang', 'Ausgleichsbuchung'],
+            });
+        }
+
+        // Status column validation
+        if (columns.rueckzahlungsstatus) {
+            validations.push({
+                column: columns.rueckzahlungsstatus,
+                values: ['Offen', 'Teilweise zurückgezahlt', 'Zurückgezahlt'],
+            });
+        }
     } else if (sheetName === 'Holding Transfers') {
         // Kategorie-Dropdown für Holding Transfers
         if (columns.kategorie) {

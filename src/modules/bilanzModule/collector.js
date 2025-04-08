@@ -350,38 +350,80 @@ function processEquity(ss, bilanzData, gesellschafterCols, holdingCols, config) 
         // Group all transactions by category for better handling
         const transaktionenByKategorie = {};
 
+        // Track balancing transactions keyed by their reference transaction
+        const ausgleichsbuchungen = new Map();
+
+        // First pass: Identify all balancing transactions
+        for (const row of data) {
+            const transaktionstyp = row[gesellschafterCols.transaktionstyp - 1]?.toString().trim() || '';
+            if (transaktionstyp === 'Ausgleichsbuchung') {
+                const bezugRef = row[gesellschafterCols.bezugstransaktion - 1]?.toString().trim() || '';
+                if (bezugRef) {
+                    const betrag = numberUtils.parseCurrency(row[gesellschafterCols.betrag - 1]);
+                    if (!ausgleichsbuchungen.has(bezugRef)) {
+                        ausgleichsbuchungen.set(bezugRef, 0);
+                    }
+                    // Add the amount to the running total for this reference
+                    ausgleichsbuchungen.set(bezugRef, ausgleichsbuchungen.get(bezugRef) + Math.abs(betrag));
+                }
+            }
+        }
+
+        // Second pass: Process regular transactions
         for (const row of data) {
             const kategorie = row[gesellschafterCols.kategorie - 1]?.toString().trim() || '';
             if (!kategorie) continue;
 
+            const transaktionstyp = row[gesellschafterCols.transaktionstyp - 1]?.toString().trim() || '';
+            if (transaktionstyp === 'Ausgleichsbuchung') continue; // Skip balancing transactions
+
             const betrag = numberUtils.parseCurrency(row[gesellschafterCols.betrag - 1]);
+            const referenz = row[gesellschafterCols.referenz - 1]?.toString().trim() || '';
+
+            // Check if this transaction has been balanced by an Ausgleichsbuchung
+            let effectiveBetrag = betrag;
+            if (referenz && ausgleichsbuchungen.has(referenz)) {
+                const ausgleichsAmount = ausgleichsbuchungen.get(referenz);
+                // Calculate the remaining amount after balancing
+                effectiveBetrag = betrag > 0 ?
+                    Math.max(0, betrag - ausgleichsAmount) :
+                    Math.min(0, betrag + ausgleichsAmount);
+            }
+
+            // Skip if fully balanced (effectiveBetrag is 0)
+            if (effectiveBetrag === 0) continue;
+
+            // Add to transaction list by category
             if (!transaktionenByKategorie[kategorie]) {
                 transaktionenByKategorie[kategorie] = [];
             }
 
             transaktionenByKategorie[kategorie].push({
-                betrag: betrag,
+                betrag: effectiveBetrag,
                 datum: row[gesellschafterCols.datum - 1],
                 gesellschafter: row[gesellschafterCols.gesellschafter - 1],
+                rowData: row,
+                // Store original betrag for reference
+                originalBetrag: betrag,
             });
         }
 
-        // Process shareholder loans (Gesellschafterdarlehen) correctly - net amount
+        // Process shareholder loans (Gesellschafterdarlehen)
         if (transaktionenByKategorie['Gesellschafterdarlehen']) {
             let darlehenSaldo = 0;
 
-            // Calculate net balance of all loan transactions
+            // Sum all effective amounts
             for (const transaktion of transaktionenByKategorie['Gesellschafterdarlehen']) {
                 darlehenSaldo += transaktion.betrag;
             }
 
-            // Apply to appropriate position based on net direction
-            if (darlehenSaldo > 0) {
-                // Net loans given to shareholders (asset)
-                bilanzData.aktiva.anlagevermoegen.finanzanlagen.ausleihungenVerbundene += darlehenSaldo;
-            } else if (darlehenSaldo < 0) {
-                // Net loans taken from shareholders (liability)
-                bilanzData.passiva.verbindlichkeiten.sonstigeVerbindlichkeiten += Math.abs(darlehenSaldo);
+            // For Gesellschafterdarlehen, negative means company gave loan to shareholder
+            if (darlehenSaldo < 0) {
+                // Company loaned money to shareholders (asset)
+                bilanzData.aktiva.anlagevermoegen.finanzanlagen.ausleihungenVerbundene += Math.abs(darlehenSaldo);
+            } else if (darlehenSaldo > 0) {
+                // Shareholders loaned money to company (liability)
+                bilanzData.passiva.verbindlichkeiten.sonstigeVerbindlichkeiten += darlehenSaldo;
             }
         }
 
@@ -412,7 +454,7 @@ function processEquity(ss, bilanzData, gesellschafterCols, holdingCols, config) 
             const categoryConfig = config.gesellschafterkonto.categories[kategorie];
             if (!categoryConfig || !categoryConfig.bilanzMapping) continue;
 
-            // Calculate total amount for this category
+            // Calculate total amount for this category (already accounts for balancing)
             let gesamtBetrag = 0;
             for (const transaktion of transaktionen) {
                 gesamtBetrag += transaktion.betrag;

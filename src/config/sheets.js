@@ -720,8 +720,13 @@ export default {
             zahlungsart: 9,        // I: Zahlungsart
             zahlungsdatum: 10,     // J: Zahlungsdatum
             bankabgleich: 11,      // K: Bankabgleich-Information
-            uebertragJahr: 12,     // L: Übertrag Jahr
-            zeitstempel: 13,       // M: Zeitstempel der letzten Änderung
+            transaktionstyp: 12,       // L: Transaktionstyp (Eingang/Ausgang/Ausgleichsbuchung)
+            bezugstransaktion: 13,     // M: Referenz zu verbundener Transaktion
+            rueckzahlungsstatus: 14,   // N: Rückzahlungsstatus (Offen/Teilweise zurückgezahlt/Zurückgezahlt)
+            bezahlt: 15,               // O: Bereits zurückgezahlter Betrag
+            uebertragJahr: 16,         // P: Übertrag Jahr
+            zeitstempel: 17,           // Q: Zeitstempel der letzten Änderung
+
         },
         // Kategorien mit integrierter Konto- und BWA-Zuordnung
         categories: {
@@ -745,8 +750,8 @@ export default {
                 kontoMapping: {soll: '2000', gegen: '1200'},
                 bwaMapping: null, // Ausschüttungen gehören nicht in die BWA, sie sind nicht betriebsbezogen, sondern Ergebnisverwendung
                 bilanzMapping: {
-                    positiv: 'passiva.eigenkapital.jahresueberschuss',
-                    negativ: 'passiva.eigenkapital.gewinnvortrag',
+                    positiv: null, // Ausschüttungen sind keine positive Position in der Bilanz
+                    negativ: 'passiva.eigenkapital.gewinnvortrag', // Reduzieren den Gewinnvortrag
                 },
             },
             'Kapitalrückführung': {
@@ -756,8 +761,8 @@ export default {
                 kontoMapping: {soll: '1890', gegen: '1200'},
                 bwaMapping: null, // nicht in die BWA, ist rein eigenkapitalbezogen
                 bilanzMapping: {
-                    positiv: 'passiva.eigenkapital.gezeichnetesKapital',
-                    negativ: 'passiva.eigenkapital.gezeichnetesKapital',
+                    positiv: null, // Keine direkte positive Auswirkung auf das Kapital
+                    negativ: 'passiva.eigenkapital.kapitalruecklage', // Erst Kapitalrücklagen reduzieren, nicht das gezeichnete Kapital
                 },
             },
             'Privatentnahme': {
@@ -767,8 +772,8 @@ export default {
                 kontoMapping: {soll: '1800', gegen: '1200'},
                 bwaMapping: null, // Nicht relevant für BWA
                 bilanzMapping: {
-                    positiv: 'passiva.eigenkapital.gewinnvortrag',
-                    negativ: 'passiva.eigenkapital.jahresueberschuss',
+                    positiv: null, // Keine positive Auswirkung
+                    negativ: 'passiva.eigenkapital.gewinnvortrag', // Reduzieren den Gewinnvortrag
                 },
             },
             'Privateinlage': {
@@ -778,8 +783,30 @@ export default {
                 kontoMapping: {soll: '1200', gegen: '1890'},
                 bwaMapping: null, // Nicht relevant für BWA
                 bilanzMapping: {
-                    positiv: 'passiva.eigenkapital.kapitalruecklage',
+                    positiv: 'passiva.eigenkapital.kapitalruecklage', // Erhöht die Kapitalrücklagen, nicht das gezeichnete Kapital
                     negativ: null,
+                },
+            },
+            'Kapitalerhöhung': {
+                taxType: 'steuerfrei_inland',
+                group: 'gesellschafter',
+                besonderheit: null,
+                kontoMapping: {soll: '1200', gegen: '2000'},
+                bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.gezeichnetesKapital', // Direkter Einfluss auf das gezeichnete Kapital
+                    negativ: null,
+                },
+            },
+            'Kapitalherabsetzung': {
+                taxType: 'steuerfrei_inland',
+                group: 'gesellschafter',
+                besonderheit: null,
+                kontoMapping: {soll: '2000', gegen: '1200'},
+                bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    positiv: null,
+                    negativ: 'passiva.eigenkapital.gezeichnetesKapital', // Direkter Einfluss auf das gezeichnete Kapital
                 },
             },
         },
@@ -813,8 +840,8 @@ export default {
                 bwaMapping: null, // Nicht relevant für BWA
                 bilanzMapping: {
                     // Für Holding: Positiv = Einnahme = Beteiligung
-                    // Für operative GmbH: Negativ = Ausgabe = Eigenkapitalminderung
                     positiv: 'aktiva.anlagevermoegen.finanzanlagen.anteileVerbundeneUnternehmen',
+                    // Für operative GmbH: Negativ = Ausgabe = Eigenkapitalminderung
                     negativ: 'passiva.eigenkapital.jahresueberschuss',
                 },
             },
@@ -826,7 +853,7 @@ export default {
                 bwaMapping: null, // Nicht relevant für BWA
                 bilanzMapping: {
                     // Für Holding: Negativ = Ausgabe = Minderung der Beteiligung
-                    // Für operative GmbH: Positiv = Einnahme = keine Änderung in Bilanz (ggf. Bankguthaben)
+                    // Für operative GmbH: Positiv = Einnahme = Erhöhung der liquiden Mittel
                     positiv: 'aktiva.umlaufvermoegen.liquideMittel.bankguthaben',
                     negativ: 'aktiva.anlagevermoegen.finanzanlagen.anteileVerbundeneUnternehmen',
                 },
