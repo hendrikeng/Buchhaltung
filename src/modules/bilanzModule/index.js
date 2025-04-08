@@ -7,12 +7,12 @@ import globalCache from '../../utils/cacheUtils.js';
 import numberUtils from '../../utils/numberUtils.js';
 
 /**
- * Modul zur Erstellung einer Bilanz nach SKR04
- * Erstellt eine standardkonforme Bilanz basierend auf den Daten aus anderen Sheets
+ * Module for creating a DATEV-compliant balance sheet
+ * Creates a standardized balance sheet based on data from other sheets
  */
 const BilanzModule = {
     /**
-     * Cache leeren mit gezielter Invalidierung
+     * Clears cache with targeted invalidation
      */
     clearCache() {
         console.log('Clearing bilanz module cache');
@@ -20,40 +20,39 @@ const BilanzModule = {
     },
 
     /**
-     * Hauptfunktion zur Erstellung der Bilanz
-     * Sammelt Daten und erstellt ein Bilanz-Sheet mit optimierter Fehlerbehandlung
-     * @param {Object} config - Die Konfiguration
-     * @returns {boolean} true bei Erfolg, false bei Fehler
+     * Main function for creating the balance sheet
+     * Collects data and creates a balance sheet with optimized error handling
+     * @param {Object} config - Configuration
+     * @returns {boolean} true on success, false on error
      */
     calculateBilanz(config) {
         try {
             const ss = SpreadsheetApp.getActiveSpreadsheet();
             const ui = SpreadsheetApp.getUi();
 
-            // Cache zurücksetzen für aktuelle Daten
+            // Reset cache for current data
             this.clearCache();
 
-            console.log('Starting bilanz calculation...');
+            console.log('Starting DATEV-compliant balance sheet creation...');
             ui.alert('Bilanz wird erstellt...', 'Bitte warten Sie, während die Bilanz erstellt wird.', ui.ButtonSet.OK);
 
-            // Bilanzdaten aggregieren
+            // Collect balance sheet data
             const bilanzData = collector.aggregateBilanzData(config);
             if (!bilanzData) {
                 ui.alert('Fehler: Bilanzdaten konnten nicht gesammelt werden.');
                 return false;
             }
 
-            // Bilanz-Sheet erstellen
+            // Create balance sheet
             const success = formatter.generateBilanzSheet(bilanzData, ss, config);
 
-            // Optimierung: Prüfung der Bilanzsummen nur wenn nötig
-            // Prüfen, ob Aktiva = Passiva
-            const aktivaSumme = bilanzData.aktiva.summeAktiva;
-            const passivaSumme = bilanzData.passiva.summePassiva;
+            // Validation: Check if assets = liabilities
+            const aktivaSumme = bilanzData.aktiva.summe;
+            const passivaSumme = bilanzData.passiva.summe;
             const differenz = Math.abs(aktivaSumme - passivaSumme);
 
             if (differenz > 0.01) {
-                // Bei Differenz die Bilanz trotzdem erstellen, aber warnen
+                // If there's a difference, show warning but still create the balance sheet
                 ui.alert(
                     'Bilanz ist nicht ausgeglichen',
                     `Die Bilanzsummen von Aktiva (${numberUtils.formatCurrency(aktivaSumme)}) und Passiva (${numberUtils.formatCurrency(passivaSumme)}) ` +
@@ -77,7 +76,7 @@ const BilanzModule = {
         }
     },
 
-    // Methoden für Testzwecke und erweiterte Funktionalität
+    // Methods for testing and extended functionality
     _internal: {
         createEmptyBilanz: dataModel.createEmptyBilanz,
         aggregateBilanzData: collector.aggregateBilanzData,
