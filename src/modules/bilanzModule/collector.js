@@ -129,7 +129,7 @@ function processFixedAssets(ss, bilanzData, ausgabenCols, config) {
 }
 
 /**
- * Processes financial assets using bilanzMapping
+ * Processes financial assets using bilanzMapping with improved handling
  * @param {Spreadsheet} ss - Spreadsheet object
  * @param {Object} bilanzData - Balance sheet data
  * @param {Object} config - Configuration
@@ -142,56 +142,53 @@ function processFinancialAssets(ss, bilanzData, config) {
         const data = holdingSheet.getDataRange().getValues().slice(1); // Skip header
         const isHolding = config.tax.isHolding || false;
 
+        // Group transfers by category for better handling
+        const transfersByCategory = {};
+
         for (const row of data) {
             const kategorie = row[holdingCols.kategorie - 1]?.toString().trim() || '';
             if (!kategorie) continue;
 
+            const betrag = numberUtils.parseCurrency(row[holdingCols.betrag - 1]);
+
+            if (!transfersByCategory[kategorie]) {
+                transfersByCategory[kategorie] = [];
+            }
+
+            transfersByCategory[kategorie].push({
+                betrag: betrag,
+                ziel: row[holdingCols.ziel - 1],
+            });
+        }
+
+        // Process each category separately
+        for (const [kategorie, transfers] of Object.entries(transfersByCategory)) {
             // Get category configuration with bilanzMapping
             const categoryConfig = config.holdingTransfers.categories[kategorie];
             if (!categoryConfig || !categoryConfig.bilanzMapping) continue;
 
-            const betrag = numberUtils.parseCurrency(row[holdingCols.betrag - 1]);
-            if (betrag === 0) continue;
+            // Calculate net amount for this category
+            let netAmount = 0;
+            for (const transfer of transfers) {
+                netAmount += transfer.betrag;
+            }
+
+            // Skip if net amount is zero
+            if (netAmount === 0) continue;
 
             // Use the appropriate mapping based on amount sign and company type
-            const mappingKey = betrag > 0 ? 'positiv' : 'negativ';
+            const mappingKey = netAmount > 0 ? 'positiv' : 'negativ';
             const bilanzPosition = categoryConfig.bilanzMapping[mappingKey];
 
             // Apply the amount to the correct position in the balance sheet
-            applyToBilanzPosition(bilanzData, bilanzPosition, Math.abs(betrag));
+            if (bilanzPosition) {
+                applyToBilanzPosition(bilanzData, bilanzPosition, Math.abs(netAmount));
+            }
         }
     }
 
-    // Process Gesellschafterdarlehen
-    const gesellschafterSheet = ss.getSheetByName('Gesellschafterkonto');
-    if (gesellschafterSheet && gesellschafterSheet.getLastRow() > 1) {
-        const gesellschafterCols = config.gesellschafterkonto.columns;
-        const data = gesellschafterSheet.getDataRange().getValues().slice(1); // Skip header
-
-        for (const row of data) {
-            const kategorie = row[gesellschafterCols.kategorie - 1]?.toString().trim() || '';
-            if (!kategorie) continue;
-
-            // Get category configuration with bilanzMapping
-            const categoryConfig = config.gesellschafterkonto.categories[kategorie];
-            if (!categoryConfig || !categoryConfig.bilanzMapping) continue;
-
-            // Skip categories that don't belong in financial assets
-            if (kategorie !== 'Gesellschafterdarlehen') continue;
-
-            const betrag = numberUtils.parseCurrency(row[gesellschafterCols.betrag - 1]);
-            if (betrag === 0) continue;
-
-            // Determine mapping key based on amount sign
-            // Positive: Company gives loan TO shareholder (asset)
-            // Negative: Company gets loan FROM shareholder (liability)
-            const mappingKey = betrag > 0 ? 'positiv' : 'negativ';
-            const bilanzPosition = categoryConfig.bilanzMapping[mappingKey];
-
-            // Apply the amount to the correct position in the balance sheet
-            applyToBilanzPosition(bilanzData, bilanzPosition, Math.abs(betrag));
-        }
-    }
+    // Note: Gesellschafterdarlehen werden jetzt in processEquity verarbeitet
+    // um Doppelzählungen zu vermeiden und eine korrekte Saldierung sicherzustellen
 }
 
 /**
@@ -327,7 +324,7 @@ function processPayables(ss, bilanzData, ausgabenCols, config) {
 }
 
 /**
- * Processes equity using bilanzMapping
+ * Processes equity using bilanzMapping with improved handling of transactions
  * @param {Spreadsheet} ss - Spreadsheet object
  * @param {Object} bilanzData - Balance sheet data
  * @param {Object} gesellschafterCols - Shareholder account column configuration
@@ -335,8 +332,108 @@ function processPayables(ss, bilanzData, ausgabenCols, config) {
  * @param {Object} config - Configuration
  */
 function processEquity(ss, bilanzData, gesellschafterCols, holdingCols, config) {
-    // Set share capital from configuration
-    bilanzData.passiva.eigenkapital.gezeichnetesKapital = config.tax.stammkapital || 25000;
+    // Start with base share capital from configuration
+    const basisStammkapital = config.tax.stammkapital || 25000;
+
+    // Initialize with default values
+    bilanzData.passiva.eigenkapital.gezeichnetesKapital = basisStammkapital;
+
+    // Track capital changes specifically related to gezeichnetes Kapital (formal capital changes)
+    let kapitalErhoehnungen = 0;
+    let kapitalHerabsetzungen = 0;
+
+    // Process transactions from Gesellschafterkonto
+    const gesellschafterSheet = ss.getSheetByName('Gesellschafterkonto');
+    if (gesellschafterSheet && gesellschafterSheet.getLastRow() > 1) {
+        const data = gesellschafterSheet.getDataRange().getValues().slice(1); // Skip header
+
+        // Group all transactions by category for better handling
+        const transaktionenByKategorie = {};
+
+        for (const row of data) {
+            const kategorie = row[gesellschafterCols.kategorie - 1]?.toString().trim() || '';
+            if (!kategorie) continue;
+
+            const betrag = numberUtils.parseCurrency(row[gesellschafterCols.betrag - 1]);
+            if (!transaktionenByKategorie[kategorie]) {
+                transaktionenByKategorie[kategorie] = [];
+            }
+
+            transaktionenByKategorie[kategorie].push({
+                betrag: betrag,
+                datum: row[gesellschafterCols.datum - 1],
+                gesellschafter: row[gesellschafterCols.gesellschafter - 1],
+            });
+        }
+
+        // Process shareholder loans (Gesellschafterdarlehen) correctly - net amount
+        if (transaktionenByKategorie['Gesellschafterdarlehen']) {
+            let darlehenSaldo = 0;
+
+            // Calculate net balance of all loan transactions
+            for (const transaktion of transaktionenByKategorie['Gesellschafterdarlehen']) {
+                darlehenSaldo += transaktion.betrag;
+            }
+
+            // Apply to appropriate position based on net direction
+            if (darlehenSaldo > 0) {
+                // Net loans given to shareholders (asset)
+                bilanzData.aktiva.anlagevermoegen.finanzanlagen.ausleihungenVerbundene += darlehenSaldo;
+            } else if (darlehenSaldo < 0) {
+                // Net loans taken from shareholders (liability)
+                bilanzData.passiva.verbindlichkeiten.sonstigeVerbindlichkeiten += Math.abs(darlehenSaldo);
+            }
+        }
+
+        // Process formal capital increases
+        if (transaktionenByKategorie['Kapitalerhöhung']) {
+            for (const transaktion of transaktionenByKategorie['Kapitalerhöhung']) {
+                kapitalErhoehnungen += transaktion.betrag;
+            }
+        }
+
+        // Process formal capital decreases
+        if (transaktionenByKategorie['Kapitalherabsetzung']) {
+            for (const transaktion of transaktionenByKategorie['Kapitalherabsetzung']) {
+                kapitalHerabsetzungen += Math.abs(transaktion.betrag);
+            }
+        }
+
+        // Process other equity transactions using their bilanzMapping
+        for (const [kategorie, transaktionen] of Object.entries(transaktionenByKategorie)) {
+            // Skip categories we've already processed specifically
+            if (kategorie === 'Gesellschafterdarlehen' ||
+                kategorie === 'Kapitalerhöhung' ||
+                kategorie === 'Kapitalherabsetzung') {
+                continue;
+            }
+
+            // Get category configuration with bilanzMapping
+            const categoryConfig = config.gesellschafterkonto.categories[kategorie];
+            if (!categoryConfig || !categoryConfig.bilanzMapping) continue;
+
+            // Calculate total amount for this category
+            let gesamtBetrag = 0;
+            for (const transaktion of transaktionen) {
+                gesamtBetrag += transaktion.betrag;
+            }
+
+            // Skip if total amount is zero
+            if (gesamtBetrag === 0) continue;
+
+            // Determine mapping key based on amount sign
+            const mappingKey = gesamtBetrag > 0 ? 'positiv' : 'negativ';
+            const bilanzPosition = categoryConfig.bilanzMapping[mappingKey];
+
+            // Apply to balance sheet if position is defined
+            if (bilanzPosition) {
+                applyToBilanzPosition(bilanzData, bilanzPosition, Math.abs(gesamtBetrag));
+            }
+        }
+    }
+
+    // Update gezeichnetes Kapital with formal changes
+    bilanzData.passiva.eigenkapital.gezeichnetesKapital = basisStammkapital + kapitalErhoehnungen - kapitalHerabsetzungen;
 
     // Process retained earnings from BWA sheet
     const bwaSheet = ss.getSheetByName('BWA');
@@ -365,40 +462,6 @@ function processEquity(ss, bilanzData, gesellschafterCols, holdingCols, config) 
             }
         } catch (e) {
             console.error('Error processing equity from BWA:', e);
-        }
-    }
-
-    // Process equity transactions from Gesellschafterkonto
-    const gesellschafterSheet = ss.getSheetByName('Gesellschafterkonto');
-    if (gesellschafterSheet && gesellschafterSheet.getLastRow() > 1) {
-        const data = gesellschafterSheet.getDataRange().getValues().slice(1); // Skip header
-
-        for (const row of data) {
-            const kategorie = row[gesellschafterCols.kategorie - 1]?.toString().trim() || '';
-            if (!kategorie) continue;
-
-            // Get category configuration with bilanzMapping
-            const categoryConfig = config.gesellschafterkonto.categories[kategorie];
-            if (!categoryConfig || !categoryConfig.bilanzMapping) continue;
-
-            // Skip if not equity related
-            if (!['Kapitalrücklage', 'Gewinnvortrag', 'Andere Gewinnrücklagen',
-                'Ausschüttungen', 'Kapitalrückführung', 'Privatentnahme',
-                'Privateinlage'].includes(kategorie)) {
-                continue;
-            }
-
-            const betrag = numberUtils.parseCurrency(row[gesellschafterCols.betrag - 1]);
-            if (betrag === 0) continue;
-
-            // Determine mapping key based on amount sign
-            const mappingKey = betrag > 0 ? 'positiv' : 'negativ';
-            const bilanzPosition = categoryConfig.bilanzMapping[mappingKey];
-
-            // Apply to balance sheet
-            if (bilanzPosition) {
-                applyToBilanzPosition(bilanzData, bilanzPosition, Math.abs(betrag));
-            }
         }
     }
 }
