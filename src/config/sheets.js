@@ -38,6 +38,11 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4400', mwst: '1776'},
                 bwaMapping: 'erloeseLieferungenLeistungen',
+                bilanzMapping: {
+                    // Offene Forderungen erscheinen in der Bilanz
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null, // Gutschriften reduzieren Forderungen
+                },
             },
             'Provisionserlöse': {
                 taxType: 'steuerpflichtig',
@@ -45,6 +50,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4120', mwst: '1776'},
                 bwaMapping: 'provisionserloese',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Sonstige betriebliche Erträge': {
                 taxType: 'steuerpflichtig',
@@ -52,6 +61,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4830', mwst: '1776'},
                 bwaMapping: 'sonstigeBetrieblicheErtraege',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Erträge aus Vermietung/Verpachtung': {
                 taxType: 'steuerfrei_inland',
@@ -59,6 +72,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4180'},
                 bwaMapping: 'ertraegeVermietungVerpachtung',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Erträge aus Zuschüssen': {
                 taxType: 'steuerpflichtig',
@@ -66,6 +83,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4190', mwst: '1776'},
                 bwaMapping: 'ertraegeZuschuesse',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Erträge aus Währungsgewinnen': {
                 taxType: 'steuerpflichtig',
@@ -73,6 +94,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4840'},
                 bwaMapping: 'ertraegeKursgewinne',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Erträge aus Anlagenabgängen': {
                 taxType: 'steuerpflichtig',
@@ -80,6 +105,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4855'},
                 bwaMapping: 'ertraegeAnlagenabgaenge',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                    negativ: null,
+                },
             },
             'Darlehen': {
                 taxType: 'steuerfrei_inland',
@@ -87,6 +116,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '3100'},
                 bwaMapping: null,  // Kein Bestandteil der BWA! (Finanzierung, neutral)
+                bilanzMapping: {
+                    positiv: 'aktiva.anlagevermoegen.finanzanlagen.ausleihungenVerbundene',
+                    negativ: 'passiva.verbindlichkeiten.verbindlichkeitenKreditinstitute',
+                },
             },
             'Zinsen': {
                 taxType: 'steuerfrei_inland',
@@ -94,6 +127,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '4130'},
                 bwaMapping: 'sonstigeBetrieblicheErtraege',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.sonstigeVermoegensgegenstaende',
+                    negativ: null,
+                },
             },
             'Gewinnvortrag': {
                 taxType: 'steuerfrei_inland',
@@ -101,6 +138,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '2970'},
                 bwaMapping: null, // Eigenkapitalbewegung – gehört nicht in die BWA!
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.gewinnvortrag',
+                    negativ: 'passiva.eigenkapital.gewinnvortrag',
+                },
             },
             'Verlustvortrag': {
                 taxType: 'steuerfrei_inland',
@@ -108,6 +149,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '2978'},
                 bwaMapping: null, // Ebenfalls EK, nicht BWA-relevant
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.gewinnvortrag',
+                    negativ: 'passiva.eigenkapital.gewinnvortrag',
+                },
             },
             'Umsatzsteuererstattungen': {
                 taxType: 'steuerfrei_inland',
@@ -115,6 +160,10 @@ export default {
                 besonderheit: 'erstattung',
                 kontoMapping: {soll: '1800', gegen: '3820'},
                 bwaMapping: null, // Steuerkonto – KEIN Bestandteil der BWA!
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.forderungen.sonstigeVermoegensgegenstaende',
+                    negativ: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                },
             },
             'Gutschriften (Warenrückgabe)': {
                 taxType: 'steuerpflichtig',
@@ -122,6 +171,10 @@ export default {
                 besonderheit: 'erloesschmaelerung',
                 kontoMapping: {soll: '4200', gegen: '1200', mwst: '1776'},
                 bwaMapping: 'erloeseLieferungenLeistungen',
+                bilanzMapping: {
+                    positiv: null,
+                    negativ: 'aktiva.umlaufvermoegen.forderungen.forderungenLuL',
+                },
             },
         },
     },
@@ -162,6 +215,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '5000', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'wareneinsatz',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Bezogene Leistungen': {
                 taxType: 'steuerpflichtig',
@@ -169,6 +226,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '5300', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'bezogeneLeistungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Roh-, Hilfs- & Betriebsstoffe': {
                 taxType: 'steuerpflichtig',
@@ -176,6 +237,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '5400', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'rohHilfsBetriebsstoffe',
+                bilanzMapping: {
+                    positiv: 'aktiva.umlaufvermoegen.vorraete.rohHilfsBetriebsstoffe',
+                    negativ: null,
+                },
             },
 
             // Provisionen
@@ -185,6 +250,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '4920', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'provisionszahlungenDritte',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Personalkosten
@@ -194,6 +263,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6000', gegen: '1200'},
                 bwaMapping: 'loehneGehaelter',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Soziale Abgaben & Arbeitgeberanteile': {
                 taxType: 'steuerfrei_inland',
@@ -201,6 +274,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6010', gegen: '1200'},
                 bwaMapping: 'sozialeAbgaben',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Sonstige Personalkosten': {
                 taxType: 'steuerpflichtig',
@@ -208,6 +285,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6020', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'sonstigePersonalkosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
 
             // Raumkosten
@@ -217,6 +298,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6310', gegen: '1200'},
                 bwaMapping: 'mieteLeasing',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Nebenkosten': {
                 taxType: 'steuerpflichtig',
@@ -224,6 +309,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6320', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'mieteLeasing',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // IT-Kosten
@@ -233,6 +322,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6570', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'itKosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Betriebskosten
@@ -242,6 +335,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6300', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Marketing & Werbung': {
                 taxType: 'steuerpflichtig',
@@ -249,6 +346,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6600', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'werbungMarketing',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Reisekosten': {
                 taxType: 'steuerpflichtig',
@@ -256,6 +357,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6650', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'reisekosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Versicherungen': {
                 taxType: 'steuerfrei_inland',
@@ -263,6 +368,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6400', gegen: '1200'},
                 bwaMapping: 'versicherungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Porto': {
                 taxType: 'steuerfrei_inland',
@@ -270,6 +379,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6810', gegen: '1200'},
                 bwaMapping: 'buerokosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Bewirtung': {
                 taxType: 'steuerpflichtig',
@@ -277,6 +390,10 @@ export default {
                 besonderheit: 'bewirtung',
                 kontoMapping: {soll: '6670', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'bewirtungskosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Telefon & Internet': {
                 taxType: 'steuerpflichtig',
@@ -284,6 +401,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6805', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'telefonInternet',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Bürokosten': {
                 taxType: 'steuerpflichtig',
@@ -291,6 +412,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6815', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'buerokosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
             'Fortbildungskosten': {
                 taxType: 'steuerpflichtig',
@@ -298,6 +423,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6830', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'fortbildungskosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Abschreibungen & Zinsen
@@ -307,6 +436,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6200', gegen: '1200'},
                 bwaMapping: 'abschreibungenSachanlagen',
+                bilanzMapping: {
+                    positiv: 'aktiva.anlagevermoegen.sachanlagen.technischeAnlagenMaschinen',
+                    negativ: null,
+                },
             },
             'Abschreibungen Büroausstattung': {
                 taxType: 'steuerpflichtig',
@@ -314,6 +447,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6210', gegen: '1200'},
                 bwaMapping: 'abschreibungenSachanlagen',
+                bilanzMapping: {
+                    positiv: 'aktiva.anlagevermoegen.sachanlagen.andereAnlagen',
+                    negativ: null,
+                },
             },
             'Abschreibungen immaterielle Wirtschaftsgüter': {
                 taxType: 'steuerpflichtig',
@@ -321,6 +458,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6220', gegen: '1200'},
                 bwaMapping: 'abschreibungenImmaterielleVG',
+                bilanzMapping: {
+                    positiv: 'aktiva.anlagevermoegen.immaterielleVermoegensgegenstaende.konzessionen',
+                    negativ: null,
+                },
             },
             'Zinsen auf Bankdarlehen': {
                 taxType: 'steuerpflichtig',
@@ -328,6 +469,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7300', gegen: '1200'},
                 bwaMapping: 'zinsenBankdarlehen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenKreditinstitute',
+                    negativ: null,
+                },
             },
             'Zinsen auf Gesellschafterdarlehen': {
                 taxType: 'steuerpflichtig',
@@ -335,6 +480,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7310', gegen: '1200'},
                 bwaMapping: 'zinsenGesellschafterdarlehen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Leasingkosten': {
                 taxType: 'steuerpflichtig',
@@ -342,6 +491,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6240', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'leasingzinsen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Beiträge und Abgaben
@@ -351,6 +504,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6845', gegen: '1200'},
                 bwaMapping: 'beitraegeAbgaben',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Steuern & Rückstellungen
@@ -360,6 +517,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7610', gegen: '1200'},
                 bwaMapping: null, // Nicht BWA-relevant, gehört ins Jahresergebnis
+                bilanzMapping: {
+                    positiv: 'passiva.rueckstellungen.steuerrueckstellungen',
+                    negativ: null,
+                },
             },
             'Körperschaftsteuer': {
                 taxType: 'steuerfrei_inland',
@@ -367,6 +528,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7600', gegen: '1200'},
                 bwaMapping: null, // Nicht BWA-relevant
+                bilanzMapping: {
+                    positiv: 'passiva.rueckstellungen.steuerrueckstellungen',
+                    negativ: null,
+                },
             },
             'Solidaritätszuschlag': {
                 taxType: 'steuerfrei_inland',
@@ -374,6 +539,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7620', gegen: '1200'},
                 bwaMapping: null, // Nicht BWA-relevant,
+                bilanzMapping: {
+                    positiv: 'passiva.rueckstellungen.steuerrueckstellungen',
+                    negativ: null,
+                },
             },
             'Sonstige Steuerrückstellungen': {
                 taxType: 'steuerfrei_inland',
@@ -381,6 +550,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '7630', gegen: '1200'},
                 bwaMapping: null, // Nicht BWA-relevant,
+                bilanzMapping: {
+                    positiv: 'passiva.rueckstellungen.steuerrueckstellungen',
+                    negativ: null,
+                },
             },
             'Steuerzahlungen': {
                 taxType: 'steuerfrei_inland',
@@ -388,6 +561,10 @@ export default {
                 besonderheit: 'abgabe',
                 kontoMapping: {soll: '7610', gegen: '1200'},
                 bwaMapping: null, // Nicht in BWA (Ergebnisverwendung, kein Aufwand)
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
 
             // Sonstige Aufwendungen
@@ -397,6 +574,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Mobilität
@@ -406,6 +587,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '4550', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'kfzKosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenLuL',
+                    negativ: null,
+                },
             },
 
             // Finanzen
@@ -415,6 +600,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6855', gegen: '1200'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.verbindlichkeitenKreditinstitute',
+                    negativ: null,
+                },
             },
         },
     },
@@ -431,7 +620,7 @@ export default {
             kategorie: 7,          // G: Kategorie
             buchungskonto: 8,      // H: Buchungskonto
             nettobetrag: 9,        // I: Nettobetrag
-            mwstSatz: 10,           // J: MwSt-Satz in %
+            mwstSatz: 10,          // J: MwSt-Satz in %
             mwstBetrag: 11,        // K: MwSt-Betrag (H*I)
             bruttoBetrag: 12,      // L: Bruttobetrag (H+J)
             bezahlt: 13,           // M: Bereits erstatteter Betrag
@@ -454,6 +643,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Trinkgeld': {
                 taxType: 'steuerfrei',
@@ -461,6 +654,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6800', gegen: '1200'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Bürokosten': {
                 taxType: 'steuerpflichtig',
@@ -468,6 +665,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6815', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'buerokosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Reisekosten': {
                 taxType: 'steuerpflichtig',
@@ -475,6 +676,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6650', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'reisekosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Bewirtung': {
                 taxType: 'eigenbeleg',
@@ -482,6 +687,10 @@ export default {
                 besonderheit: 'bewirtung',
                 kontoMapping: {soll: '6670', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'bewirtungskosten',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
             'Sonstiges': {
                 taxType: 'steuerpflichtig',
@@ -489,6 +698,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '6800', gegen: '1200', vorsteuer: '1576'},
                 bwaMapping: 'sonstigeBetrieblicheAufwendungen',
+                bilanzMapping: {
+                    positiv: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                    negativ: null,
+                },
             },
         },
     },
@@ -518,6 +731,12 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '0950'},
                 bwaMapping: null, // nicht in der BWA aufführen, da Darlehen keine Betriebsausgabe/-einnahme ist
+                bilanzMapping: {
+                    // Positiver Betrag: Gesellschaft gewährt Darlehen an Gesellschafter (Vermögenswert)
+                    positiv: 'aktiva.anlagevermoegen.finanzanlagen.ausleihungenVerbundene',
+                    // Negativer Betrag: Gesellschafter gewährt Darlehen an Gesellschaft (Verbindlichkeit)
+                    negativ: 'passiva.verbindlichkeiten.sonstigeVerbindlichkeiten',
+                },
             },
             'Ausschüttungen': {
                 taxType: 'steuerfrei_inland',
@@ -525,6 +744,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '2000', gegen: '1200'},
                 bwaMapping: null, // Ausschüttungen gehören nicht in die BWA, sie sind nicht betriebsbezogen, sondern Ergebnisverwendung
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.jahresueberschuss',
+                    negativ: 'passiva.eigenkapital.gewinnvortrag',
+                },
             },
             'Kapitalrückführung': {
                 taxType: 'steuerfrei_inland',
@@ -532,6 +755,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1890', gegen: '1200'},
                 bwaMapping: null, // nicht in die BWA, ist rein eigenkapitalbezogen
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.gezeichnetesKapital',
+                    negativ: 'passiva.eigenkapital.gezeichnetesKapital',
+                },
             },
             'Privatentnahme': {
                 taxType: 'steuerfrei_inland',
@@ -539,6 +766,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1800', gegen: '1200'},
                 bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.gewinnvortrag',
+                    negativ: 'passiva.eigenkapital.jahresueberschuss',
+                },
             },
             'Privateinlage': {
                 taxType: 'steuerfrei_inland',
@@ -546,6 +777,10 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '1890'},
                 bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    positiv: 'passiva.eigenkapital.kapitalruecklage',
+                    negativ: null,
+                },
             },
         },
     },
@@ -576,6 +811,12 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '8999'},
                 bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    // Für Holding: Positiv = Einnahme = Beteiligung
+                    // Für operative GmbH: Negativ = Ausgabe = Eigenkapitalminderung
+                    positiv: 'aktiva.anlagevermoegen.finanzanlagen.anteileVerbundeneUnternehmen',
+                    negativ: 'passiva.eigenkapital.jahresueberschuss',
+                },
             },
             'Kapitalrückführung': {
                 taxType: 'steuerfrei_inland',
@@ -583,6 +824,12 @@ export default {
                 besonderheit: null,
                 kontoMapping: {soll: '1200', gegen: '2000'},
                 bwaMapping: null, // Nicht relevant für BWA
+                bilanzMapping: {
+                    // Für Holding: Negativ = Ausgabe = Minderung der Beteiligung
+                    // Für operative GmbH: Positiv = Einnahme = keine Änderung in Bilanz (ggf. Bankguthaben)
+                    positiv: 'aktiva.umlaufvermoegen.liquideMittel.bankguthaben',
+                    negativ: 'aktiva.anlagevermoegen.finanzanlagen.anteileVerbundeneUnternehmen',
+                },
             },
         },
     },
@@ -613,7 +860,7 @@ export default {
             datum: 1,              // A: Datum/Zeitstempel
             typ: 2,                // B: Rechnungstyp (Einnahme/Ausgabe)
             dateiname: 3,          // C: Dateiname
-            dateilink: 4,           // D: Link zur Datei
+            dateilink: 4,          // D: Link zur Datei
         },
     },
 };
