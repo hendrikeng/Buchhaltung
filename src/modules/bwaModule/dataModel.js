@@ -32,6 +32,8 @@ function createEmptyBWA() {
         personalaufwand_gesamt: 0,
 
         // 4. Sonstige betriebliche Aufwendungen
+        provisionszahlungenDritte: 0,
+        itKosten: 0,
         mieteLeasing: 0,
         werbungMarketing: 0,
         reisekosten: 0,

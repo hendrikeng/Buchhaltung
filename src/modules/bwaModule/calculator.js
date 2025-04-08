@@ -231,6 +231,8 @@ function processExpense(row, bwaData, config) {
             'Sonstige Personalkosten': 'sonstigePersonalkosten',
 
             // Sonstige Aufwendungen
+            'Provisionszahlungen': 'provisionszahlungenDritte',
+            'IT-Kosten': 'itKosten',
             'Miete': 'mieteLeasing',
             'Nebenkosten': 'mieteLeasing',
             'Marketing & Werbung': 'werbungMarketing',
@@ -273,6 +275,8 @@ function processExpense(row, bwaData, config) {
                 'bruttoLoehne': 'loehneGehaelter',
                 'sozialeAbgaben': 'sozialeAbgaben',
                 'sonstigePersonalkosten': 'sonstigePersonalkosten',
+                'provisionszahlungen': 'provisionszahlungenDritte',
+                'itKosten': 'itKosten',
                 'werbungMarketing': 'werbungMarketing',
                 'reisekosten': 'reisekosten',
                 'versicherungen': 'versicherungen',
@@ -288,6 +292,8 @@ function processExpense(row, bwaData, config) {
                 'zinsenBank': 'zinsenBankdarlehen',
                 'zinsenGesellschafter': 'zinsenGesellschafterdarlehen',
                 'leasingkosten': 'leasingzinsen',
+                'beitraegeAbgaben': 'beitraegeAbgaben',
+                'bewirtungskosten': 'bewirtungskosten',
             };
 
             mapping = legacyToDatev[categoryConfig.bwaMapping];
@@ -376,6 +382,7 @@ function processEigen(row, bwaData, config) {
                     'buerokosten': 'buerokosten',
                     'reisekosten': 'reisekosten',
                     'sonstigeAufwendungen': 'sonstigeBetrieblicheAufwendungen',
+                    'bewirtungskosten': 'bewirtungskosten',
                 };
 
                 mapping = legacyToDatev[categoryConfig.bwaMapping] || 'sonstigeBetrieblicheAufwendungen';
@@ -411,13 +418,6 @@ function processGesellschafter(row, bwaData, config) {
         const targetYear = config?.tax?.year || new Date().getFullYear();
         if (paymentDate.getFullYear() !== targetYear) return;
 
-        // Get payment month for cash-based accounting
-        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
-
-        // Extract amount (already handles sign correctly)
-        const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
-        if (Math.abs(amount) === 0) return;
-
         // Shareholder transactions typically appear in balance sheet, not BWA
     } catch (e) {
         console.error('Error processing shareholder position:', e);
@@ -441,13 +441,6 @@ function processHolding(row, bwaData, config) {
         // Check if payment date is in target year
         const targetYear = config?.tax?.year || new Date().getFullYear();
         if (paymentDate.getFullYear() !== targetYear) return;
-
-        // Get payment month for cash-based accounting
-        const paymentMonth = paymentDate.getMonth() + 1; // 1-12
-
-        // Extract amount (already handles sign correctly)
-        const amount = numberUtils.parseCurrency(row[columns.betrag - 1]);
-        if (Math.abs(amount) === 0) return;
 
         // Holding transfers typically appear in balance sheet, not BWA
     } catch (e) {
@@ -497,6 +490,8 @@ function calculateAggregates(bwaData, config) {
 
         // 4. Sonstige betriebliche Aufwendungen
         d.sonstigeAufwendungen_gesamt = numberUtils.round(
+            d.provisionszahlungenDritte +
+            d.itKosten +
             d.mieteLeasing +
             d.werbungMarketing +
             d.reisekosten +

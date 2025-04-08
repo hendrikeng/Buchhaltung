@@ -77,7 +77,7 @@ function generateBWASheet(bwaData, ss, config) {
     try {
         console.log('Generating DATEV-compliant BWA sheet...');
 
-        // Define DATEV-compliant BWA structure based on JSON provided
+        // Define DATEV-compliant BWA structure based on bwa.json
         const bwaStructure = [
             {
                 kategorie: '1. Betriebserlöse (Einnahmen)',
@@ -116,6 +116,8 @@ function generateBWASheet(bwaData, ss, config) {
             {
                 kategorie: '4. Sonstige betriebliche Aufwendungen',
                 positionen: [
+                    {label: 'Provisionszahlungen (an Dritte)', get: d => d.provisionszahlungenDritte || 0},
+                    {label: 'IT-Kosten (Software, Cloud, Support)', get: d => d.itKosten || 0},
                     {label: 'Miete und Leasing', get: d => d.mieteLeasing || 0},
                     {label: 'Werbung und Marketing', get: d => d.werbungMarketing || 0},
                     {label: 'Reisekosten', get: d => d.reisekosten || 0},
