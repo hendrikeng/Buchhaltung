@@ -77,7 +77,7 @@ function setDropdownValidations(sheet, sheetName, numRows, columns, config) {
         if (columns.rueckzahlungsstatus) {
             validations.push({
                 column: columns.rueckzahlungsstatus,
-                values: ['Offen', 'Teilweise zurückgezahlt', 'Zurückgezahlt'],
+                values: ['', 'Offen', 'Teilweise zurückgezahlt', 'Zurückgezahlt'],
             });
         }
     } else if (sheetName === 'Holding Transfers') {

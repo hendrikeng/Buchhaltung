@@ -32,7 +32,7 @@ const config = {
         ];
 
         // Duplikate aus den Kategorien entfernen
-        this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)];
+        this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)].sort();
 
         return this;
     },
