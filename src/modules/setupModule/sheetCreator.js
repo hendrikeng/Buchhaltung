@@ -148,6 +148,12 @@ function applyStatusColumnFormatting(sheet, statusCol, sheetName) {
                 {value: 'Teilerstattet', background: '#FFEB9C', fontColor: '#9C6500'},
                 {value: 'Erstattet', background: '#C6EFCE', fontColor: '#006100'},
             ];
+        } else if (sheetName === 'Gesellschafterkonto') {
+            conditions = [
+                {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
+                {value: 'Teilweise zurückgezahlt', background: '#FFEB9C', fontColor: '#9C6500'},
+                {value: 'Zurückgezahlt', background: '#C6EFCE', fontColor: '#006100'},
+            ];
         } else {
             conditions = [
                 {value: 'Offen', background: '#FFC7CE', fontColor: '#9C0006'},
@@ -186,59 +192,63 @@ function applyStatusColumnFormatting(sheet, statusCol, sheetName) {
  */
 function applyBankSheetSettings(sheet, config) {
     const columns = config.bankbewegungen.columns;
-    const anfangssaldoDate = new Date(config.tax.year, 0, 1);
 
-    // Anfangssaldo-Zeile in einem Batch setzen
-    const initialBalanceRow = [
-        anfangssaldoDate, // Datum
-        'Anfangssaldo', // Buchungstext
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-    ];
+    // Don't overwrite Anfangssaldo if the sheet already exists
+    // Only set it for new sheets
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+        // Only for new sheets - set an initial Anfangssaldo
+        const anfangssaldoDate = new Date(config.tax.year, 0, 1);
+        const initialBalanceRow = [
+            anfangssaldoDate, // Datum
+            'Anfangssaldo', // Buchungstext
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+        ];
 
-    // Erste Datenzeile als Anfangssaldo
-    sheet.getRange(2, 1, 1, initialBalanceRow.length).setValues([initialBalanceRow]);
+        // First data row as Anfangssaldo
+        sheet.getRange(2, 1, 1, initialBalanceRow.length).setValues([initialBalanceRow]);
 
-    // Formatierungen für Beträge und Status in einem Batch
+        // Formatting for Anfangssaldo
+        sheet.getRange(2, 1, 1, sheet.getLastColumn())
+            .setBackground('#e6f2ff')
+            .setFontWeight('bold');
+    }
+
+    // Format currency columns (betrag, saldo)
     const formatBatches = {
         currency: [],
-        conditionalFormat: [],
     };
 
-    // Spalten für Währungsformat sammeln
+    // Collect columns for currency format
     if (columns.betrag) formatBatches.currency.push(columns.betrag);
     if (columns.saldo) formatBatches.currency.push(columns.saldo);
 
-    // Batch-Währungsformat anwenden
+    // Apply batch currency format
     formatBatches.currency.forEach(col => {
         sheet.getRange(2, col, 1000, 1).setNumberFormat('#,##0.00 €');
     });
 
-    // Formatierung für Anfangssaldo
-    sheet.getRange(2, 1, 1, sheet.getLastColumn())
-        .setBackground('#e6f2ff')
-        .setFontWeight('bold');
-
-    // Bedingte Formatierung für Transaktionstyp
+    // Conditional formatting for transaktionstyp
     if (columns.transaktionstyp) {
         const typeCol = stringUtils.getColumnLetter(columns.transaktionstyp);
 
-        // Regeln in einem Batch erstellen und setzen
+        // Create and set rules in a batch
         const range = sheet.getRange(`${typeCol}3:${typeCol}1000`);
         const rules = sheet.getConditionalFormatRules().filter(rule =>
             rule.getRanges().every(r => r.getA1Notation() !== range.getA1Notation()),
         );
 
-        // Einnahme-Regel
+        // Einnahme rule
         const incomeRule = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo('Einnahme')
             .setBackground('#C6EFCE')
@@ -246,7 +256,7 @@ function applyBankSheetSettings(sheet, config) {
             .setRanges([range])
             .build();
 
-        // Ausgabe-Regel
+        // Ausgabe rule
         const expenseRule = SpreadsheetApp.newConditionalFormatRule()
             .whenTextEqualTo('Ausgabe')
             .setBackground('#FFC7CE')
@@ -268,13 +278,66 @@ function applyGesellschafterSheetSettings(sheet, config) {
     const columns = config.gesellschafterkonto.columns;
 
     // Geld- und Datumsformatierungen in einem Batch
+    // Währungsformat für Betrag-Spalte
     if (columns.betrag) {
         sheet.getRange(2, columns.betrag, 1000, 1).setNumberFormat('#,##0.00 €');
     }
 
+    // Bezahlt-Spalte formatieren wenn vorhanden
+    if (columns.bezahlt) {
+        sheet.getRange(2, columns.bezahlt, 1000, 1).setNumberFormat('#,##0.00 €');
+    }
+
+    // Datumsformatierung
     [columns.datum, columns.zahlungsdatum].filter(Boolean).forEach(col => {
         sheet.getRange(2, col, 1000, 1).setNumberFormat('dd.mm.yyyy');
     });
+
+    // Bedingte Formatierung für Transaktionstyp wenn vorhanden
+    if (columns.transaktionstyp) {
+        const typeCol = stringUtils.getColumnLetter(columns.transaktionstyp);
+        const range = sheet.getRange(`${typeCol}2:${typeCol}1000`);
+        const rules = sheet.getConditionalFormatRules().filter(rule =>
+            rule.getRanges().every(r => r.getA1Notation() !== range.getA1Notation()),
+        );
+
+        // Transaktionstyp-Formatierungen
+        const typeConditions = [
+            {
+                value: 'Eingang',
+                background: '#C6EFCE',
+                fontColor: '#006100',
+            },
+            {
+                value: 'Ausgang',
+                background: '#FFC7CE',
+                fontColor: '#9C0006',
+            },
+            {
+                value: 'Ausgleichsbuchung',
+                background: '#DDEBF7',
+                fontColor: '#2F5597',
+            },
+        ];
+
+        typeConditions.forEach(condition => {
+            const rule = SpreadsheetApp.newConditionalFormatRule()
+                .whenTextEqualTo(condition.value)
+                .setBackground(condition.background)
+                .setFontColor(condition.fontColor)
+                .setRanges([range])
+                .build();
+            rules.push(rule);
+        });
+
+        sheet.setConditionalFormatRules(rules);
+    }
+
+    // Bedingte Formatierung für Rückzahlungsstatus wenn vorhanden
+    if (columns.rueckzahlungsstatus) {
+        const statusCol = stringUtils.getColumnLetter(columns.rueckzahlungsstatus);
+        applyStatusColumnFormatting(sheet, statusCol, 'Gesellschafterkonto');
+    }
 }
 
 /**
@@ -355,12 +418,30 @@ function addCommonValidations(sheet, sheetName, config) {
         });
     }
 
-    if (sheetName === 'Gesellschafterkonto' && columns.gesellschafter) {
+    if (sheetName === 'Gesellschafterkonto') {
         // Dropdown für Gesellschafter
-        validations.push({
-            column: columns.gesellschafter,
-            values: config.common.shareholders,
-        });
+        if (columns.gesellschafter) {
+            validations.push({
+                column: columns.gesellschafter,
+                values: config.common.shareholders,
+            });
+        }
+
+        // Dropdown für Transaktionstyp
+        if (columns.transaktionstyp) {
+            validations.push({
+                column: columns.transaktionstyp,
+                values: ['Eingang', 'Ausgang', 'Ausgleichsbuchung'],
+            });
+        }
+
+        // Dropdown für Rückzahlungsstatus
+        if (columns.rueckzahlungsstatus) {
+            validations.push({
+                column: columns.rueckzahlungsstatus,
+                values: ['', 'Offen', 'Teilweise zurückgezahlt', 'Zurückgezahlt'],
+            });
+        }
     }
 
     if (sheetName === 'Holding Transfers' && columns.ziel) {
@@ -723,6 +804,10 @@ function getHeaderLabel(key, sheetType) {
             referenz: 'Referenz',
             gesellschafter: 'Gesellschafter',
             betrag: 'Betrag',
+            transaktionstyp: 'Transaktionstyp',
+            bezugstransaktion: 'Referenz zu verbundener Transaktion',
+            rueckzahlungsstatus: 'Rückzahlungsstatus',
+            bezahlt: 'Bereits zurückgezahlter Betrag',
         },
         holdingTransfers: {
             referenz: 'Referenz',

@@ -23,7 +23,7 @@ const config = {
      */
     initialize() {
         // Bankkategorien dynamisch aus den Einnahmen- und Ausgaben-Kategorien befüllen
-        this.bankbewegungen.categories = [
+        const allCategories = [
             ...Object.keys(this.einnahmen.categories),
             ...Object.keys(this.ausgaben.categories),
             ...Object.keys(this.eigenbelege.categories),
@@ -32,7 +32,7 @@ const config = {
         ];
 
         // Duplikate aus den Kategorien entfernen
-        this.bankbewegungen.categories = [...new Set(this.bankbewegungen.categories)].sort();
+        this.bankbewegungen.categories = [...new Set(allCategories)].sort();
 
         return this;
     },
